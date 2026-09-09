@@ -1,0 +1,15 @@
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    KimaiPlugin\PlannerBundle\:
+        resource: '../../*'
+        exclude:
+            - '../../Entity/'
+            - '../../Resources/'
+            - '../../DependencyInjection/'
+            - '../../Migrations/'
+            - '../../PlannerBundle.php'
+            - '../../tests/'

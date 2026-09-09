@@ -1,0 +1,23 @@
+{
+  "name": "kimai/planner-bundle",
+  "description": "Weekly team planner plugin for Kimai",
+  "homepage": "https://www.kimai.org",
+  "type": "kimai-plugin",
+  "version": "1.0.0",
+  "require": {
+    "kimai/kimai": ">=2.0.0"
+  },
+  "keywords": [
+    "kimai",
+    "kimai-plugin",
+    "planner"
+  ],
+  "license": "AGPL-3.0-or-later",
+  "extra": {
+    "kimai": {
+      "require": 20000,
+      "name": "PlannerBundle",
+      "version": "1.0.0"
+    }
+  }
+}

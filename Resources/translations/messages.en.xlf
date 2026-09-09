@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
+    <file source-language="en" target-language="en" datatype="plaintext" original="none">
+        <body>
+            <trans-unit id="planner.title">
+                <source>planner.title</source>
+                <target>Weekly Planner</target>
+            </trans-unit>
+            <trans-unit id="planner.planned_activity">
+                <source>planner.planned_activity</source>
+                <target>Planned Activity</target>
+            </trans-unit>
+            <trans-unit id="planner.hours_per_day">
+                <source>planner.hours_per_day</source>
+                <target>Hours per day</target>
+            </trans-unit>
+            <trans-unit id="planner.capacity">
+                <source>planner.capacity</source>
+                <target>Capacity</target>
+            </trans-unit>
+            <trans-unit id="planner.over_allocated">
+                <source>planner.over_allocated</source>
+                <target>Over-allocated</target>
+            </trans-unit>
+            <trans-unit id="planner.under_allocated">
+                <source>planner.under_allocated</source>
+                <target>Under-allocated</target>
+            </trans-unit>
+            <trans-unit id="planner.actual_hours">
+                <source>planner.actual_hours</source>
+                <target>Actual</target>
+            </trans-unit>
+            <trans-unit id="planner.create_entry">
+                <source>planner.create_entry</source>
+                <target>Create planned activity</target>
+            </trans-unit>
+            <trans-unit id="planner.edit_entry">
+                <source>planner.edit_entry</source>
+                <target>Edit planned activity</target>
+            </trans-unit>
+            <trans-unit id="planner.add_activity">
+                <source>planner.add_activity</source>
+                <target>Plan activity for this day</target>
+            </trans-unit>
+        </body>
+    </file>
+</xliff>

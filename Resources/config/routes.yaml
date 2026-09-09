@@ -1,0 +1,6 @@
+kimai_planner:
+    resource: '../../Controller/'
+    type: attribute
+    prefix: /{_locale}
+    defaults:
+        _locale: '%locale%'

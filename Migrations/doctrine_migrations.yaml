@@ -1,0 +1,4 @@
+table_storage:
+    table_name: 'bundle_migration_planner'
+migrations_paths:
+    'KimaiPlugin\PlannerBundle\Migrations': 'var/plugins/PlannerBundle/Migrations'

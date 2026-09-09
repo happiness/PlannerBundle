@@ -1,0 +1,25 @@
+includes:
+    - %rootDir%/../phpstan-symfony/extension.neon
+    - %rootDir%/../phpstan-symfony/rules.neon
+    - %rootDir%/../phpstan-doctrine/extension.neon
+    - %rootDir%/../phpstan-doctrine/rules.neon
+
+parameters:
+    featureToggles:
+        skipCheckGenericClasses:
+            - Symfony\Component\Form\AbstractType
+            - Symfony\Component\Form\FormInterface
+            - Symfony\Component\Form\FormTypeExtensionInterface
+            - Symfony\Component\Form\FormTypeInterface
+    level: 9
+    paths:
+        - .
+    excludePaths:
+        - .php-cs-fixer.dist.php
+        - tests/
+    treatPhpDocTypesAsCertain: false
+    doctrine:
+        objectManagerLoader: %rootDir%/../../../tests/phpstan-doctrine.php
+        allowNullablePropertyForRequiredField: true
+    symfony:
+        containerXmlPath: %rootDir%/../../../var/cache/dev/App_KernelDevDebugContainer.xml

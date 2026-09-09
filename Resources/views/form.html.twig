@@ -1,0 +1,44 @@
+{% extends form.vars.include_user is defined and form.vars.include_user ? 'form.html.twig' : 'form.html.twig' %}
+{% import "macros/widgets.html.twig" as widgets %}
+
+{% block form_body %}
+    {% if form.user is defined %}
+        {{ form_row(form.user) }}
+    {% endif %}
+    {{ form_row(form.title) }}
+    <div class="row">
+        <div class="col-md-6">
+            {{ form_row(form.begin) }}
+        </div>
+        <div class="col-md-6">
+            {{ form_row(form.end) }}
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-6">
+            {{ form_row(form.hoursPerDay) }}
+        </div>
+        <div class="col-md-6">
+            {{ form_row(form.color) }}
+        </div>
+    </div>
+    {{ form_row(form.comment) }}
+{% endblock %}
+
+{% block form_after %}
+    {% if activity.id is not null and is_granted('delete', activity) %}
+        <div class="card-footer d-flex justify-content-between border-top">
+            <button type="button" class="btn btn-outline-danger" onclick="if(confirm('{{ 'stats.confirm'|trans({}, 'actions')|default('Are you sure?') }}')) { document.getElementById('delete-activity-form').submit(); }">
+                {{ icon('trash') }} {{ 'action.delete'|trans }}
+            </button>
+        </div>
+    {% endif %}
+{% endblock %}
+
+{% block page_after %}
+    {% if activity.id is not null and is_granted('delete', activity) %}
+        <form id="delete-activity-form" action="{{ path('planner_activity_delete', {'id': activity.id}) }}" method="POST" style="display: none;">
+            <input type="hidden" name="_token" value="{{ csrf_token('planner_delete_' ~ activity.id) }}">
+        </form>
+    {% endif %}
+{% endblock %}
