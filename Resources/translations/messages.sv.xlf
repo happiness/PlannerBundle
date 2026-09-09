@@ -1,90 +1,90 @@
 <?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
-    <file source-language="en" target-language="en" datatype="plaintext" original="none">
+    <file source-language="en" target-language="sv" datatype="plaintext" original="none">
         <body>
             <trans-unit id="planner.title">
                 <source>planner.title</source>
-                <target>Weekly Planner</target>
+                <target>Veckoplanering</target>
             </trans-unit>
             <trans-unit id="planner.planned_activity">
                 <source>planner.planned_activity</source>
-                <target>Planned Activity</target>
+                <target>Planerad aktivitet</target>
             </trans-unit>
             <trans-unit id="planner.hours_per_day">
                 <source>planner.hours_per_day</source>
-                <target>Hours per day</target>
+                <target>Timmar per dag</target>
             </trans-unit>
             <trans-unit id="planner.capacity">
                 <source>planner.capacity</source>
-                <target>Capacity</target>
+                <target>Kapacitet</target>
             </trans-unit>
             <trans-unit id="planner.over_allocated">
                 <source>planner.over_allocated</source>
-                <target>Over-allocated</target>
+                <target>Överallokerad</target>
             </trans-unit>
             <trans-unit id="planner.under_allocated">
                 <source>planner.under_allocated</source>
-                <target>Under-allocated</target>
+                <target>Underallokerad</target>
             </trans-unit>
             <trans-unit id="planner.actual_hours">
                 <source>planner.actual_hours</source>
-                <target>Actual</target>
+                <target>Faktisk tid</target>
             </trans-unit>
             <trans-unit id="planner.create_entry">
                 <source>planner.create_entry</source>
-                <target>Create planned activity</target>
+                <target>Skapa planerad aktivitet</target>
             </trans-unit>
             <trans-unit id="planner.edit_entry">
                 <source>planner.edit_entry</source>
-                <target>Edit planned activity</target>
+                <target>Redigera planerad aktivitet</target>
             </trans-unit>
             <trans-unit id="planner.add_activity">
                 <source>planner.add_activity</source>
-                <target>Plan activity for this day</target>
+                <target>Planera aktivitet för denna dag</target>
             </trans-unit>
             <trans-unit id="label.title">
                 <source>label.title</source>
-                <target>Title</target>
+                <target>Titel</target>
             </trans-unit>
             <trans-unit id="label.begin">
                 <source>label.begin</source>
-                <target>Start date</target>
+                <target>Startdatum</target>
             </trans-unit>
             <trans-unit id="label.end">
                 <source>label.end</source>
-                <target>End date</target>
+                <target>Slutdatum</target>
             </trans-unit>
             <trans-unit id="label.comment">
                 <source>label.comment</source>
-                <target>Comment</target>
+                <target>Kommentar</target>
             </trans-unit>
             <trans-unit id="label.color">
                 <source>label.color</source>
-                <target>Color</target>
+                <target>Färg</target>
             </trans-unit>
             <trans-unit id="label.user">
                 <source>label.user</source>
-                <target>User</target>
+                <target>Användare</target>
             </trans-unit>
             <trans-unit id="label.hours_per_day">
                 <source>label.hours_per_day</source>
-                <target>Hours per day</target>
+                <target>Timmar per dag</target>
             </trans-unit>
             <trans-unit id="begin">
                 <source>begin</source>
-                <target>Start date</target>
+                <target>Startdatum</target>
             </trans-unit>
             <trans-unit id="end">
                 <source>end</source>
-                <target>End date</target>
+                <target>Slutdatum</target>
             </trans-unit>
             <trans-unit id="title">
                 <source>title</source>
-                <target>Title</target>
+                <target>Titel</target>
             </trans-unit>
             <trans-unit id="comment">
                 <source>comment</source>
-                <target>Comment</target>
+                <target>Kommentar</target>
             </trans-unit>
         </body>
     </file>

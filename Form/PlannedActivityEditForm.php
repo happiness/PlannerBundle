@@ -36,6 +36,7 @@ class PlannedActivityEditForm extends AbstractType
 
         if ($includeUser) {
             $builder->add('user', UserType::class, [
+                'label' => 'label.user',
                 'required' => true,
                 'width' => false,
             ]);
@@ -69,6 +70,7 @@ class PlannedActivityEditForm extends AbstractType
                 ],
             ])
             ->add('color', ColorPickerType::class, [
+                'label' => 'label.color',
                 'required' => false,
                 'empty_data' => null,
             ])
