@@ -88,9 +88,12 @@ class PlannedActivityEditForm extends AbstractType
         $resolver->setDefaults([
             'data_class' => PlannedActivity::class,
             'csrf_protection' => true,
-            'csrf_field_name' => '_token',
+            'csrf_field_name' => 'token',
             'csrf_token_id' => 'planner_edit',
             'include_user' => false,
+            'attr' => [
+                'data-form-event' => 'kimai.plannerActivityUpdate',
+            ],
         ]);
 
         $resolver->setRequired('user');

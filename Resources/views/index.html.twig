@@ -164,3 +164,13 @@
         </div>
     </div>
 {% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script type="text/javascript">
+        document.addEventListener('kimai.initialized', function() {
+            // Soft reload (reloads content area without full browser refresh)
+            KimaiReloadPageWidget.create('kimai.plannerActivityUpdate');
+        });
+    </script>
+{% endblock %}
