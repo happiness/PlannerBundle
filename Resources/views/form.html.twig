@@ -35,26 +35,37 @@
         {% endblock %}
         {% block modal_footer %}
             {% if activity.id is not null and is_granted('delete', activity) %}
-                <button type="button" class="btn btn-outline-danger me-auto" onclick="if(confirm('{{ 'confirm.delete'|trans }}')) { document.getElementById('delete-activity-form').submit(); }">
-                    {{ icon('trash') }} {{ 'action.delete'|trans }}
-                </button>
+                <a class="confirmation-link btn btn-outline-danger me-auto"
+                    href="{{ path('planner_activity_delete', {'id': activity.id, 'token': csrf_token('planner_delete_' ~ activity.id)}) }}"
+                    data-question="confirm.delete">
+                    {{ icon('delete', true) }}
+                    {{ 'action.delete'|trans }}
+                </a>
             {% endif %}
-            <button type="submit" class="btn btn-primary modal-form-save" data-loading-text="{{ 'action.save'|trans }}…" id="form_modal_save" data-hotkey="ctrl+Enter">{{ 'action.save'|trans }}</button>
-            <button type="button" class="btn btn-cancel" data-bs-dismiss="modal">{{ 'action.close'|trans }}</button>
+            <button type="submit"
+                    class="btn btn-primary modal-form-save"
+                    data-loading-text="{{ 'action.save'|trans }}…"
+                    id="form_modal_save"
+                    data-hotkey="ctrl+Enter">
+                {{ 'action.save'|trans }}
+            </button>
+            <button type="button"
+                    class="btn btn-cancel"
+                    data-bs-dismiss="modal">
+                {{ 'action.close'|trans }}
+            </button>
         {% endblock %}
         {% block form_after %}
             {% if not kimai_context.modalRequest and activity.id is not null and is_granted('delete', activity) %}
                 <div class="card-footer d-flex justify-content-between border-top">
-                    <button type="button" class="btn btn-outline-danger" onclick="if(confirm('{{ 'confirm.delete'|trans }}')) { document.getElementById('delete-activity-form').submit(); }">
-                        {{ icon('trash') }} {{ 'action.delete'|trans }}
-                    </button>
+                    <a class="confirmation-link btn btn-outline-danger me-auto"
+                        href="{{ path('planner_activity_delete', {'id': activity.id, 'token': csrf_token('planner_delete_' ~ activity.id)}) }}"
+                        data-question="confirm.delete">
+                        {{ icon('delete', true) }}
+                        {{ 'action.delete'|trans }}
+                    </a>
                 </div>
             {% endif %}
         {% endblock %}
     {% endembed %}
-    {% if activity.id is not null and is_granted('delete', activity) %}
-        <form id="delete-activity-form" action="{{ path('planner_activity_delete', {'id': activity.id}) }}" method="POST" style="display: none;">
-            <input type="hidden" name="_token" value="{{ csrf_token('planner_delete_' ~ activity.id) }}">
-        </form>
-    {% endif %}
 {% endblock %}

@@ -161,7 +161,7 @@ final class WeeklyPlannerController extends AbstractController
             throw $this->createAccessDeniedException();
         }
 
-        $token = $request->getPayload()->getString('_token');
+        $token = $request->query->get('token') ?? $request->query->get('token') ?? $request->getPayload()->getString('token');
         if (!$this->isCsrfTokenValid('planner_delete_' . (string) $activity->getId(), $token)) {
             $this->flashError('action.csrf.error');
             $selectedDate = $activity->getBegin() ? $activity->getBegin()->format('Y-m-d') : (new \DateTime('today'))->format('Y-m-d');

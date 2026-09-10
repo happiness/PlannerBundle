@@ -88,7 +88,7 @@
                                                     {% endif %}
 
                                                     {% if canCreate %}
-                                                        <a href="{{ path('planner_activity_create', {'user': row.user.id, 'date': day.date|date('Y-m-d')}) }}" class="btn btn-sm btn-icon btn-ghost-secondary modal-ajax-form" title="{{ 'planner.add_activity'|trans }}">
+                                                        <a href="{{ path('planner_activity_create', {'user': row.user.id, 'date': day.date|date('Y-m-d')}) }}" class="btn btn-sm btn-ghost-secondary modal-ajax-form" title="{{ 'planner.add_activity'|trans }}">
                                                             {{ icon('create') }}
                                                         </a>
                                                     {% endif %}
