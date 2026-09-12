@@ -55,14 +55,27 @@
                                             {{ day|date_weekday }}
                                         </th>
                                     {% endfor %}
-                                    <th class="text-center border-bottom p-1">{{ 'planner.capacity'|trans }}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for row in plannerData.rows %}
                                     <tr>
-                                        <td class="w-avatar align-top p-1 pt-2">{{ widgets.user_avatar(row.user, false, 'avatar-xs') }}</td>
-                                        <td class="text-nowrap align-top p-1 pt-2">{{ row.user.displayName }}</td>
+                                        <td class="w-avatar align-top p-1">{{ widgets.user_avatar(row.user, false, 'avatar-xs') }}</td>
+                                        <td class="text-nowrap align-top p-1">
+                                            <div>{{ row.user.displayName }}</div>
+                                            <div class="small">
+                                                {% set pct = row.totalExpectedHours > 0 ? ((row.totalPlannedHours / row.totalExpectedHours) * 100)|round : 0 %}
+                                                <span class="fw-bold">{{ pct }}%</span>
+
+                                                {% set classes = [
+                                                    row.isOverAllocated ? 'text-danger' : '',
+                                                    row.isBalanced ? 'text-success' : '',
+                                                    not row.isOverAllocated and not row.isBalanced ? 'text-primary' : ''
+                                                ] %}
+                                                <span title="{{ 'planner.planed_hours'|trans }}" class="{{ classes|join(' ') }}">{{ row.totalPlannedHours }}/</span><span title="{{ 'planner.expected_hours'|trans }}">{{ row.totalExpectedHours }} hrs</span>
+                                                <span title="{{ 'planner.actual_hours'|trans }}" class="text-muted">({{ row.totalActualHours }} hrs)</span>
+                                            </div>
+                                        </td>
                                         {% for day in row.days %}
                                             {% set hasAcitivities = day.activities is not empty  %}
                                             <td class="position-relative align-top border-1 day{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %} p-1 {{ hasAcitivities ? 'has-activities' : 'no-activities' }}">
@@ -85,17 +98,6 @@
                                                 {% endfor %}
                                             </td>
                                         {% endfor %}
-                                        <td class="align-top text-center small p-1">
-                                            <div>
-                                                <span class="{% if row.isOverAllocated %}text-danger{% elseif row.isBalanced %}text-success{% else %}text-primary{% endif %}">
-                                                    {{ row.totalPlannedHours }}h</span><span class="text-muted">/{{ row.totalExpectedHours }}h</span>
-                                                {% set pct = row.totalExpectedHours > 0 ? ((row.totalPlannedHours / row.totalExpectedHours) * 100)|round : 0 %}
-                                                <span>({{ pct }}%)</span>
-                                            </div>
-                                            <div>
-                                                {{ 'planner.actual_hours'|trans }}: <strong>{{ row.totalActualHours }}h</strong>
-                                            </div>
-                                        </td>
                                     </tr>
                                 {% else %}
                                     <tr>
@@ -108,7 +110,12 @@
                             {% if plannerData.rows|length > 0 %}
                                 <tfoot>
                                     <tr class="bg-light fw-bold">
-                                        <td class="text-right p-1" colspan="2">&nbsp;</td>
+                                        <td class="text-right p-1" colspan="2">
+                                            <div>{{ plannerData.totalPlannedHours }}h / {{ plannerData.totalExpectedHours }}h</div>
+                                            {% if plannerData.totalActualHours > 0 %}
+                                                <div class="small text-muted fw-normal">{{ 'planner.actual_hours'|trans }}: {{ plannerData.totalActualHours }}h</div>
+                                            {% endif %}
+                                        </td>
                                         {% for day in plannerData.dateHeaders %}
                                             {% set dayTotalPlanned = plannerData.getTotalPlannedHoursForDay(day) %}
                                             {% set dayTotalActual = plannerData.getTotalActualHoursForDay(day) %}
@@ -119,12 +126,6 @@
                                                 {% endif %}
                                             </td>
                                         {% endfor %}
-                                        <td class="align-top text-center p-1">
-                                            <div>{{ plannerData.totalPlannedHours }}h / {{ plannerData.totalExpectedHours }}h</div>
-                                            {% if plannerData.totalActualHours > 0 %}
-                                                <div class="small text-muted fw-normal">{{ 'planner.actual_hours'|trans }}: {{ plannerData.totalActualHours }}h</div>
-                                            {% endif %}
-                                        </td>
                                     </tr>
                                 </tfoot>
                             {% endif %}
@@ -140,6 +141,7 @@
     {{ parent() }}
     <style>
         td.day {
+            min-height: 36px;
             height: 100%;
         }
         td.day:hover {

@@ -30,6 +30,14 @@
                 <source>planner.actual_hours</source>
                 <target>Actual</target>
             </trans-unit>
+            <trans-unit id="planner.planed_hours">
+                <source>planner.planed_hours</source>
+                <target>Planed</target>
+            </trans-unit>
+            <trans-unit id="planner.expected_hours">
+                <source>planner.expected_hours</source>
+                <target>Expected</target>
+            </trans-unit>
             <trans-unit id="planner.create_entry">
                 <source>planner.create_entry</source>
                 <target>Create planned activity</target>

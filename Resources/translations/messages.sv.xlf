@@ -30,6 +30,14 @@
                 <source>planner.actual_hours</source>
                 <target>Faktisk tid</target>
             </trans-unit>
+            <trans-unit id="planner.planed_hours">
+                <source>planner.planed_hours</source>
+                <target>Planerad</target>
+            </trans-unit>
+            <trans-unit id="planner.expected_hours">
+                <source>planner.expected_hours</source>
+                <target>Förväntade</target>
+            </trans-unit>
             <trans-unit id="planner.create_entry">
                 <source>planner.create_entry</source>
                 <target>Skapa planerad aktivitet</target>
