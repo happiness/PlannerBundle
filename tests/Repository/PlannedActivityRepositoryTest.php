@@ -97,4 +97,60 @@ class PlannedActivityRepositoryTest extends TestCase
         $this->assertCount(1, $results);
         $this->assertSame($activity, $results[0]);
     }
+
+    public function testCreateRecurringActivitiesWithZeroOrNegativeWeeks(): void
+    {
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('persist');
+        $em->expects($this->never())->method('flush');
+
+        $repository = $this->createRepository($em);
+
+        $activity = new PlannedActivity();
+        $activity->setBegin(new \DateTime('2026-09-07'));
+        $activity->setEnd(new \DateTime('2026-09-09'));
+
+        $this->assertSame([], $repository->createRecurringActivities($activity, 0));
+        $this->assertSame([], $repository->createRecurringActivities($activity, -2));
+    }
+
+    public function testCreateRecurringActivitiesWithPositiveWeeks(): void
+    {
+        $user = new User();
+        $activity = new PlannedActivity();
+        $activity->setUser($user);
+        $activity->setTitle('Sprint Planning');
+        $activity->setHoursPerDay(4.5);
+        $activity->setColor('#ff0000');
+        $activity->setComment('Weekly meeting');
+        $activity->setBegin(new \DateTime('2026-09-07'));
+        $activity->setEnd(new \DateTime('2026-09-09'));
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->exactly(2))->method('persist');
+        $em->expects($this->exactly(2))->method('flush');
+
+        $repository = $this->createRepository($em);
+        $created = $repository->createRecurringActivities($activity, 2);
+
+        $this->assertCount(2, $created);
+
+        // Week 1 recurrence
+        $this->assertSame($user, $created[0]->getUser());
+        $this->assertSame('Sprint Planning', $created[0]->getTitle());
+        $this->assertSame(4.5, $created[0]->getHoursPerDay());
+        $this->assertSame('#ff0000', $created[0]->getColor());
+        $this->assertSame('Weekly meeting', $created[0]->getComment());
+        $this->assertSame('2026-09-14', $created[0]->getBegin()?->format('Y-m-d'));
+        $this->assertSame('2026-09-16', $created[0]->getEnd()?->format('Y-m-d'));
+
+        // Week 2 recurrence
+        $this->assertSame($user, $created[1]->getUser());
+        $this->assertSame('Sprint Planning', $created[1]->getTitle());
+        $this->assertSame(4.5, $created[1]->getHoursPerDay());
+        $this->assertSame('#ff0000', $created[1]->getColor());
+        $this->assertSame('Weekly meeting', $created[1]->getComment());
+        $this->assertSame('2026-09-21', $created[1]->getBegin()?->format('Y-m-d'));
+        $this->assertSame('2026-09-23', $created[1]->getEnd()?->format('Y-m-d'));
+    }
 }

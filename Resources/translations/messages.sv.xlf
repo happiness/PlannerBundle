@@ -42,6 +42,10 @@
                 <source>planner.add_activity</source>
                 <target>Planera aktivitet för denna dag</target>
             </trans-unit>
+            <trans-unit id="planner.recurrent_weeks">
+                <source>planner.recurrent_weeks</source>
+                <target>Återkommande veckor</target>
+            </trans-unit>
             <trans-unit id="label.title">
                 <source>label.title</source>
                 <target>Titel</target>
@@ -69,6 +73,10 @@
             <trans-unit id="label.hours_per_day">
                 <source>label.hours_per_day</source>
                 <target>Timmar per dag</target>
+            </trans-unit>
+            <trans-unit id="label.recurrent_weeks">
+                <source>label.recurrent_weeks</source>
+                <target>Återkommande veckor</target>
             </trans-unit>
             <trans-unit id="begin">
                 <source>begin</source>

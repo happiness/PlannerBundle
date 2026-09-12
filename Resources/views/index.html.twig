@@ -49,13 +49,13 @@
                         <table class="table table-hover dataTable">
                             <thead class="sticky-top">
                                 <tr>
-                                    <th class="w-avatar p-1" colspan="2"></th>
+                                    <th class="w-avatar border-bottom p-1" colspan="2"></th>
                                     {% for day in plannerData.dateHeaders %}
-                                        <th class="text-center{% if day is weekend %} weekend{% endif %}{% if day is today %} today{% endif %} p-1" style="min-width: 140px;">
+                                        <th class="text-center border-bottom{% if day is weekend %} weekend{% endif %}{% if day is today %} today{% endif %} p-1" style="min-width: 140px;">
                                             {{ day|date_weekday }}
                                         </th>
                                     {% endfor %}
-                                    <th class="text-center p-1">{{ 'planner.capacity'|trans }}</th>
+                                    <th class="text-center border-bottom p-1">{{ 'planner.capacity'|trans }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -147,6 +147,9 @@
         }
         td.day.has-activities {
             padding-bottom: 1rem !important;
+        }
+        th.border-bottom {
+            border-bottom: 1px solid #e5e7eb !important;
         }
     </style>
 {% endblock %}

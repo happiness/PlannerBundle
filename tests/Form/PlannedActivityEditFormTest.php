@@ -29,6 +29,7 @@ class PlannedActivityEditFormTest extends TypeTestCase
         ]);
 
         $this->assertFalse($form->has('user'));
+        $this->assertFalse($form->has('recurrentWeeks'));
         $this->assertTrue($form->has('title'));
         $this->assertTrue($form->has('begin'));
         $this->assertTrue($form->has('end'));
@@ -48,6 +49,27 @@ class PlannedActivityEditFormTest extends TypeTestCase
         ]);
 
         $this->assertTrue($form->has('user'));
+        $this->assertFalse($form->has('recurrentWeeks'));
+        $this->assertTrue($form->has('title'));
+        $this->assertTrue($form->has('begin'));
+        $this->assertTrue($form->has('end'));
+        $this->assertTrue($form->has('hoursPerDay'));
+        $this->assertTrue($form->has('color'));
+        $this->assertTrue($form->has('comment'));
+    }
+
+    public function testFormFieldsWithRecurrence(): void
+    {
+        $user = new User();
+        $activity = new PlannedActivity();
+
+        $form = $this->factory->createBuilder(PlannedActivityEditForm::class, $activity, [
+            'user' => $user,
+            'include_recurrence' => true,
+        ]);
+
+        $this->assertFalse($form->has('user'));
+        $this->assertTrue($form->has('recurrentWeeks'));
         $this->assertTrue($form->has('title'));
         $this->assertTrue($form->has('begin'));
         $this->assertTrue($form->has('end'));

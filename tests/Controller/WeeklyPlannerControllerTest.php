@@ -212,4 +212,74 @@ class WeeklyPlannerControllerTest extends TestCase
         $this->assertInstanceOf(Response::class, $response);
         $this->assertSame('<html>Edit Form View</html>', $response->getContent());
     }
+
+    public function testCreateActivityWithRecurrenceSubmitsSuccessfully(): void
+    {
+        $user = new User();
+        $ref = new \ReflectionProperty(User::class, 'id');
+        $ref->setValue($user, 1);
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->once())->method('savePlannedActivity');
+        $repo->expects($this->once())->method('createRecurringActivities')->with($this->isInstanceOf(PlannedActivity::class), 3);
+
+        $plannerService = $this->createMock(WeeklyPlannerService::class);
+        $userRepo = $this->createMock(UserRepository::class);
+
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo);
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturn(true);
+
+        $token = new UsernamePasswordToken($user, 'main', $user->getRoles());
+        $tokenStorage = $this->createMock(TokenStorageInterface::class);
+        $tokenStorage->method('getToken')->willReturn($token);
+
+        $router = $this->createMock(RouterInterface::class);
+        $router->method('generate')->willReturn('/planner/week/2026-09-07');
+
+        $recurrentField = $this->createMock(FormInterface::class);
+        $recurrentField->method('getData')->willReturn(3);
+
+        $form = $this->createMock(FormInterface::class);
+        $form->method('isSubmitted')->willReturn(true);
+        $form->method('isValid')->willReturn(true);
+        $form->method('has')->with('recurrentWeeks')->willReturn(true);
+        $form->method('get')->with('recurrentWeeks')->willReturn($recurrentField);
+
+        $formFactory = $this->createMock(FormFactoryInterface::class);
+        $formFactory->method('create')->willReturn($form);
+
+        $flashBag = new \Symfony\Component\HttpFoundation\Session\Flash\FlashBag();
+        $session = $this->createMock(\Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface::class);
+        $session->method('getFlashBag')->willReturn($flashBag);
+
+        $requestStack = new \Symfony\Component\HttpFoundation\RequestStack();
+        $request = new Request();
+        $request->setSession($session);
+        $requestStack->push($request);
+
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnMap([
+            ['security.authorization_checker', true],
+            ['security.token_storage', true],
+            ['router', true],
+            ['form.factory', true],
+            ['request_stack', true],
+        ]);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['security.token_storage', $tokenStorage],
+            ['router', $router],
+            ['form.factory', $formFactory],
+            ['request_stack', $requestStack],
+        ]);
+
+        $controller->setContainer($container);
+
+        $response = $controller->createActivity($request);
+
+        $this->assertInstanceOf(Response::class, $response);
+        $this->assertTrue($response->isRedirect('/planner/week/2026-09-07'));
+    }
 }

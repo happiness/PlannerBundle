@@ -17,11 +17,14 @@ use App\Form\Type\DatePickerType;
 use App\Form\Type\UserType;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Validator\Constraints\GreaterThanOrEqual;
+use Symfony\Component\Validator\Constraints\LessThanOrEqual;
 
 /**
  * @extends AbstractType<PlannedActivity>
@@ -33,6 +36,7 @@ class PlannedActivityEditForm extends AbstractType
         /** @var User $user */
         $user = $options['user'];
         $includeUser = $options['include_user'];
+        $includeRecurrence = $options['include_recurrence'];
 
         if ($includeUser) {
             $builder->add('user', UserType::class, [
@@ -73,14 +77,33 @@ class PlannedActivityEditForm extends AbstractType
                 'label' => 'label.color',
                 'required' => false,
                 'empty_data' => null,
-            ])
-            ->add('comment', TextareaType::class, [
-                'label' => 'label.comment',
+            ]);
+
+        if ($includeRecurrence) {
+            $builder->add('recurrentWeeks', IntegerType::class, [
+                'label' => 'planner.recurrent_weeks',
                 'required' => false,
+                'mapped' => false,
                 'attr' => [
-                    'rows' => 3,
+                    'min' => '0',
+                    'max' => '52',
+                    'step' => '1',
+                    'placeholder' => '0',
+                ],
+                'constraints' => [
+                    new GreaterThanOrEqual(0),
+                    new LessThanOrEqual(104),
                 ],
             ]);
+        }
+
+        $builder->add('comment', TextareaType::class, [
+            'label' => 'label.comment',
+            'required' => false,
+            'attr' => [
+                'rows' => 3,
+            ],
+        ]);
     }
 
     public function configureOptions(OptionsResolver $resolver): void
@@ -91,6 +114,7 @@ class PlannedActivityEditForm extends AbstractType
             'csrf_field_name' => 'token',
             'csrf_token_id' => 'planner_edit',
             'include_user' => false,
+            'include_recurrence' => false,
             'attr' => [
                 'data-form-event' => 'kimai.plannerActivityUpdate',
             ],
@@ -99,5 +123,6 @@ class PlannedActivityEditForm extends AbstractType
         $resolver->setRequired('user');
         $resolver->setAllowedTypes('user', User::class);
         $resolver->setAllowedTypes('include_user', 'bool');
+        $resolver->setAllowedTypes('include_recurrence', 'bool');
     }
 }

@@ -41,6 +41,37 @@ class PlannedActivityRepository extends ServiceEntityRepository
     }
 
     /**
+     * @return array<PlannedActivity>
+     */
+    public function createRecurringActivities(PlannedActivity $activity, int $weeks): array
+    {
+        if ($weeks <= 0 || $activity->getBegin() === null || $activity->getEnd() === null) {
+            return [];
+        }
+
+        $created = [];
+        for ($i = 1; $i <= $weeks; $i++) {
+            $recurring = new PlannedActivity();
+            $recurring->setUser($activity->getUser());
+            $recurring->setTitle($activity->getTitle());
+            $recurring->setHoursPerDay($activity->getHoursPerDay());
+            $recurring->setColor($activity->getColor());
+            $recurring->setComment($activity->getComment());
+
+            $recBegin = (clone $activity->getBegin())->modify(\sprintf('+%d week', $i));
+            $recEnd = (clone $activity->getEnd())->modify(\sprintf('+%d week', $i));
+
+            $recurring->setBegin($recBegin);
+            $recurring->setEnd($recEnd);
+
+            $this->savePlannedActivity($recurring);
+            $created[] = $recurring;
+        }
+
+        return $created;
+    }
+
+    /**
      * @param array<User> $users
      * @return array<PlannedActivity>
      */
