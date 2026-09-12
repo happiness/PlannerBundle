@@ -47,88 +47,59 @@
                 <div class="card mt-2 mb-3">
                     <div class="card-body p-0">
                         <table class="table table-hover dataTable">
-                            <thead>
-                                <tr class="bg-light">
-                                    <th class="w-avatar"></th>
-                                    <th>&nbsp;</th>
+                            <thead class="sticky-top">
+                                <tr>
+                                    <th class="w-avatar p-1" colspan="2"></th>
                                     {% for day in plannerData.dateHeaders %}
-                                        <th class="text-center{% if day is weekend %} bg-light text-muted{% endif %}{% if day is today %} bg-primary-lt{% endif %}" style="min-width: 140px;">
+                                        <th class="text-center{% if day is weekend %} weekend{% endif %}{% if day is today %} today{% endif %} p-1" style="min-width: 140px;">
                                             {{ day|date_weekday }}
                                         </th>
                                     {% endfor %}
-                                    <th class="text-center" style="min-width: 130px; width: 130px;">{{ 'planner.capacity'|trans }}</th>
+                                    <th class="text-center p-1">{{ 'planner.capacity'|trans }}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for row in plannerData.rows %}
                                     <tr>
-                                        <td class="w-avatar">{{ widgets.user_avatar(row.user, false, 'avatar-sm me-2') }}</td>
-                                        <td class="text-nowrap">{{ row.user.displayName }}</td>
+                                        <td class="w-avatar align-top p-1 pt-2">{{ widgets.user_avatar(row.user, false, 'avatar-xs') }}</td>
+                                        <td class="text-nowrap align-top p-1 pt-2">{{ row.user.displayName }}</td>
                                         {% for day in row.days %}
-                                            <td class="align-top{% if day.date is weekend %} bg-light-subtle{% endif %}{% if day.date is today %} bg-primary-lt{% endif %}" style="min-height: 90px;">
-                                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                                    {% if day.isOverAllocated %}
-                                                        <span class="badge bg-danger-lt text-danger" title="{{ 'planner.over_allocated'|trans }}">
-                                                            {{ day.plannedHours }}h / {{ day.expectedHours }}h
-                                                        </span>
-                                                    {% elseif day.isBalanced %}
-                                                        <span class="badge bg-success-lt text-success" title="{{ 'planner.capacity'|trans }}">
-                                                            {{ day.plannedHours }}h / {{ day.expectedHours }}h
-                                                        </span>
-                                                    {% elseif day.plannedHours > 0 %}
-                                                        <span class="badge bg-info-lt text-info" title="{{ 'planner.under_allocated'|trans }}">
-                                                            {{ day.plannedHours }}h / {{ day.expectedHours }}h
-                                                        </span>
-                                                    {% elseif day.expectedHours > 0 %}
-                                                        <span class="badge bg-secondary-lt text-muted">
-                                                            0h / {{ day.expectedHours }}h
-                                                        </span>
-                                                    {% else %}
-                                                        <span class="badge bg-secondary-lt text-muted">&ndash;</span>
-                                                    {% endif %}
-
-                                                    {% if canCreate %}
-                                                        <a href="{{ path('planner_activity_create', {'user': row.user.id, 'date': day.date|date('Y-m-d')}) }}" class="btn btn-sm btn-ghost-secondary modal-ajax-form" title="{{ 'planner.add_activity'|trans }}">
-                                                            {{ icon('create') }}
-                                                        </a>
-                                                    {% endif %}
-                                                </div>
+                                            {% set hasAcitivities = day.activities is not empty  %}
+                                            <td class="position-relative align-top border-1 day{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %} p-1 {{ hasAcitivities ? 'has-activities' : 'no-activities' }}">
+                                                {% if canCreate %}
+                                                    <a href="{{ path('planner_activity_create', {'user': row.user.id, 'date': day.date|date('Y-m-d')}) }}"
+                                                       class="stretched-link cursor-crosshair modal-ajax-form"
+                                                       title="{{ 'planner.planned_activity'|trans }}"></a>
+                                                {% endif %}
 
                                                 {% for activity in day.activities %}
-                                                    <a href="{{ path('planner_activity_edit', {'id': activity.id}) }}" class="d-block p-1 my-1 rounded text-decoration-none modal-ajax-form shadow-sm" style="background-color: {{ activity.colorSafe }}; color: {{ activity.colorSafe|font_contrast }}; font-size: 0.8rem;" title="{{ activity.title }}{% if activity.comment %}&#10;{{ activity.comment }}{% endif %}">
+                                                    <a href="{{ path('planner_activity_edit', {'id': activity.id}) }}"
+                                                       class="position-relative z-2 d-block p-1 my-1 rounded text-decoration-none modal-ajax-form shadow-sm"
+                                                       style="background-color: {{ activity.colorSafe }}; color: {{ activity.colorSafe|font_contrast }};"
+                                                       title="{{ activity.title }}{% if activity.comment %}&#10;{{ activity.comment }}{% endif %}">
                                                         <div class="d-flex justify-content-between align-items-center">
-                                                            <span class="text-truncate fw-bold">{{ activity.title }}</span>
-                                                            <span class="badge bg-dark-lt ms-1">{{ activity.hoursPerDay }}h</span>
+                                                            <span class="text-truncate small">{{ activity.title }}</span>
+                                                            <span class="badge badge-sm ms-1">{{ activity.hoursPerDay }}h</span>
                                                         </div>
                                                     </a>
                                                 {% endfor %}
-
-                                                {% if day.actualHours > 0 %}
-                                                    <div class="small text-muted mt-2 pt-1 border-top" style="font-size: 0.75rem;">
-                                                        {{ 'planner.actual_hours'|trans }}: <span class="fw-bold">{{ day.actualHours }}h</span>
-                                                    </div>
-                                                {% endif %}
                                             </td>
                                         {% endfor %}
-                                        <td class="align-top text-center bg-light-subtle">
-                                            <div class="fw-bold">
+                                        <td class="align-top text-center small p-1">
+                                            <div>
                                                 <span class="{% if row.isOverAllocated %}text-danger{% elseif row.isBalanced %}text-success{% else %}text-primary{% endif %}">
-                                                    {{ row.totalPlannedHours }}h
-                                                </span>
-                                                <span class="text-muted">/ {{ row.totalExpectedHours }}h</span>
+                                                    {{ row.totalPlannedHours }}h</span><span class="text-muted">/{{ row.totalExpectedHours }}h</span>
+                                                {% set pct = row.totalExpectedHours > 0 ? ((row.totalPlannedHours / row.totalExpectedHours) * 100)|round : 0 %}
+                                                <span>({{ pct }}%)</span>
                                             </div>
-                                            {% set pct = row.totalExpectedHours > 0 ? ((row.totalPlannedHours / row.totalExpectedHours) * 100)|round : 0 %}
-                                            <div class="progress progress-sm my-1" style="height: 6px;">
-                                                <div class="progress-bar {% if row.isOverAllocated %}bg-danger{% elseif row.isBalanced %}bg-success{% else %}bg-primary{% endif %}" style="width: {{ min(100, pct) }}%" role="progressbar"></div>
-                                            </div>
-                                            <div class="small text-muted">
+                                            <div>
                                                 {{ 'planner.actual_hours'|trans }}: <strong>{{ row.totalActualHours }}h</strong>
                                             </div>
                                         </td>
                                     </tr>
                                 {% else %}
                                     <tr>
-                                        <td colspan="10" class="text-center text-muted p-4">
+                                        <td colspan="10" class="text-center text-muted p-1">
                                             {{ 'error.no_entries_found'|trans }}
                                         </td>
                                     </tr>
@@ -137,18 +108,18 @@
                             {% if plannerData.rows|length > 0 %}
                                 <tfoot>
                                     <tr class="bg-light fw-bold">
-                                        <td>{{ 'stats.durationTotal'|trans }}</td>
+                                        <td class="text-right p-1" colspan="2">&nbsp;</td>
                                         {% for day in plannerData.dateHeaders %}
                                             {% set dayTotalPlanned = plannerData.getTotalPlannedHoursForDay(day) %}
                                             {% set dayTotalActual = plannerData.getTotalActualHoursForDay(day) %}
-                                            <td class="text-center">
+                                            <td class="align-top text-center p-1">
                                                 <div>{{ dayTotalPlanned }}h</div>
                                                 {% if dayTotalActual > 0 %}
                                                     <div class="small text-muted fw-normal">{{ dayTotalActual }}h</div>
                                                 {% endif %}
                                             </td>
                                         {% endfor %}
-                                        <td class="text-center">
+                                        <td class="align-top text-center p-1">
                                             <div>{{ plannerData.totalPlannedHours }}h / {{ plannerData.totalExpectedHours }}h</div>
                                             {% if plannerData.totalActualHours > 0 %}
                                                 <div class="small text-muted fw-normal">{{ 'planner.actual_hours'|trans }}: {{ plannerData.totalActualHours }}h</div>
@@ -163,6 +134,21 @@
             </section>
         </div>
     </div>
+{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+        td.day {
+            height: 100%;
+        }
+        td.day:hover {
+            background-color: #ccc;
+        }
+        td.day.has-activities {
+            padding-bottom: 1rem !important;
+        }
+    </style>
 {% endblock %}
 
 {% block javascripts %}

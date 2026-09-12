@@ -227,6 +227,7 @@ final class WeeklyPlannerController extends AbstractController
         }
 
         $query = new UserQuery();
+        $query->setSystemAccount(FALSE);
         $query->setCurrentUser($currentUser);
         $query->setOrder(UserQuery::ORDER_ASC);
         $query->setOrderBy('username');
