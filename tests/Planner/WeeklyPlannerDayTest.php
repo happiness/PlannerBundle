@@ -25,6 +25,7 @@ class WeeklyPlannerDayTest extends TestCase
         $this->assertSame($date, $day->getDate());
         $this->assertSame(8.0, $day->getExpectedHours());
         $this->assertSame(7.5, $day->getActualHours());
+        $this->assertSame(0, $day->getPlannedPercentage());
         $this->assertTrue($day->isWorkingDay());
         $this->assertTrue($day->isUnderAllocated());
         $this->assertFalse($day->isOverAllocated());
@@ -35,6 +36,7 @@ class WeeklyPlannerDayTest extends TestCase
         $day->addActivity($act1);
 
         $this->assertSame(4.0, $day->getPlannedHours());
+        $this->assertSame(50, $day->getPlannedPercentage());
         $this->assertTrue($day->isUnderAllocated());
 
         $act2 = new PlannedActivity();
@@ -42,6 +44,7 @@ class WeeklyPlannerDayTest extends TestCase
         $day->addActivity($act2);
 
         $this->assertSame(8.0, $day->getPlannedHours());
+        $this->assertSame(100, $day->getPlannedPercentage());
         $this->assertTrue($day->isBalanced());
         $this->assertFalse($day->isUnderAllocated());
         $this->assertFalse($day->isOverAllocated());
@@ -51,8 +54,14 @@ class WeeklyPlannerDayTest extends TestCase
         $day->addActivity($act3);
 
         $this->assertSame(9.0, $day->getPlannedHours());
+        $this->assertSame(113, $day->getPlannedPercentage());
         $this->assertTrue($day->isOverAllocated());
         $this->assertFalse($day->isBalanced());
         $this->assertFalse($day->isUnderAllocated());
+
+        $weekendDay = new WeeklyPlannerDay(new \DateTimeImmutable('2026-09-13'), 0.0, 0.0);
+        $this->assertSame(0, $weekendDay->getPlannedPercentage());
+        $weekendDay->addActivity($act1);
+        $this->assertSame(0, $weekendDay->getPlannedPercentage());
     }
 }

@@ -65,6 +65,15 @@ final class WeeklyPlannerDay
         return $total;
     }
 
+    public function getPlannedPercentage(): int
+    {
+        if ($this->expectedHours <= 0.0) {
+            return 0;
+        }
+
+        return (int) round(($this->getPlannedHours() / $this->expectedHours) * 100);
+    }
+
     public function isWorkingDay(): bool
     {
         return $this->expectedHours > 0.0;

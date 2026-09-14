@@ -42,6 +42,10 @@
                 <source>planner.this_week</source>
                 <target>This week</target>
             </trans-unit>
+            <trans-unit id="planner.toggle_all">
+                <source>planner.toggle_all</source>
+                <target>Toggle all</target>
+            </trans-unit>
             <trans-unit id="planner.create_entry">
                 <source>planner.create_entry</source>
                 <target>Create planned activity</target>
@@ -125,6 +129,10 @@
             <trans-unit id="planner.delete_all">
                 <source>planner.delete_all</source>
                 <target>Delete all entries</target>
+            </trans-unit>
+            <trans-unit id="planner.toggle_activities">
+                <source>planner.toggle_activities</source>
+                <target>Expand/collapse activities</target>
             </trans-unit>
         </body>
     </file>

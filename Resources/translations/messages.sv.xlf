@@ -42,6 +42,10 @@
                 <source>planner.this_week</source>
                 <target>Denna vecka</target>
             </trans-unit>
+            <trans-unit id="planner.toggle_all">
+                <source>planner.toggle_all</source>
+                <target>Visa/dölj alla</target>
+            </trans-unit>
             <trans-unit id="planner.create_entry">
                 <source>planner.create_entry</source>
                 <target>Skapa planerad aktivitet</target>
@@ -125,6 +129,10 @@
             <trans-unit id="planner.delete_all">
                 <source>planner.delete_all</source>
                 <target>Radera alla poster</target>
+            </trans-unit>
+            <trans-unit id="planner.toggle_activities">
+                <source>planner.toggle_activities</source>
+                <target>Visa/dölj aktiviteter</target>
             </trans-unit>
         </body>
     </file>

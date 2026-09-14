@@ -78,6 +78,16 @@ final class WeeklyPlannerUserRow
         return $total;
     }
 
+    public function getPlannedPercentage(): int
+    {
+        $expected = $this->getTotalExpectedHours();
+        if ($expected <= 0.0) {
+            return 0;
+        }
+
+        return (int) round(($this->getTotalPlannedHours() / $expected) * 100);
+    }
+
     public function getTotalPlannedHours(): float
     {
         $total = 0.0;

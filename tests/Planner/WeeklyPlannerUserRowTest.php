@@ -53,8 +53,12 @@ class WeeklyPlannerUserRowTest extends TestCase
         $this->assertSame(16.0, $row->getTotalExpectedHours());
         $this->assertSame(12.0, $row->getTotalPlannedHours());
         $this->assertSame(15.0, $row->getTotalActualHours());
+        $this->assertSame(75, $row->getPlannedPercentage());
         $this->assertTrue($row->isUnderAllocated());
         $this->assertFalse($row->isOverAllocated());
         $this->assertFalse($row->isBalanced());
+
+        $emptyRow = new WeeklyPlannerUserRow(new User());
+        $this->assertSame(0, $emptyRow->getPlannedPercentage());
     }
 }

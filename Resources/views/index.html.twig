@@ -25,6 +25,10 @@
                         {{ icon('calendar', true) }}
                         {{ 'planner.this_week'|trans }}
                     </a>
+                    <button type="button" class="btn planner-toggle-all planner-expand-all">
+                        {{ icon('fas fa-plus-minus', true) }}
+                        {{ 'planner.toggle_all'|trans }}
+                    </button>
                 </div>
 
                 {% if canCreate %}
@@ -63,26 +67,37 @@
                             </thead>
                             <tbody>
                                 {% for row in plannerData.rows %}
-                                    <tr>
-                                        <td class="w-avatar align-top p-1">{{ widgets.user_avatar(row.user, false, 'avatar-sm') }}</td>
-                                        <td class="text-nowrap align-top p-1">
-                                            <div>{{ row.user.displayName }}</div>
-                                            <div class="small">
-                                                {% set pct = row.totalExpectedHours > 0 ? ((row.totalPlannedHours / row.totalExpectedHours) * 100)|round : 0 %}
-                                                <span class="fw-bold">{{ pct }}%</span>
-
-                                                {% set classes = [
-                                                    row.isOverAllocated ? 'text-danger' : '',
-                                                    row.isBalanced ? 'text-success' : '',
-                                                    not row.isOverAllocated and not row.isBalanced ? 'text-primary' : ''
-                                                ] %}
-                                                <span title="{{ 'planner.planed_hours'|trans }}" class="{{ classes|join(' ') }}">{{ row.totalPlannedHours }}/</span><span title="{{ 'planner.expected_hours'|trans }}">{{ row.totalExpectedHours }} hrs</span>
-                                                <span title="{{ 'planner.actual_hours'|trans }}" class="text-muted">({{ row.totalActualHours }} hrs)</span>
+                                    {% set pct = row.plannedPercentage %}
+                                    {% set barColorClass = row.isOverAllocated ? 'planner-bar-danger' : (row.totalPlannedHours > 0 ? 'planner-bar-success' : 'planner-bar-muted') %}
+                                    <tr class="planner-row planner-row-summary is-collapsed" data-user-id="{{ row.user.id }}">
+                                        <td class="w-avatar align-middle p-1 planner-user-cell">{{ widgets.user_avatar(row.user, false, 'avatar-sm') }}</td>
+                                        <td class="text-nowrap align-middle p-1 planner-user-cell">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div>{{ row.user.displayName }}</div>
+                                                <button type="button" class="btn btn-sm btn-icon btn-ghost-secondary planner-user-toggle m-2 p-0" aria-expanded="false" title="{{ 'planner.toggle_activities'|trans }}">
+                                                    <span class="toggle-icon d-inline-block">{{ icon('right') }}</span>
+                                                </button>
+                                            </div>
+                                            {% if row.user.title %}
+                                                <div class="small text-muted">{{ row.user.title }}</div>
+                                            {% endif %}
+                                        </td>
+                                        <td colspan="{{ plannerData.dateHeaders|length }}" class="planner-week-summary align-middle p-0">
+                                            <div class="planner-summary-bar {{ barColorClass }}">
+                                                <div class="planner-summary-badge">
+                                                    <div class="planner-summary-pct">{{ pct }}%</div>
+                                                    <div class="planner-summary-hours">
+                                                        {{ row.totalPlannedHours }}/{{ row.totalExpectedHours }} hrs ({{ row.totalActualHours }} hrs)
+                                                    </div>
+                                                </div>
                                             </div>
                                         </td>
+                                    </tr>
+                                    <tr class="planner-row planner-row-details is-collapsed" data-user-id="{{ row.user.id }}">
+                                        <td colspan="2" class="planner-user-cell p-1 border-top-0"></td>
                                         {% for day in row.days %}
-                                            {% set hasAcitivities = day.activities is not empty  %}
-                                            <td class="position-relative align-top border-1 day{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %} p-1 {{ hasAcitivities ? 'has-activities' : 'no-activities' }}">
+                                            {% set hasActivities = day.activities is not empty  %}
+                                            <td class="position-relative align-top border-1 day{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %} p-1 {{ hasActivities ? 'has-activities' : 'no-activities' }}">
                                                 {% if canCreate %}
                                                     <a href="{{ path('planner_activity_create', {'user': row.user.id, 'date': day.date|date('Y-m-d')}) }}"
                                                        class="stretched-link cursor-crosshair modal-ajax-form"
@@ -91,7 +106,7 @@
 
                                                 {% for activity in day.activities %}
                                                     <a href="{{ path('planner_activity_edit', {'id': activity.id}) }}"
-                                                       class="planed-activity position-relative z-2 d-block p-1 my-1 rounded text-decoration-none modal-ajax-form shadow-sm"
+                                                       class="planner-activity position-relative z-2 d-block p-1 my-1 rounded text-decoration-none modal-ajax-form shadow-sm"
                                                        style="background-color: {{ activity.colorSafe }}; color: {{ activity.colorSafe|font_contrast }};"
                                                        title="{{ activity.title }}">
                                                         <div class="d-flex justify-content-between align-items-center">
@@ -145,18 +160,81 @@
     {{ parent() }}
     <style>
         td.day {
-            min-height: 36px;
-            height: 100%;
+            height: 48px;
         }
         td.day:hover {
             background-color: #ccc;
         }
-        td.day.has-activities {
+        tr.is-expanded td.day.has-activities {
             padding-bottom: 1rem !important;
         }
-        .planed-activity {
+        .planner-activity {
             min-width: 100%;
             max-width: 8rem;
+        }
+        td.planner-week-summary {
+            padding: 0 !important;
+            vertical-align: middle;
+        }
+        .planner-summary-bar {
+            width: 100%;
+            height: 100%;
+            min-height: 48px;
+            display: flex;
+            align-items: stretch;
+        }
+        .planner-bar-success {
+            background-color: #5fa675;
+        }
+        .planner-bar-danger {
+            background-color: #db5c5c;
+        }
+        .planner-bar-muted {
+            background-color: #94a3b8;
+        }
+        .planner-summary-badge {
+            background-color: rgba(0, 0, 0, 0.35);
+            color: #ffffff;
+            padding: 4px 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-width: 140px;
+            flex-shrink: 0;
+        }
+        .planner-summary-pct {
+            font-weight: 700;
+            font-size: 1.1rem;
+            line-height: 1.2;
+        }
+        .planner-summary-hours {
+            font-size: 0.8rem;
+            line-height: 1.2;
+            white-space: nowrap;
+            color: rgba(255, 255, 255, 0.95);
+        }
+        .planner-user-cell {
+            cursor: pointer;
+            user-select: none;
+        }
+        .planner-user-toggle {
+            line-height: 1;
+        }
+        .planner-user-toggle .toggle-icon {
+            transition: transform 0.15s ease-in-out;
+        }
+        .planner-user-toggle[aria-expanded="true"] .toggle-icon,
+        tr.is-expanded .planner-user-toggle .toggle-icon {
+            transform: rotate(90deg);
+        }
+        tr.planner-row-summary {
+            display: table-row;
+        }
+        tr.planner-row-details.is-collapsed {
+            display: none;
+        }
+        tr.planner-row-details.is-expanded {
+            display: table-row;
         }
     </style>
 {% endblock %}
@@ -164,9 +242,130 @@
 {% block javascripts %}
     {{ parent() }}
     <script type="text/javascript">
+        function getPlannerUserToggleStates() {
+            try {
+                if (typeof KimaiStorage !== 'undefined') {
+                    return KimaiStorage.get('planner_user_toggle_states') || {};
+                }
+                const data = localStorage.getItem('planner_user_toggle_states');
+                return data ? JSON.parse(data) : {};
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function savePlannerUserToggleState(userId, isExpanded) {
+            try {
+                const states = getPlannerUserToggleStates();
+                states[userId] = isExpanded;
+                if (typeof KimaiStorage !== 'undefined') {
+                    KimaiStorage.set('planner_user_toggle_states', states);
+                } else {
+                    localStorage.setItem('planner_user_toggle_states', JSON.stringify(states));
+                }
+            } catch (e) {
+                // ignore storage error
+            }
+        }
+
+        function restorePlannerUserToggleStates() {
+            const states = getPlannerUserToggleStates();
+            document.querySelectorAll('.planner-row[data-user-id]').forEach(function(row) {
+                const userId = row.getAttribute('data-user-id');
+                if (userId && states[userId] !== undefined) {
+                    const isExpanded = !!states[userId];
+                    row.classList.toggle('is-expanded', isExpanded);
+                    row.classList.toggle('is-collapsed', !isExpanded);
+                    const toggleBtn = row.querySelector('.planner-user-toggle');
+                    if (toggleBtn) {
+                        toggleBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+                    }
+                }
+            });
+        }
+
         document.addEventListener('kimai.initialized', function() {
             // Soft reload (reloads content area without full browser refresh)
             KimaiReloadPageWidget.create('kimai.plannerActivityUpdate');
+            restorePlannerUserToggleStates();
+        });
+
+        document.addEventListener('kimai.reloadPage', function() {
+            restorePlannerUserToggleStates();
+        });
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', restorePlannerUserToggleStates);
+        } else {
+            restorePlannerUserToggleStates();
+        }
+
+        document.addEventListener('click', function(e) {
+            const toggleAllBtn = e.target.closest('.planner-toggle-all, .planner-expand-all');
+            if (toggleAllBtn) {
+                e.preventDefault();
+                const detailsRows = Array.from(document.querySelectorAll('tr.planner-row-details[data-user-id]'));
+                const anyCollapsed = detailsRows.some(function(r) {
+                    return r.classList.contains('is-collapsed') || !r.classList.contains('is-expanded');
+                });
+                const willExpand = detailsRows.length === 0 || anyCollapsed;
+
+                const states = getPlannerUserToggleStates();
+                document.querySelectorAll('.planner-row[data-user-id]').forEach(function(r) {
+                    r.classList.toggle('is-expanded', willExpand);
+                    r.classList.toggle('is-collapsed', !willExpand);
+                    const toggleBtn = r.querySelector('.planner-user-toggle');
+                    if (toggleBtn) {
+                        toggleBtn.setAttribute('aria-expanded', willExpand ? 'true' : 'false');
+                    }
+                    const userId = r.getAttribute('data-user-id');
+                    if (userId) {
+                        states[userId] = willExpand;
+                    }
+                });
+                try {
+                    if (typeof KimaiStorage !== 'undefined') {
+                        KimaiStorage.set('planner_user_toggle_states', states);
+                    } else {
+                        localStorage.setItem('planner_user_toggle_states', JSON.stringify(states));
+                    }
+                } catch (err) {
+                    // ignore storage error
+                }
+                return;
+            }
+
+            const userCell = e.target.closest('.planner-user-cell');
+            if (!userCell) {
+                return;
+            }
+
+            if (e.target.closest('a')) {
+                return;
+            }
+
+            e.preventDefault();
+
+            const row = userCell.closest('tr');
+            if (!row) {
+                return;
+            }
+
+            const userId = row.getAttribute('data-user-id');
+            const isExpanded = row.classList.contains('is-expanded');
+            const willExpand = !isExpanded;
+
+            if (userId) {
+                document.querySelectorAll('.planner-row[data-user-id="' + userId + '"]').forEach(function(r) {
+                    r.classList.toggle('is-expanded', willExpand);
+                    r.classList.toggle('is-collapsed', !willExpand);
+                    const toggleBtn = r.querySelector('.planner-user-toggle');
+                    if (toggleBtn) {
+                        toggleBtn.setAttribute('aria-expanded', willExpand ? 'true' : 'false');
+                    }
+                });
+                savePlannerUserToggleState(userId, willExpand);
+            }
         });
     </script>
 {% endblock %}
