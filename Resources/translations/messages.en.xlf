@@ -38,6 +38,10 @@
                 <source>planner.expected_hours</source>
                 <target>Expected</target>
             </trans-unit>
+            <trans-unit id="planner.this_week">
+                <source>planner.this_week</source>
+                <target>This week</target>
+            </trans-unit>
             <trans-unit id="planner.create_entry">
                 <source>planner.create_entry</source>
                 <target>Create planned activity</target>

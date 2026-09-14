@@ -164,6 +164,11 @@ class PlannedActivity
         return $this;
     }
 
+    public function hasComment(): bool
+    {
+        return $this->comment !== null && $this->comment !== '';
+    }
+
     public function coversDate(\DateTimeInterface $date): bool
     {
         if ($this->begin === null || $this->end === null) {

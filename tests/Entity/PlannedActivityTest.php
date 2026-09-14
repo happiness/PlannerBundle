@@ -47,6 +47,13 @@ class PlannedActivityTest extends TestCase
 
         $this->assertSame($activity, $activity->setComment('Important tasks'));
         $this->assertSame('Important tasks', $activity->getComment());
+        $this->assertTrue($activity->hasComment());
+
+        $activity->setComment('');
+        $this->assertFalse($activity->hasComment());
+
+        $activity->setComment(null);
+        $this->assertFalse($activity->hasComment());
     }
 
     public function testCoversDateAndHoursCalculation(): void
