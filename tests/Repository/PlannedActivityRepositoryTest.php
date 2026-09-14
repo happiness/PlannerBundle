@@ -58,6 +58,34 @@ class PlannedActivityRepositoryTest extends TestCase
         $repository->deletePlannedActivity($activity);
     }
 
+    public function testDeleteRecurringActivities(): void
+    {
+        $activity1 = new PlannedActivity();
+        $activity2 = new PlannedActivity();
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->exactly(2))->method('remove')->with($this->logicalOr($this->identicalTo($activity1), $this->identicalTo($activity2)));
+        $em->expects($this->once())->method('flush');
+
+        $metadata = new ClassMetadata(PlannedActivity::class);
+        $em->method('getClassMetadata')->with(PlannedActivity::class)->willReturn($metadata);
+
+        $registry = $this->createMock(ManagerRegistry::class);
+        $registry->method('getManagerForClass')->willReturn($em);
+
+        $repository = $this->getMockBuilder(PlannedActivityRepository::class)
+            ->setConstructorArgs([$registry])
+            ->onlyMethods(['findBy'])
+            ->getMock();
+
+        $repository->expects($this->once())
+            ->method('findBy')
+            ->with(['recurrenceGroup' => 'group-123'])
+            ->willReturn([$activity1, $activity2]);
+
+        $repository->deleteRecurringActivities('group-123');
+    }
+
     public function testFindPlannedActivitiesForEmptyUsers(): void
     {
         $em = $this->createMock(EntityManagerInterface::class);
@@ -127,13 +155,15 @@ class PlannedActivityRepositoryTest extends TestCase
         $activity->setEnd(new \DateTime('2026-09-09'));
 
         $em = $this->createMock(EntityManagerInterface::class);
-        $em->expects($this->exactly(2))->method('persist');
-        $em->expects($this->exactly(2))->method('flush');
+        $em->expects($this->exactly(3))->method('persist');
+        $em->expects($this->exactly(3))->method('flush');
 
         $repository = $this->createRepository($em);
         $created = $repository->createRecurringActivities($activity, 2);
 
         $this->assertCount(2, $created);
+        $this->assertNotNull($activity->getRecurrenceGroup());
+        $this->assertNotEmpty($activity->getRecurrenceGroup());
 
         // Week 1 recurrence
         $this->assertSame($user, $created[0]->getUser());
@@ -141,6 +171,7 @@ class PlannedActivityRepositoryTest extends TestCase
         $this->assertSame(4.5, $created[0]->getHoursPerDay());
         $this->assertSame('#ff0000', $created[0]->getColor());
         $this->assertSame('Weekly meeting', $created[0]->getComment());
+        $this->assertSame($activity->getRecurrenceGroup(), $created[0]->getRecurrenceGroup());
         $this->assertSame('2026-09-14', $created[0]->getBegin()?->format('Y-m-d'));
         $this->assertSame('2026-09-16', $created[0]->getEnd()?->format('Y-m-d'));
 
@@ -150,6 +181,7 @@ class PlannedActivityRepositoryTest extends TestCase
         $this->assertSame(4.5, $created[1]->getHoursPerDay());
         $this->assertSame('#ff0000', $created[1]->getColor());
         $this->assertSame('Weekly meeting', $created[1]->getComment());
+        $this->assertSame($activity->getRecurrenceGroup(), $created[1]->getRecurrenceGroup());
         $this->assertSame('2026-09-21', $created[1]->getBegin()?->format('Y-m-d'));
         $this->assertSame('2026-09-23', $created[1]->getEnd()?->format('Y-m-d'));
     }

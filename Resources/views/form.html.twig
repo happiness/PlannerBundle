@@ -38,12 +38,20 @@
         {% endblock %}
         {% block modal_footer %}
             {% if activity.id is not null and is_granted('delete', activity) %}
-                <a class="confirmation-link btn btn-outline-danger me-auto"
-                    href="{{ path('planner_activity_delete', {'id': activity.id, 'token': csrf_token('planner_delete_' ~ activity.id)}) }}"
-                    data-question="confirm.delete">
-                    {{ icon('delete', true) }}
-                    {{ 'action.delete'|trans }}
-                </a>
+                {% if activity.isRecurring %}
+                    <a class="btn btn-outline-danger me-auto modal-ajax-form"
+                        href="{{ path('planner_activity_delete', {'id': activity.id}) }}">
+                        {{ icon('delete', true) }}
+                        {{ 'action.delete'|trans }}
+                    </a>
+                {% else %}
+                    <a class="confirmation-link btn btn-outline-danger me-auto"
+                        href="{{ path('planner_activity_delete', {'id': activity.id, 'token': csrf_token('planner_delete_' ~ activity.id)}) }}"
+                        data-question="confirm.delete">
+                        {{ icon('delete', true) }}
+                        {{ 'action.delete'|trans }}
+                    </a>
+                {% endif %}
             {% endif %}
             <button type="submit"
                     class="btn btn-primary modal-form-save"
@@ -61,12 +69,20 @@
         {% block form_after %}
             {% if not kimai_context.modalRequest and activity.id is not null and is_granted('delete', activity) %}
                 <div class="card-footer d-flex justify-content-between border-top">
-                    <a class="confirmation-link btn btn-outline-danger me-auto"
-                        href="{{ path('planner_activity_delete', {'id': activity.id, 'token': csrf_token('planner_delete_' ~ activity.id)}) }}"
-                        data-question="confirm.delete">
-                        {{ icon('delete', true) }}
-                        {{ 'action.delete'|trans }}
-                    </a>
+                    {% if activity.isRecurring %}
+                        <a class="btn btn-outline-danger me-auto modal-ajax-form"
+                            href="{{ path('planner_activity_delete', {'id': activity.id}) }}">
+                            {{ icon('delete', true) }}
+                            {{ 'action.delete'|trans }}
+                        </a>
+                    {% else %}
+                        <a class="confirmation-link btn btn-outline-danger me-auto"
+                            href="{{ path('planner_activity_delete', {'id': activity.id, 'token': csrf_token('planner_delete_' ~ activity.id)}) }}"
+                            data-question="confirm.delete">
+                            {{ icon('delete', true) }}
+                            {{ 'action.delete'|trans }}
+                        </a>
+                    {% endif %}
                 </div>
             {% endif %}
         {% endblock %}

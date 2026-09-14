@@ -40,13 +40,30 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $entityManager->flush();
     }
 
+    public function deleteRecurringActivities(string $recurrenceGroup): void
+    {
+        $activities = $this->findBy(['recurrenceGroup' => $recurrenceGroup]);
+        $entityManager = $this->getEntityManager();
+        foreach ($activities as $activity) {
+            $entityManager->remove($activity);
+        }
+        $entityManager->flush();
+    }
+
     /**
      * @return array<PlannedActivity>
      */
     public function createRecurringActivities(PlannedActivity $activity, int $weeks): array
     {
-        if ($weeks <= 0 || $activity->getBegin() === null || $activity->getEnd() === null) {
+        $begin = $activity->getBegin();
+        $end = $activity->getEnd();
+        if ($weeks <= 0 || $begin === null || $end === null) {
             return [];
+        }
+
+        if ($activity->getRecurrenceGroup() === null || $activity->getRecurrenceGroup() === '') {
+            $activity->setRecurrenceGroup(bin2hex(random_bytes(16)));
+            $this->savePlannedActivity($activity);
         }
 
         $created = [];
@@ -57,9 +74,10 @@ class PlannedActivityRepository extends ServiceEntityRepository
             $recurring->setHoursPerDay($activity->getHoursPerDay());
             $recurring->setColor($activity->getColor());
             $recurring->setComment($activity->getComment());
+            $recurring->setRecurrenceGroup($activity->getRecurrenceGroup());
 
-            $recBegin = (clone $activity->getBegin())->modify(\sprintf('+%d week', $i));
-            $recEnd = (clone $activity->getEnd())->modify(\sprintf('+%d week', $i));
+            $recBegin = (clone $begin)->modify(\sprintf('+%d week', $i));
+            $recEnd = (clone $end)->modify(\sprintf('+%d week', $i));
 
             $recurring->setBegin($recBegin);
             $recurring->setEnd($recEnd);

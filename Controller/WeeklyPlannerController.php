@@ -21,6 +21,7 @@ use KimaiPlugin\PlannerBundle\Form\PlannedActivityEditForm;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use KimaiPlugin\PlannerBundle\Voter\PlannedActivityVoter;
+use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -170,16 +171,64 @@ final class WeeklyPlannerController extends AbstractController
             throw $this->createAccessDeniedException();
         }
 
+        $selectedDate = $activity->getBegin() ? $activity->getBegin()->format('Y-m-d') : (new \DateTime('today'))->format('Y-m-d');
+
+        if ($activity->isRecurring()) {
+            $deleteForm = $this->createFormBuilder(null, [
+                'attr' => [
+                    'data-form-event' => 'kimai.plannerActivityUpdate',
+                    'data-msg-success' => 'action.delete.success',
+                    'data-msg-error' => 'action.delete.error',
+                ],
+            ])
+                ->add('delete_mode', ChoiceType::class, [
+                    'label' => false,
+                    'expanded' => true,
+                    'multiple' => false,
+                    'choices' => [
+                        'planner.delete_single' => 'single',
+                        'planner.delete_all' => 'all',
+                    ],
+                    'data' => 'single',
+                ])
+                ->setAction($this->generateUrl('planner_activity_delete', ['id' => $activity->getId()]))
+                ->setMethod('POST')
+                ->getForm();
+
+            $deleteForm->handleRequest($request);
+
+            if ($deleteForm->isSubmitted() && $deleteForm->isValid()) {
+                try {
+                    $mode = $deleteForm->get('delete_mode')->getData();
+                    if ($mode === 'all' && $activity->getRecurrenceGroup() !== null) {
+                        $this->repository->deleteRecurringActivities($activity->getRecurrenceGroup());
+                    } else {
+                        $this->repository->deletePlannedActivity($activity);
+                    }
+                    $this->flashSuccess('action.delete.success');
+
+                    return $this->redirectToRoute('planner_week', ['date' => $selectedDate]);
+                } catch (\Exception $ex) {
+                    $this->flashDeleteException($ex);
+
+                    return $this->redirectToRoute('planner');
+                }
+            }
+
+            return $this->render('@Planner/delete.html.twig', [
+                'activity' => $activity,
+                'form' => $deleteForm->createView(),
+            ]);
+        }
+
         $token = $request->query->get('token') ?? $request->getPayload()->getString('token');
         if (!$this->isCsrfTokenValid('planner_delete_' . (string) $activity->getId(), $token)) {
             $this->flashError('action.csrf.error');
-            $selectedDate = $activity->getBegin() ? $activity->getBegin()->format('Y-m-d') : (new \DateTime('today'))->format('Y-m-d');
 
             return $this->redirectToRoute('planner_week', ['date' => $selectedDate]);
         }
 
         try {
-            $selectedDate = $activity->getBegin() ? $activity->getBegin()->format('Y-m-d') : (new \DateTime('today'))->format('Y-m-d');
             $this->repository->deletePlannedActivity($activity);
             $this->flashSuccess('action.delete.success');
 

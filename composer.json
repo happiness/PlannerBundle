@@ -1,6 +1,6 @@
 {
   "name": "happiness/planner-bundle",
-  "description": "Weekly team planner plugin for Kimai",
+  "description": "Weekly team planner plugin.",
   "homepage": "https://github.com/happiness/PlannerBundle",
   "type": "kimai-plugin",
   "version": "1.0.0",

@@ -282,4 +282,285 @@ class WeeklyPlannerControllerTest extends TestCase
         $this->assertInstanceOf(Response::class, $response);
         $this->assertTrue($response->isRedirect('/planner/week/2026-09-07'));
     }
+
+    public function testDeleteNonRecurringActivityWithValidToken(): void
+    {
+        $user = new User();
+        $ref = new \ReflectionProperty(User::class, 'id');
+        $ref->setValue($user, 1);
+
+        $activity = new PlannedActivity();
+        $activityRef = new \ReflectionProperty(PlannedActivity::class, 'id');
+        $activityRef->setValue($activity, 5);
+        $activity->setBegin(new \DateTime('2026-09-07'));
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->once())->method('deletePlannedActivity')->with($activity);
+
+        $plannerService = $this->createMock(WeeklyPlannerService::class);
+        $userRepo = $this->createMock(UserRepository::class);
+
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo);
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturn(true);
+
+        $csrfManager = $this->createMock(\Symfony\Component\Security\Csrf\CsrfTokenManagerInterface::class);
+        $csrfManager->method('isTokenValid')->willReturn(true);
+
+        $router = $this->createMock(RouterInterface::class);
+        $router->method('generate')->willReturn('/planner/week/2026-09-07');
+
+        $flashBag = new \Symfony\Component\HttpFoundation\Session\Flash\FlashBag();
+        $session = $this->createMock(\Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface::class);
+        $session->method('getFlashBag')->willReturn($flashBag);
+
+        $requestStack = new \Symfony\Component\HttpFoundation\RequestStack();
+        $request = new Request(['token' => 'valid_token']);
+        $request->setSession($session);
+        $requestStack->push($request);
+
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnMap([
+            ['security.authorization_checker', true],
+            ['security.csrf.token_manager', true],
+            ['router', true],
+            ['request_stack', true],
+        ]);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['security.csrf.token_manager', $csrfManager],
+            ['router', $router],
+            ['request_stack', $requestStack],
+        ]);
+
+        $controller->setContainer($container);
+
+        $response = $controller->deleteActivity($activity, $request);
+
+        $this->assertInstanceOf(Response::class, $response);
+        $this->assertTrue($response->isRedirect('/planner/week/2026-09-07'));
+    }
+
+    public function testDeleteRecurringActivityRendersPrompt(): void
+    {
+        $user = new User();
+        $ref = new \ReflectionProperty(User::class, 'id');
+        $ref->setValue($user, 1);
+
+        $activity = new PlannedActivity();
+        $activityRef = new \ReflectionProperty(PlannedActivity::class, 'id');
+        $activityRef->setValue($activity, 5);
+        $activity->setBegin(new \DateTime('2026-09-07'));
+        $activity->setRecurrenceGroup('group-xyz');
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->never())->method('deletePlannedActivity');
+        $repo->expects($this->never())->method('deleteRecurringActivities');
+
+        $plannerService = $this->createMock(WeeklyPlannerService::class);
+        $userRepo = $this->createMock(UserRepository::class);
+
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo);
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturn(true);
+
+        $router = $this->createMock(RouterInterface::class);
+        $router->method('generate')->willReturn('/planner/activity/5/delete');
+
+        $formView = $this->createMock(FormView::class);
+        $form = $this->createMock(FormInterface::class);
+        $form->method('createView')->willReturn($formView);
+        $form->method('isSubmitted')->willReturn(false);
+
+        $formBuilder = $this->createMock(\Symfony\Component\Form\FormBuilderInterface::class);
+        $formBuilder->method('add')->willReturnSelf();
+        $formBuilder->method('setAction')->willReturnSelf();
+        $formBuilder->method('setMethod')->willReturnSelf();
+        $formBuilder->method('getForm')->willReturn($form);
+
+        $formFactory = $this->createMock(FormFactoryInterface::class);
+        $formFactory->method('createBuilder')->willReturn($formBuilder);
+
+        $twig = $this->createMock(Environment::class);
+        $twig->expects($this->once())
+            ->method('render')
+            ->with('@Planner/delete.html.twig', $this->callback(function (array $context) use ($activity) {
+                return isset($context['form'], $context['activity']) && $context['activity'] === $activity;
+            }))
+            ->willReturn('<html>Delete Confirmation Prompt</html>');
+
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnMap([
+            ['security.authorization_checker', true],
+            ['router', true],
+            ['form.factory', true],
+            ['twig', true],
+        ]);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['router', $router],
+            ['form.factory', $formFactory],
+            ['twig', $twig],
+        ]);
+
+        $controller->setContainer($container);
+
+        $request = new Request();
+        $response = $controller->deleteActivity($activity, $request);
+
+        $this->assertInstanceOf(Response::class, $response);
+        $this->assertSame('<html>Delete Confirmation Prompt</html>', $response->getContent());
+    }
+
+    public function testDeleteRecurringActivitySubmitsDeleteSingle(): void
+    {
+        $user = new User();
+        $ref = new \ReflectionProperty(User::class, 'id');
+        $ref->setValue($user, 1);
+
+        $activity = new PlannedActivity();
+        $activityRef = new \ReflectionProperty(PlannedActivity::class, 'id');
+        $activityRef->setValue($activity, 5);
+        $activity->setBegin(new \DateTime('2026-09-07'));
+        $activity->setRecurrenceGroup('group-xyz');
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->once())->method('deletePlannedActivity')->with($activity);
+        $repo->expects($this->never())->method('deleteRecurringActivities');
+
+        $plannerService = $this->createMock(WeeklyPlannerService::class);
+        $userRepo = $this->createMock(UserRepository::class);
+
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo);
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturn(true);
+
+        $router = $this->createMock(RouterInterface::class);
+        $router->method('generate')->willReturn('/planner/activity/5/delete');
+
+        $deleteModeField = $this->createMock(FormInterface::class);
+        $deleteModeField->method('getData')->willReturn('single');
+
+        $form = $this->createMock(FormInterface::class);
+        $form->method('isSubmitted')->willReturn(true);
+        $form->method('isValid')->willReturn(true);
+        $form->method('get')->with('delete_mode')->willReturn($deleteModeField);
+
+        $formBuilder = $this->createMock(\Symfony\Component\Form\FormBuilderInterface::class);
+        $formBuilder->method('add')->willReturnSelf();
+        $formBuilder->method('setAction')->willReturnSelf();
+        $formBuilder->method('setMethod')->willReturnSelf();
+        $formBuilder->method('getForm')->willReturn($form);
+
+        $formFactory = $this->createMock(FormFactoryInterface::class);
+        $formFactory->method('createBuilder')->willReturn($formBuilder);
+
+        $flashBag = new \Symfony\Component\HttpFoundation\Session\Flash\FlashBag();
+        $session = $this->createMock(\Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface::class);
+        $session->method('getFlashBag')->willReturn($flashBag);
+
+        $requestStack = new \Symfony\Component\HttpFoundation\RequestStack();
+        $request = new Request();
+        $request->setSession($session);
+        $requestStack->push($request);
+
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnMap([
+            ['security.authorization_checker', true],
+            ['router', true],
+            ['form.factory', true],
+            ['request_stack', true],
+        ]);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['router', $router],
+            ['form.factory', $formFactory],
+            ['request_stack', $requestStack],
+        ]);
+
+        $controller->setContainer($container);
+
+        $response = $controller->deleteActivity($activity, $request);
+
+        $this->assertInstanceOf(Response::class, $response);
+        $this->assertTrue($response->isRedirect('/planner/activity/5/delete'));
+    }
+
+    public function testDeleteRecurringActivitySubmitsDeleteAll(): void
+    {
+        $user = new User();
+        $ref = new \ReflectionProperty(User::class, 'id');
+        $ref->setValue($user, 1);
+
+        $activity = new PlannedActivity();
+        $activityRef = new \ReflectionProperty(PlannedActivity::class, 'id');
+        $activityRef->setValue($activity, 5);
+        $activity->setBegin(new \DateTime('2026-09-07'));
+        $activity->setRecurrenceGroup('group-xyz');
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->never())->method('deletePlannedActivity');
+        $repo->expects($this->once())->method('deleteRecurringActivities')->with('group-xyz');
+
+        $plannerService = $this->createMock(WeeklyPlannerService::class);
+        $userRepo = $this->createMock(UserRepository::class);
+
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo);
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturn(true);
+
+        $router = $this->createMock(RouterInterface::class);
+        $router->method('generate')->willReturn('/planner/week/2026-09-07');
+
+        $deleteModeField = $this->createMock(FormInterface::class);
+        $deleteModeField->method('getData')->willReturn('all');
+
+        $form = $this->createMock(FormInterface::class);
+        $form->method('isSubmitted')->willReturn(true);
+        $form->method('isValid')->willReturn(true);
+        $form->method('get')->with('delete_mode')->willReturn($deleteModeField);
+
+        $formBuilder = $this->createMock(\Symfony\Component\Form\FormBuilderInterface::class);
+        $formBuilder->method('add')->willReturnSelf();
+        $formBuilder->method('setAction')->willReturnSelf();
+        $formBuilder->method('setMethod')->willReturnSelf();
+        $formBuilder->method('getForm')->willReturn($form);
+
+        $formFactory = $this->createMock(FormFactoryInterface::class);
+        $formFactory->method('createBuilder')->willReturn($formBuilder);
+
+        $flashBag = new \Symfony\Component\HttpFoundation\Session\Flash\FlashBag();
+        $session = $this->createMock(\Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface::class);
+        $session->method('getFlashBag')->willReturn($flashBag);
+
+        $requestStack = new \Symfony\Component\HttpFoundation\RequestStack();
+        $request = new Request();
+        $request->setSession($session);
+        $requestStack->push($request);
+
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnMap([
+            ['security.authorization_checker', true],
+            ['router', true],
+            ['form.factory', true],
+            ['request_stack', true],
+        ]);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['router', $router],
+            ['form.factory', $formFactory],
+            ['request_stack', $requestStack],
+        ]);
+
+        $controller->setContainer($container);
+
+        $response = $controller->deleteActivity($activity, $request);
+
+        $this->assertInstanceOf(Response::class, $response);
+        $this->assertTrue($response->isRedirect('/planner/week/2026-09-07'));
+    }
 }

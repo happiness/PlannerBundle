@@ -110,6 +110,22 @@
                 <source>action.delete</source>
                 <target>Radera</target>
             </trans-unit>
+            <trans-unit id="planner.delete_entry">
+                <source>planner.delete_entry</source>
+                <target>Radera planerad aktivitet</target>
+            </trans-unit>
+            <trans-unit id="planner.delete_recurring_prompt">
+                <source>planner.delete_recurring_prompt</source>
+                <target>Denna planerade aktivitet är del av en återkommande serie. Vill du radera alla poster eller bara den du klickade på?</target>
+            </trans-unit>
+            <trans-unit id="planner.delete_single">
+                <source>planner.delete_single</source>
+                <target>Radera endast denna post</target>
+            </trans-unit>
+            <trans-unit id="planner.delete_all">
+                <source>planner.delete_all</source>
+                <target>Radera alla poster</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>

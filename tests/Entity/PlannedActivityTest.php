@@ -54,6 +54,19 @@ class PlannedActivityTest extends TestCase
 
         $activity->setComment(null);
         $this->assertFalse($activity->hasComment());
+
+        $this->assertNull($activity->getRecurrenceGroup());
+        $this->assertFalse($activity->isRecurring());
+
+        $this->assertSame($activity, $activity->setRecurrenceGroup('abc-123'));
+        $this->assertSame('abc-123', $activity->getRecurrenceGroup());
+        $this->assertTrue($activity->isRecurring());
+
+        $activity->setRecurrenceGroup('');
+        $this->assertFalse($activity->isRecurring());
+
+        $activity->setRecurrenceGroup(null);
+        $this->assertFalse($activity->isRecurring());
     }
 
     public function testCoversDateAndHoursCalculation(): void

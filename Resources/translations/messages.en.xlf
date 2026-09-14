@@ -110,6 +110,22 @@
                 <source>action.delete</source>
                 <target>Delete</target>
             </trans-unit>
+            <trans-unit id="planner.delete_entry">
+                <source>planner.delete_entry</source>
+                <target>Delete planned activity</target>
+            </trans-unit>
+            <trans-unit id="planner.delete_recurring_prompt">
+                <source>planner.delete_recurring_prompt</source>
+                <target>This planned activity is part of a recurring series. Do you want to delete all entries or only the one you clicked?</target>
+            </trans-unit>
+            <trans-unit id="planner.delete_single">
+                <source>planner.delete_single</source>
+                <target>Delete only this entry</target>
+            </trans-unit>
+            <trans-unit id="planner.delete_all">
+                <source>planner.delete_all</source>
+                <target>Delete all entries</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>

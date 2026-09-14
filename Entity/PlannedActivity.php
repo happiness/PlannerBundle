@@ -22,6 +22,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Table(name: 'kimai2_planned_activities')]
 #[ORM\Index(columns: ['user_id'], name: 'IDX_PLANNED_ACTIVITY_USER')]
 #[ORM\Index(columns: ['date_begin', 'date_end'], name: 'IDX_PLANNED_ACTIVITY_DATES')]
+#[ORM\Index(columns: ['recurrence_group'], name: 'IDX_PLANNED_ACTIVITY_RECURRENCE')]
 #[ORM\Entity(repositoryClass: PlannedActivityRepository::class)]
 #[ORM\ChangeTrackingPolicy('DEFERRED_EXPLICIT')]
 #[Serializer\ExclusionPolicy('all')]
@@ -75,6 +76,11 @@ class PlannedActivity
     #[Serializer\Expose]
     #[Serializer\Groups(['Default'])]
     private ?string $comment = null;
+
+    #[ORM\Column(name: 'recurrence_group', type: Types::STRING, length: 64, nullable: true)]
+    #[Serializer\Expose]
+    #[Serializer\Groups(['Default'])]
+    private ?string $recurrenceGroup = null;
 
     public function __construct()
     {
@@ -167,6 +173,23 @@ class PlannedActivity
     public function hasComment(): bool
     {
         return $this->comment !== null && $this->comment !== '';
+    }
+
+    public function getRecurrenceGroup(): ?string
+    {
+        return $this->recurrenceGroup;
+    }
+
+    public function setRecurrenceGroup(?string $recurrenceGroup): self
+    {
+        $this->recurrenceGroup = $recurrenceGroup;
+
+        return $this;
+    }
+
+    public function isRecurring(): bool
+    {
+        return $this->recurrenceGroup !== null && $this->recurrenceGroup !== '';
     }
 
     public function coversDate(\DateTimeInterface $date): bool

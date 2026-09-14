@@ -1,0 +1,7 @@
+happiness:
+    name: Happiness
+    description: Weekly team planner plugin.
+    image: https://example.com/logo.webp
+    homepage: https://github.com/happiness/PlannerBundle
+    github: https://github.com/happiness/PlannerBundle
+    email: info@happiness.se
