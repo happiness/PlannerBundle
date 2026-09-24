@@ -12,11 +12,11 @@
                         <a href="{{ path('planner_week', {'date': prevWeek}) }}" class="btn btn-left btn-icon">
                             {{ icon('left') }}
                         </a>
-                        <a href="{{ path('planner_week', {'date': todayWeek}) }}" class="btn btn-default">
-                            {{ currentWeek|month_name }} {{ currentWeek|date('Y') }}
+                        <span class="btn btn-default pe-none">
+                            {{ currentWeek|month_name(true) }}
                             -
-                            {{ 'stats.workingTimeWeekShort'|trans({'%week%': todayWeek|date('W')}) }}
-                        </a>
+                            {{ 'stats.workingTimeWeekShort'|trans({'%week%': currentWeek|date('W')}) }}
+                        </span>
                         <a href="{{ path('planner_week', {'date': nextWeek}) }}" class="btn btn-right btn-icon">
                             {{ icon('right') }}
                         </a>

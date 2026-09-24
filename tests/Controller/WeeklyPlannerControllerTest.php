@@ -82,6 +82,142 @@ class WeeklyPlannerControllerTest extends TestCase
         $this->assertSame('<html>Planner View</html>', $response->getContent());
     }
 
+    public function testWeekRendersSpecificWeek(): void
+    {
+        $user = new User();
+        $ref = new \ReflectionProperty(User::class, 'id');
+        $ref->setValue($user, 1);
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $plannerService = $this->createMock(WeeklyPlannerService::class);
+        $userRepo = $this->createMock(UserRepository::class);
+
+        $plannerData = new WeeklyPlannerData(new \DateTimeImmutable('2026-08-17'), new \DateTimeImmutable('2026-08-23'));
+        $plannerService->expects($this->once())
+            ->method('getPlannerData')
+            ->with([$user], $this->callback(function (\DateTimeImmutable $date) {
+                return $date->format('Y-m-d') === '2026-08-17';
+            }))
+            ->willReturn($plannerData);
+
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo);
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturn(false);
+
+        $token = new UsernamePasswordToken($user, 'main', $user->getRoles());
+        $tokenStorage = $this->createMock(TokenStorageInterface::class);
+        $tokenStorage->method('getToken')->willReturn($token);
+
+        $twig = $this->createMock(Environment::class);
+        $twig->expects($this->once())
+            ->method('render')
+            ->with(
+                '@Planner/index.html.twig',
+                $this->callback(function (array $context) {
+                    $this->assertArrayHasKey('currentWeek', $context);
+                    $this->assertArrayHasKey('prevWeek', $context);
+                    $this->assertArrayHasKey('nextWeek', $context);
+                    $this->assertArrayHasKey('todayWeek', $context);
+                    $this->assertArrayHasKey('selectedDate', $context);
+                    $this->assertArrayHasKey('plannerData', $context);
+                    $this->assertArrayHasKey('canCreate', $context);
+
+                    $this->assertInstanceOf(\DateTimeImmutable::class, $context['currentWeek']);
+                    $this->assertSame('2026-08-17', $context['currentWeek']->format('Y-m-d'));
+                    $this->assertSame('34', $context['currentWeek']->format('W'));
+                    $this->assertSame('2026-08-10', $context['prevWeek']);
+                    $this->assertSame('2026-08-24', $context['nextWeek']);
+
+                    $expectedToday = (new \DateTimeImmutable('today'))->modify('this week monday')->format('Y-m-d');
+                    $this->assertSame($expectedToday, $context['todayWeek']);
+
+                    return true;
+                })
+            )
+            ->willReturn('<html>Planner View</html>');
+
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnMap([
+            ['security.authorization_checker', true],
+            ['security.token_storage', true],
+            ['twig', true],
+        ]);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['security.token_storage', $tokenStorage],
+            ['twig', $twig],
+        ]);
+
+        $controller->setContainer($container);
+
+        $response = $controller->week('2026-08-17');
+        $this->assertInstanceOf(Response::class, $response);
+        $this->assertSame('<html>Planner View</html>', $response->getContent());
+    }
+
+    public function testWeekWithInvalidDateFallsBackToToday(): void
+    {
+        $user = new User();
+        $ref = new \ReflectionProperty(User::class, 'id');
+        $ref->setValue($user, 1);
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $plannerService = $this->createMock(WeeklyPlannerService::class);
+        $userRepo = $this->createMock(UserRepository::class);
+
+        $expectedToday = new \DateTimeImmutable('today');
+        $expectedMonday = $expectedToday->modify('this week monday 00:00:00');
+
+        $plannerData = new WeeklyPlannerData($expectedMonday, $expectedMonday->modify('+6 days'));
+        $plannerService->expects($this->once())
+            ->method('getPlannerData')
+            ->willReturn($plannerData);
+
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo);
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturn(false);
+
+        $token = new UsernamePasswordToken($user, 'main', $user->getRoles());
+        $tokenStorage = $this->createMock(TokenStorageInterface::class);
+        $tokenStorage->method('getToken')->willReturn($token);
+
+        $twig = $this->createMock(Environment::class);
+        $twig->expects($this->once())
+            ->method('render')
+            ->with(
+                '@Planner/index.html.twig',
+                $this->callback(function (array $context) use ($expectedMonday) {
+                    $this->assertInstanceOf(\DateTimeImmutable::class, $context['currentWeek']);
+                    $this->assertSame($expectedMonday->format('Y-m-d'), $context['currentWeek']->format('Y-m-d'));
+                    $this->assertSame($expectedMonday->modify('-1 week')->format('Y-m-d'), $context['prevWeek']);
+                    $this->assertSame($expectedMonday->modify('+1 week')->format('Y-m-d'), $context['nextWeek']);
+
+                    return true;
+                })
+            )
+            ->willReturn('<html>Planner View</html>');
+
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnMap([
+            ['security.authorization_checker', true],
+            ['security.token_storage', true],
+            ['twig', true],
+        ]);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['security.token_storage', $tokenStorage],
+            ['twig', $twig],
+        ]);
+
+        $controller->setContainer($container);
+
+        $response = $controller->week('not-a-valid-date');
+        $this->assertInstanceOf(Response::class, $response);
+        $this->assertSame('<html>Planner View</html>', $response->getContent());
+    }
+
     public function testCreateActivityRendersForm(): void
     {
         $user = new User();
