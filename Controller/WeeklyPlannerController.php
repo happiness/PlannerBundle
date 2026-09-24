@@ -12,14 +12,17 @@ declare(strict_types=1);
 namespace KimaiPlugin\PlannerBundle\Controller;
 
 use App\Controller\AbstractController;
+use App\Entity\Team;
 use App\Entity\User;
 use App\Repository\Query\UserQuery;
 use App\Repository\UserRepository;
 use App\Utils\PageSetup;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Form\PlannedActivityEditForm;
+use KimaiPlugin\PlannerBundle\Form\Toolbar\PlannerToolbarForm;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
+use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
 use KimaiPlugin\PlannerBundle\Voter\PlannedActivityVoter;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\HttpFoundation\Request;
@@ -39,15 +42,15 @@ final class WeeklyPlannerController extends AbstractController
     }
 
     #[Route(path: '', name: 'planner', methods: ['GET'])]
-    public function index(): Response
+    public function index(Request $request = new Request()): Response
     {
-        return $this->renderWeek((new \DateTimeImmutable('today'))->format('Y-m-d'));
+        return $this->renderWeek((new \DateTimeImmutable('today'))->format('Y-m-d'), $request);
     }
 
     #[Route(path: '/week/{date}', name: 'planner_week', methods: ['GET'])]
-    public function week(string $date): Response
+    public function week(string $date, Request $request = new Request()): Response
     {
-        return $this->renderWeek($date);
+        return $this->renderWeek($date, $request);
     }
 
     #[Route(path: '/activity/create', name: 'planner_activity_create', methods: ['GET', 'POST'])]
@@ -240,7 +243,7 @@ final class WeeklyPlannerController extends AbstractController
         }
     }
 
-    private function renderWeek(string $dateString): Response
+    private function renderWeek(string $dateString, Request $request): Response
     {
         try {
             $selectedDate = new \DateTimeImmutable($dateString);
@@ -249,12 +252,33 @@ final class WeeklyPlannerController extends AbstractController
         }
 
         $currentUser = $this->getUser();
-        $users = $this->getVisibleUsers($currentUser);
+        $dateTimeFactory = $this->getDateTimeFactory($currentUser);
+
+        $query = new PlannerQuery();
+        $query->setCurrentUser($currentUser);
+
+        if (\count($currentUser->getTeams()) === 1) {
+            $query->setTeams($currentUser->getTeams());
+        }
+
+        $form = $this->createSearchForm(PlannerToolbarForm::class, $query, [
+            'timezone' => $dateTimeFactory->getTimezone()->getName(),
+        ]);
+
+        if ($this->handleSearch($form, $request)) {
+            return $this->redirectToRoute('planner_week', ['date' => $selectedDate->format('Y-m-d')]);
+        }
+
+        /** @var PlannerQuery $query */
+        $query = $form->getData();
+
+        $users = $this->getVisibleUsers($currentUser, $query);
 
         $plannerData = $this->plannerService->getPlannerData($users, $selectedDate);
 
         $page = new PageSetup('planner.title');
         $page->setHelp('planner.html');
+        $page->setPaginationForm($form);
 
         $currentWeekMonday = $selectedDate->modify('this week monday 00:00:00');
         $prevWeek = $currentWeekMonday->modify('-1 week')->format('Y-m-d');
@@ -263,6 +287,8 @@ final class WeeklyPlannerController extends AbstractController
 
         return $this->render('@Planner/index.html.twig', [
             'page_setup' => $page,
+            'toolbarForm' => $form->createView(),
+            'query' => $query,
             'plannerData' => $plannerData,
             'selectedDate' => $selectedDate,
             'currentWeek' => $currentWeekMonday,
@@ -276,7 +302,7 @@ final class WeeklyPlannerController extends AbstractController
     /**
      * @return array<User>
      */
-    private function getVisibleUsers(User $currentUser): array
+    private function getVisibleUsers(User $currentUser, PlannerQuery $plannerQuery): array
     {
         $canSeeOther = $this->isGranted('view_other_planner') || $this->isGranted('view_all_data');
 
@@ -289,11 +315,39 @@ final class WeeklyPlannerController extends AbstractController
         $query->setCurrentUser($currentUser);
         $query->setOrder(UserQuery::ORDER_ASC);
         $query->setOrderBy('username');
-        if (!$this->isGranted('view_all_data')) {
-            $teams = array_filter($currentUser->getTeams(), fn ($team) => $currentUser->isTeamleadOf($team));
-            $query->setSearchTeams($teams);
+
+        $hasViewAllData = $this->isGranted('view_all_data');
+
+        if (!$hasViewAllData) {
+            /** @var Team[] $ledTeams */
+            $ledTeams = array_values(array_filter($currentUser->getTeams(), fn (Team $team) => $currentUser->isTeamleadOf($team)));
+            if ($ledTeams === []) {
+                return [];
+            }
+            $query->setSearchTeams($ledTeams);
         }
 
-        return $this->userRepository->getUsersForQuery($query);
+        if ($plannerQuery->hasTeams()) {
+            $selectedTeams = $plannerQuery->getTeams();
+            if (!$hasViewAllData) {
+                /** @var Team[] $ledTeams */
+                $ledTeams = array_values(array_filter($currentUser->getTeams(), fn (Team $team) => $currentUser->isTeamleadOf($team)));
+                $ledTeamIds = array_map(fn (Team $t) => $t->getId(), $ledTeams);
+                $selectedTeams = array_values(array_filter($selectedTeams, fn (Team $t) => \in_array($t->getId(), $ledTeamIds, true)));
+                if ($selectedTeams === []) {
+                    return [];
+                }
+            }
+            $query->setSearchTeams($selectedTeams);
+        }
+
+        $users = $this->userRepository->getUsersForQuery($query);
+
+        if ($plannerQuery->hasUsers()) {
+            $selectedUserIds = array_map(fn (User $u) => $u->getId(), $plannerQuery->getUsers());
+            $users = array_values(array_filter($users, fn (User $u) => \in_array($u->getId(), $selectedUserIds, true)));
+        }
+
+        return $users;
     }
 }

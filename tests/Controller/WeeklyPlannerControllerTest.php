@@ -57,6 +57,17 @@ class WeeklyPlannerControllerTest extends TestCase
         $tokenStorage = $this->createMock(TokenStorageInterface::class);
         $tokenStorage->method('getToken')->willReturn($token);
 
+        $formView = $this->createMock(FormView::class);
+        $form = $this->createMock(FormInterface::class);
+        $form->method('createView')->willReturn($formView);
+        $form->method('getData')->willReturn(new \KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery());
+        $form->method('isSubmitted')->willReturn(false);
+
+        $formFactory = $this->createMock(FormFactoryInterface::class);
+        $formFactory->method('createNamed')->willReturn($form);
+
+        $bookmarkRepo = $this->createMock(\App\Repository\BookmarkRepository::class);
+
         $twig = $this->createMock(Environment::class);
         $twig->expects($this->once())
             ->method('render')
@@ -67,11 +78,15 @@ class WeeklyPlannerControllerTest extends TestCase
         $container->method('has')->willReturnMap([
             ['security.authorization_checker', true],
             ['security.token_storage', true],
+            ['form.factory', true],
+            [\App\Repository\BookmarkRepository::class, true],
             ['twig', true],
         ]);
         $container->method('get')->willReturnMap([
             ['security.authorization_checker', $authChecker],
             ['security.token_storage', $tokenStorage],
+            ['form.factory', $formFactory],
+            [\App\Repository\BookmarkRepository::class, $bookmarkRepo],
             ['twig', $twig],
         ]);
 
@@ -562,5 +577,242 @@ class WeeklyPlannerControllerTest extends TestCase
 
         $this->assertInstanceOf(Response::class, $response);
         $this->assertTrue($response->isRedirect('/planner/week/2026-09-07'));
+    }
+
+    public function testSingleTeamDefaultPreSelection(): void
+    {
+        $team = new \App\Entity\Team('Team Alpha');
+        $user = new User();
+        $ref = new \ReflectionProperty(User::class, 'id');
+        $ref->setValue($user, 1);
+        $user->addTeam($team);
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $plannerService = $this->createMock(WeeklyPlannerService::class);
+        $userRepo = $this->createMock(UserRepository::class);
+
+        $plannerData = new WeeklyPlannerData(new \DateTimeImmutable('2026-09-07'), new \DateTimeImmutable('2026-09-13'));
+        $plannerService->expects($this->once())
+            ->method('getPlannerData')
+            ->willReturn($plannerData);
+
+        $userRepo->expects($this->once())
+            ->method('getUsersForQuery')
+            ->with($this->callback(function (\App\Repository\Query\UserQuery $query) use ($team) {
+                return $query->getSearchTeams() === [$team];
+            }))
+            ->willReturn([$user]);
+
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo);
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturn(true);
+
+        $token = new UsernamePasswordToken($user, 'main', $user->getRoles());
+        $tokenStorage = $this->createMock(TokenStorageInterface::class);
+        $tokenStorage->method('getToken')->willReturn($token);
+
+        $formView = $this->createMock(FormView::class);
+        $form = $this->createMock(FormInterface::class);
+        $form->method('createView')->willReturn($formView);
+        $form->method('getData')->willReturnCallback(function () use ($user) {
+            $q = new \KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery();
+            $q->setCurrentUser($user);
+            $q->setTeams($user->getTeams());
+
+            return $q;
+        });
+        $form->method('isSubmitted')->willReturn(false);
+
+        $formFactory = $this->createMock(FormFactoryInterface::class);
+        $formFactory->method('createNamed')->willReturn($form);
+
+        $bookmarkRepo = $this->createMock(\App\Repository\BookmarkRepository::class);
+
+        $twig = $this->createMock(Environment::class);
+        $twig->expects($this->once())
+            ->method('render')
+            ->with('@Planner/index.html.twig', $this->callback(function (array $context) use ($team) {
+                return isset($context['query']) && $context['query']->getTeams() === [$team];
+            }))
+            ->willReturn('<html>Planner View</html>');
+
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnMap([
+            ['security.authorization_checker', true],
+            ['security.token_storage', true],
+            ['form.factory', true],
+            [\App\Repository\BookmarkRepository::class, true],
+            ['twig', true],
+        ]);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['security.token_storage', $tokenStorage],
+            ['form.factory', $formFactory],
+            [\App\Repository\BookmarkRepository::class, $bookmarkRepo],
+            ['twig', $twig],
+        ]);
+
+        $controller->setContainer($container);
+
+        $response = $controller->index();
+        $this->assertInstanceOf(Response::class, $response);
+    }
+
+    public function testMultipleTeamsNoDefaultPreSelection(): void
+    {
+        $team1 = new \App\Entity\Team('Team Alpha');
+        $team2 = new \App\Entity\Team('Team Beta');
+        $user = new User();
+        $ref = new \ReflectionProperty(User::class, 'id');
+        $ref->setValue($user, 1);
+        $user->addTeam($team1);
+        $user->addTeam($team2);
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $plannerService = $this->createMock(WeeklyPlannerService::class);
+        $userRepo = $this->createMock(UserRepository::class);
+
+        $plannerData = new WeeklyPlannerData(new \DateTimeImmutable('2026-09-07'), new \DateTimeImmutable('2026-09-13'));
+        $plannerService->expects($this->once())
+            ->method('getPlannerData')
+            ->willReturn($plannerData);
+
+        $userRepo->expects($this->once())
+            ->method('getUsersForQuery')
+            ->with($this->callback(function (\App\Repository\Query\UserQuery $query) {
+                return $query->getSearchTeams() === [];
+            }))
+            ->willReturn([$user]);
+
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo);
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturn(true);
+
+        $token = new UsernamePasswordToken($user, 'main', $user->getRoles());
+        $tokenStorage = $this->createMock(TokenStorageInterface::class);
+        $tokenStorage->method('getToken')->willReturn($token);
+
+        $formView = $this->createMock(FormView::class);
+        $form = $this->createMock(FormInterface::class);
+        $form->method('createView')->willReturn($formView);
+        $form->method('getData')->willReturnCallback(function () use ($user) {
+            $q = new \KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery();
+            $q->setCurrentUser($user);
+
+            return $q;
+        });
+        $form->method('isSubmitted')->willReturn(false);
+
+        $formFactory = $this->createMock(FormFactoryInterface::class);
+        $formFactory->method('createNamed')->willReturn($form);
+
+        $bookmarkRepo = $this->createMock(\App\Repository\BookmarkRepository::class);
+
+        $twig = $this->createMock(Environment::class);
+        $twig->expects($this->once())
+            ->method('render')
+            ->with('@Planner/index.html.twig', $this->callback(function (array $context) {
+                return isset($context['query']) && $context['query']->getTeams() === [];
+            }))
+            ->willReturn('<html>Planner View</html>');
+
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnMap([
+            ['security.authorization_checker', true],
+            ['security.token_storage', true],
+            ['form.factory', true],
+            [\App\Repository\BookmarkRepository::class, true],
+            ['twig', true],
+        ]);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['security.token_storage', $tokenStorage],
+            ['form.factory', $formFactory],
+            [\App\Repository\BookmarkRepository::class, $bookmarkRepo],
+            ['twig', $twig],
+        ]);
+
+        $controller->setContainer($container);
+
+        $response = $controller->index();
+        $this->assertInstanceOf(Response::class, $response);
+    }
+
+    public function testUserFilterRestrictsPlannerDataToFilteredUsers(): void
+    {
+        $user1 = new User();
+        $ref1 = new \ReflectionProperty(User::class, 'id');
+        $ref1->setValue($user1, 1);
+
+        $user2 = new User();
+        $ref2 = new \ReflectionProperty(User::class, 'id');
+        $ref2->setValue($user2, 2);
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $plannerService = $this->createMock(WeeklyPlannerService::class);
+        $userRepo = $this->createMock(UserRepository::class);
+
+        $userRepo->expects($this->once())
+            ->method('getUsersForQuery')
+            ->willReturn([$user1, $user2]);
+
+        $plannerData = new WeeklyPlannerData(new \DateTimeImmutable('2026-09-07'), new \DateTimeImmutable('2026-09-13'));
+        $plannerService->expects($this->once())
+            ->method('getPlannerData')
+            ->with([$user2], $this->isInstanceOf(\DateTimeImmutable::class))
+            ->willReturn($plannerData);
+
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo);
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturn(true);
+
+        $token = new UsernamePasswordToken($user1, 'main', $user1->getRoles());
+        $tokenStorage = $this->createMock(TokenStorageInterface::class);
+        $tokenStorage->method('getToken')->willReturn($token);
+
+        $query = new \KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery();
+        $query->setCurrentUser($user1);
+        $query->setUsers([$user2]);
+
+        $formView = $this->createMock(FormView::class);
+        $form = $this->createMock(FormInterface::class);
+        $form->method('createView')->willReturn($formView);
+        $form->method('getData')->willReturn($query);
+        $form->method('isSubmitted')->willReturn(false);
+
+        $formFactory = $this->createMock(FormFactoryInterface::class);
+        $formFactory->method('createNamed')->willReturn($form);
+
+        $bookmarkRepo = $this->createMock(\App\Repository\BookmarkRepository::class);
+
+        $twig = $this->createMock(Environment::class);
+        $twig->expects($this->once())
+            ->method('render')
+            ->with('@Planner/index.html.twig', $this->isType('array'))
+            ->willReturn('<html>Planner View</html>');
+
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnMap([
+            ['security.authorization_checker', true],
+            ['security.token_storage', true],
+            ['form.factory', true],
+            [\App\Repository\BookmarkRepository::class, true],
+            ['twig', true],
+        ]);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['security.token_storage', $tokenStorage],
+            ['form.factory', $formFactory],
+            [\App\Repository\BookmarkRepository::class, $bookmarkRepo],
+            ['twig', $twig],
+        ]);
+
+        $controller->setContainer($container);
+
+        $response = $controller->index();
+        $this->assertInstanceOf(Response::class, $response);
     }
 }

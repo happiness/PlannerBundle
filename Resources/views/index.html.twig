@@ -31,8 +31,54 @@
                     </button>
                 </div>
 
-                {% if canCreate %}
-                <div class="col-auto ms-auto d-print-none">
+                <div class="col-auto ms-auto d-print-none d-flex gap-2 align-items-center">
+                    {% if toolbarForm is defined and toolbarForm is not null %}
+                        {% form_theme toolbarForm 'form/search.html.twig' %}
+                        {{ form_start(toolbarForm, {'attr': {'class': 'searchform d-flex align-items-center'}}) }}
+                        {% set filterCount = query.countFilter() %}
+                        <div class="input-group inline-search position-static">
+                            <button type="button" class="btn dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="false" aria-haspopup="true" aria-expanded="false" id="search-dropdown-btn" title="{{ 'search_filter'|trans }}">
+                                {{ icon('filter', true) }}
+                                {% if filterCount > 0 %}<span class="badge badge-notification bg-primary text-primary-fg ms-1 d-none d-sm-inline">{{ filterCount }}</span>{% endif %}
+                            </button>
+                            <div class="dropdown-menu p-3 search-dropdown" data-popper-placement="bottom-start" aria-labelledby="search-dropdown-btn">
+                                {{ form_rest(toolbarForm) }}
+                                <div class="row mt-3">
+                                    <div class="col-12 text-end">
+                                        <button type="submit" class="btn btn-primary">{{ 'search'|trans }}</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <span class="input-group-text">
+                                {% set bookmarkToken = csrf_token('search') %}
+                                {% set searchBtnClass = 'btn btn-icon btn-sm btn-ghost-secondary p-1' %}
+                                <input type="hidden" name="_token" value="{{ bookmarkToken }}">
+                                <button type="submit" class="{{ searchBtnClass }}" data-toggle="tooltip" title="{{ 'search'|trans }}">
+                                    {{ icon('search') }}
+                                </button>
+
+                                {% if toolbarForm.vars.data.bookmark %}
+                                <a class="{{ searchBtnClass }} text-yellow" href="?_token={{ bookmarkToken }}&removeDefaultQuery={{ toolbarForm.vars.data.bookmark.name }}" data-toggle="tooltip" title="{{ 'remove_default'|trans }}" id="removeDefaultQuery">
+                                    {{ icon('bookmarked') }}
+                                </a>
+                                {% elseif filterCount > 0 %}
+                                <button class="{{ searchBtnClass }}" type="submit" id="setDefaultQuery" name="setDefaultQuery" data-toggle="tooltip" title="{{ 'set_as_default'|trans }}">
+                                    {{ icon('bookmark') }}
+                                </button>
+                                {% endif %}
+
+                                {% if filterCount > 0 and not toolbarForm.vars.data.isBookmarkSearch() %}
+                                    <a class="{{ searchBtnClass }} text-orange" href="{{ path(app.request.attributes.get('_route'), app.request.attributes.get('_route_params')) }}" data-toggle="tooltip" title="{{ 'remove_filter'|trans }}">
+                                        {{ icon('cancel') }}
+                                    </a>
+                                {% endif %}
+                            </span>
+                        </div>
+                        <input type="hidden" name="performSearch" value="performSearch" />
+                        {{ form_end(toolbarForm) }}
+                    {% endif %}
+
+                    {% if canCreate %}
                     <div class="page-actions">
                         {{ widgets.card_tool_button('create', {
                             'class': 'modal-ajax-form',
@@ -43,8 +89,8 @@
                             })
                         }) }}
                     </div>
+                    {% endif %}
                 </div>
-                {% endif %}
             </div>
         </div>
     </div>
@@ -117,8 +163,15 @@
                                     </tr>
                                 {% else %}
                                     <tr>
-                                        <td colspan="10" class="text-center text-muted p-1">
-                                            {{ 'error.no_entries_found'|trans }}
+                                        <td colspan="{{ (plannerData.dateHeaders|length) + 2 }}" class="text-center p-4">
+                                            {{ widgets.nothing_found() }}
+                                            {% if query is defined and query.countFilter() > 0 %}
+                                                <div class="mt-2">
+                                                    <a href="{{ path(app.request.attributes.get('_route'), app.request.attributes.get('_route_params')) }}" class="btn btn-outline-secondary btn-sm">
+                                                        {{ icon('cancel') }} {{ 'remove_filter'|trans }}
+                                                    </a>
+                                                </div>
+                                            {% endif %}
                                         </td>
                                     </tr>
                                 {% endfor %}
