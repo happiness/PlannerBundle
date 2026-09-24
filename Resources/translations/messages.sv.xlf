@@ -120,15 +120,31 @@
             </trans-unit>
             <trans-unit id="planner.delete_recurring_prompt">
                 <source>planner.delete_recurring_prompt</source>
-                <target>Denna planerade aktivitet är del av en återkommande serie. Vill du radera alla poster eller bara den du klickade på?</target>
+                <target>Denna planerade aktivitet är del av en återkommande serie. Vill du radera bara denna instans eller alla framtida instanser?</target>
             </trans-unit>
             <trans-unit id="planner.delete_single">
                 <source>planner.delete_single</source>
-                <target>Radera endast denna post</target>
+                <target>Bara denna instans</target>
+            </trans-unit>
+            <trans-unit id="planner.delete_future">
+                <source>planner.delete_future</source>
+                <target>Alla framtida instanser</target>
             </trans-unit>
             <trans-unit id="planner.delete_all">
                 <source>planner.delete_all</source>
-                <target>Radera alla poster</target>
+                <target>Alla framtida instanser</target>
+            </trans-unit>
+            <trans-unit id="planner.edit_recurring_prompt">
+                <source>planner.edit_recurring_prompt</source>
+                <target>Denna planerade aktivitet är del av en återkommande serie. Vill du ändra bara denna instans eller alla framtida instanser?</target>
+            </trans-unit>
+            <trans-unit id="planner.edit_single">
+                <source>planner.edit_single</source>
+                <target>Bara denna instans</target>
+            </trans-unit>
+            <trans-unit id="planner.edit_future">
+                <source>planner.edit_future</source>
+                <target>Alla framtida instanser</target>
             </trans-unit>
             <trans-unit id="planner.toggle_activities">
                 <source>planner.toggle_activities</source>

@@ -17,6 +17,7 @@ use App\Form\Type\DatePickerType;
 use App\Form\Type\UserType;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
@@ -37,6 +38,7 @@ class PlannedActivityEditForm extends AbstractType
         $user = $options['user'];
         $includeUser = $options['include_user'];
         $includeRecurrence = $options['include_recurrence'];
+        $includeRecurrenceMode = $options['include_recurrence_mode'];
 
         if ($includeUser) {
             $builder->add('user', UserType::class, [
@@ -97,6 +99,20 @@ class PlannedActivityEditForm extends AbstractType
             ]);
         }
 
+        if ($includeRecurrenceMode) {
+            $builder->add('edit_mode', ChoiceType::class, [
+                'label' => 'planner.edit_recurring_prompt',
+                'mapped' => false,
+                'expanded' => true,
+                'multiple' => false,
+                'choices' => [
+                    'planner.edit_single' => 'single',
+                    'planner.edit_future' => 'future',
+                ],
+                'data' => 'single',
+            ]);
+        }
+
         $builder->add('comment', TextareaType::class, [
             'label' => 'label.comment',
             'required' => false,
@@ -115,6 +131,7 @@ class PlannedActivityEditForm extends AbstractType
             'csrf_token_id' => 'planner_edit',
             'include_user' => false,
             'include_recurrence' => false,
+            'include_recurrence_mode' => false,
             'attr' => [
                 'data-form-event' => 'kimai.plannerActivityUpdate',
             ],
@@ -124,5 +141,6 @@ class PlannedActivityEditForm extends AbstractType
         $resolver->setAllowedTypes('user', User::class);
         $resolver->setAllowedTypes('include_user', 'bool');
         $resolver->setAllowedTypes('include_recurrence', 'bool');
+        $resolver->setAllowedTypes('include_recurrence_mode', 'bool');
     }
 }

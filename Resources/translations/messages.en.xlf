@@ -120,15 +120,31 @@
             </trans-unit>
             <trans-unit id="planner.delete_recurring_prompt">
                 <source>planner.delete_recurring_prompt</source>
-                <target>This planned activity is part of a recurring series. Do you want to delete all entries or only the one you clicked?</target>
+                <target>This planned activity is part of a recurring series. Do you want to delete just this instance or all future instances?</target>
             </trans-unit>
             <trans-unit id="planner.delete_single">
                 <source>planner.delete_single</source>
-                <target>Delete only this entry</target>
+                <target>Just this instance</target>
+            </trans-unit>
+            <trans-unit id="planner.delete_future">
+                <source>planner.delete_future</source>
+                <target>All future instances</target>
             </trans-unit>
             <trans-unit id="planner.delete_all">
                 <source>planner.delete_all</source>
-                <target>Delete all entries</target>
+                <target>All future instances</target>
+            </trans-unit>
+            <trans-unit id="planner.edit_recurring_prompt">
+                <source>planner.edit_recurring_prompt</source>
+                <target>This planned activity is part of a recurring series. Do you want to edit just this instance or all future instances?</target>
+            </trans-unit>
+            <trans-unit id="planner.edit_single">
+                <source>planner.edit_single</source>
+                <target>Just this instance</target>
+            </trans-unit>
+            <trans-unit id="planner.edit_future">
+                <source>planner.edit_future</source>
+                <target>All future instances</target>
             </trans-unit>
             <trans-unit id="planner.toggle_activities">
                 <source>planner.toggle_activities</source>

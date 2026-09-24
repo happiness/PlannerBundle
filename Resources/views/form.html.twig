@@ -33,20 +33,28 @@
             {% if form.recurrentWeeks is defined %}
                 {{ form_row(form.recurrentWeeks) }}
             {% endif %}
+            {% if form.edit_mode is defined %}
+                {{ form_row(form.edit_mode) }}
+            {% endif %}
             {{ form_row(form.comment) }}
             {{ form_rest(form) }}
         {% endblock %}
         {% block modal_footer %}
             {% if activity.id is not null and is_granted('delete', activity) %}
+                {% set deleteParams = {'id': activity.id} %}
+                {% if date is defined and date is not empty %}
+                    {% set deleteParams = deleteParams|merge({'date': date}) %}
+                {% endif %}
                 {% if activity.isRecurring %}
                     <a class="btn btn-outline-danger me-auto modal-ajax-form"
-                        href="{{ path('planner_activity_delete', {'id': activity.id}) }}">
+                        href="{{ path('planner_activity_delete', deleteParams) }}">
                         {{ icon('delete', true) }}
                         {{ 'action.delete'|trans }}
                     </a>
                 {% else %}
+                    {% set deleteParams = deleteParams|merge({'token': csrf_token('planner_delete_' ~ activity.id)}) %}
                     <a class="confirmation-link btn btn-outline-danger me-auto"
-                        href="{{ path('planner_activity_delete', {'id': activity.id, 'token': csrf_token('planner_delete_' ~ activity.id)}) }}"
+                        href="{{ path('planner_activity_delete', deleteParams) }}"
                         data-question="confirm.delete">
                         {{ icon('delete', true) }}
                         {{ 'action.delete'|trans }}
@@ -68,16 +76,21 @@
         {% endblock %}
         {% block form_after %}
             {% if not kimai_context.modalRequest and activity.id is not null and is_granted('delete', activity) %}
+                {% set deleteParams = {'id': activity.id} %}
+                {% if date is defined and date is not empty %}
+                    {% set deleteParams = deleteParams|merge({'date': date}) %}
+                {% endif %}
                 <div class="card-footer d-flex justify-content-between border-top">
                     {% if activity.isRecurring %}
                         <a class="btn btn-outline-danger me-auto modal-ajax-form"
-                            href="{{ path('planner_activity_delete', {'id': activity.id}) }}">
+                            href="{{ path('planner_activity_delete', deleteParams) }}">
                             {{ icon('delete', true) }}
                             {{ 'action.delete'|trans }}
                         </a>
                     {% else %}
+                        {% set deleteParams = deleteParams|merge({'token': csrf_token('planner_delete_' ~ activity.id)}) %}
                         <a class="confirmation-link btn btn-outline-danger me-auto"
-                            href="{{ path('planner_activity_delete', {'id': activity.id, 'token': csrf_token('planner_delete_' ~ activity.id)}) }}"
+                            href="{{ path('planner_activity_delete', deleteParams) }}"
                             data-question="confirm.delete">
                             {{ icon('delete', true) }}
                             {{ 'action.delete'|trans }}

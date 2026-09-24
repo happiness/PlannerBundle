@@ -102,7 +102,7 @@
                                                 {% endif %}
 
                                                 {% for activity in day.activities %}
-                                                    <a href="{{ path('planner_activity_edit', {'id': activity.id}) }}"
+                                                    <a href="{{ path('planner_activity_edit', {'id': activity.id, 'date': day.date|date('Y-m-d')}) }}"
                                                        class="planner-activity position-relative z-2 d-block p-1 my-1 rounded text-decoration-none modal-ajax-form shadow-sm"
                                                        style="background-color: {{ activity.colorSafe }}; color: {{ activity.colorSafe|font_contrast }};"
                                                        title="{{ activity.title }}">

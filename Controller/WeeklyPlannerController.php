@@ -135,11 +135,18 @@ final class WeeklyPlannerController extends AbstractController
         $currentUser = $this->getUser();
         $canEditOther = $this->isGranted('edit_other_planner') || $this->isGranted('view_all_data');
 
+        $dateParam = $request->query->getString('date');
+        $formActionParams = ['id' => $activity->getId()];
+        if ($dateParam !== '') {
+            $formActionParams['date'] = $dateParam;
+        }
+
         $form = $this->createForm(PlannedActivityEditForm::class, $activity, [
-            'action' => $this->generateUrl('planner_activity_edit', ['id' => $activity->getId()]),
+            'action' => $this->generateUrl('planner_activity_edit', $formActionParams),
             'method' => 'POST',
             'user' => $currentUser,
             'include_user' => $canEditOther,
+            'include_recurrence_mode' => $activity->isRecurring(),
         ]);
 
         $form->handleRequest($request);
@@ -147,6 +154,14 @@ final class WeeklyPlannerController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             try {
                 $this->repository->savePlannedActivity($activity);
+
+                if ($form->has('edit_mode') && $activity->isRecurring()) {
+                    $editMode = $form->get('edit_mode')->getData();
+                    if ($editMode === 'future') {
+                        $this->repository->updateFutureRecurringActivities($activity);
+                    }
+                }
+
                 $this->flashSuccess('action.update.success');
 
                 $selectedDate = $activity->getBegin() ? $activity->getBegin()->format('Y-m-d') : (new \DateTime('today'))->format('Y-m-d');
@@ -161,6 +176,7 @@ final class WeeklyPlannerController extends AbstractController
             'form' => $form->createView(),
             'activity' => $activity,
             'title' => 'planner.edit_entry',
+            'date' => $dateParam,
         ]);
     }
 
@@ -171,9 +187,26 @@ final class WeeklyPlannerController extends AbstractController
             throw $this->createAccessDeniedException();
         }
 
+        $dateParam = $request->query->getString('date');
+        if ($dateParam === '') {
+            $dateParam = $request->request->getString('date');
+        }
+
         $selectedDate = $activity->getBegin() ? $activity->getBegin()->format('Y-m-d') : (new \DateTime('today'))->format('Y-m-d');
+        if ($dateParam !== '') {
+            try {
+                $selectedDate = (new \DateTimeImmutable($dateParam))->format('Y-m-d');
+            } catch (\Exception) {
+                // Keep activity begin date
+            }
+        }
 
         if ($activity->isRecurring()) {
+            $deleteActionParams = ['id' => $activity->getId()];
+            if ($dateParam !== '') {
+                $deleteActionParams['date'] = $dateParam;
+            }
+
             $deleteForm = $this->createFormBuilder(null, [
                 'attr' => [
                     'data-form-event' => 'kimai.plannerActivityUpdate',
@@ -187,11 +220,11 @@ final class WeeklyPlannerController extends AbstractController
                     'multiple' => false,
                     'choices' => [
                         'planner.delete_single' => 'single',
-                        'planner.delete_all' => 'all',
+                        'planner.delete_future' => 'future',
                     ],
                     'data' => 'single',
                 ])
-                ->setAction($this->generateUrl('planner_activity_delete', ['id' => $activity->getId()]))
+                ->setAction($this->generateUrl('planner_activity_delete', $deleteActionParams))
                 ->setMethod('POST')
                 ->getForm();
 
@@ -200,8 +233,15 @@ final class WeeklyPlannerController extends AbstractController
             if ($deleteForm->isSubmitted() && $deleteForm->isValid()) {
                 try {
                     $mode = $deleteForm->get('delete_mode')->getData();
-                    if ($mode === 'all' && $activity->getRecurrenceGroup() !== null) {
-                        $this->repository->deleteRecurringActivities($activity->getRecurrenceGroup());
+                    if (($mode === 'future' || $mode === 'all') && $activity->getRecurrenceGroup() !== null) {
+                        $this->repository->deleteFutureRecurringActivities($activity);
+                    } elseif ($dateParam !== '') {
+                        try {
+                            $targetDate = new \DateTime($dateParam);
+                            $this->repository->removeDayFromActivity($activity, $targetDate);
+                        } catch (\Exception) {
+                            $this->repository->deletePlannedActivity($activity);
+                        }
                     } else {
                         $this->repository->deletePlannedActivity($activity);
                     }
@@ -218,6 +258,7 @@ final class WeeklyPlannerController extends AbstractController
             return $this->render('@Planner/delete.html.twig', [
                 'activity' => $activity,
                 'form' => $deleteForm->createView(),
+                'date' => $dateParam,
             ]);
         }
 
@@ -229,7 +270,16 @@ final class WeeklyPlannerController extends AbstractController
         }
 
         try {
-            $this->repository->deletePlannedActivity($activity);
+            if ($dateParam !== '') {
+                try {
+                    $targetDate = new \DateTime($dateParam);
+                    $this->repository->removeDayFromActivity($activity, $targetDate);
+                } catch (\Exception) {
+                    $this->repository->deletePlannedActivity($activity);
+                }
+            } else {
+                $this->repository->deletePlannedActivity($activity);
+            }
             $this->flashSuccess('action.delete.success');
 
             return $this->redirectToRoute('planner_week', ['date' => $selectedDate]);
