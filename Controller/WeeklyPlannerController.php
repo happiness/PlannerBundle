@@ -289,6 +289,10 @@ final class WeeklyPlannerController extends AbstractController
         $query->setCurrentUser($currentUser);
         $query->setOrder(UserQuery::ORDER_ASC);
         $query->setOrderBy('username');
+        if (!$this->isGranted('view_all_data')) {
+            $teams = array_filter($currentUser->getTeams(), fn ($team) => $currentUser->isTeamleadOf($team));
+            $query->setSearchTeams($teams);
+        }
 
         return $this->userRepository->getUsersForQuery($query);
     }
