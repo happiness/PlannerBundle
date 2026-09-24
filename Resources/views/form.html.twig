@@ -10,33 +10,61 @@
     } %}
     {% embed formEditTemplate with formOptions %}
         {% block form_body %}
-            {% if form.user is defined %}
-                {{ form_row(form.user) }}
+            {% if activity.isRecurring and form.edit_mode is defined %}
+                <div class="planner-edit-fields">
+                    {% if form.user is defined %}
+                        {{ form_row(form.user) }}
+                    {% endif %}
+                    {{ form_row(form.title) }}
+                    <div class="row">
+                        <div class="col-md-6">
+                            {{ form_row(form.begin) }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form_row(form.end) }}
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            {{ form_row(form.hoursPerDay) }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form_row(form.color) }}
+                        </div>
+                    </div>
+                    {{ form_row(form.comment) }}
+                </div>
+                <div class="planner-edit-recurring-prompt d-none">
+                    <p class="planner-prompt-item-name"><strong>{{ activity.title }}</strong></p>
+                    <p>{{ 'planner.edit_recurring_prompt'|trans }}</p>
+                    {{ form_widget(form.edit_mode) }}
+                </div>
+            {% else %}
+                {% if form.user is defined %}
+                    {{ form_row(form.user) }}
+                {% endif %}
+                {{ form_row(form.title) }}
+                <div class="row">
+                    <div class="col-md-6">
+                        {{ form_row(form.begin) }}
+                    </div>
+                    <div class="col-md-6">
+                        {{ form_row(form.end) }}
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        {{ form_row(form.hoursPerDay) }}
+                    </div>
+                    <div class="col-md-6">
+                        {{ form_row(form.color) }}
+                    </div>
+                </div>
+                {% if form.recurrentWeeks is defined %}
+                    {{ form_row(form.recurrentWeeks) }}
+                {% endif %}
+                {{ form_row(form.comment) }}
             {% endif %}
-            {{ form_row(form.title) }}
-            <div class="row">
-                <div class="col-md-6">
-                    {{ form_row(form.begin) }}
-                </div>
-                <div class="col-md-6">
-                    {{ form_row(form.end) }}
-                </div>
-            </div>
-            <div class="row">
-                <div class="col-md-6">
-                    {{ form_row(form.hoursPerDay) }}
-                </div>
-                <div class="col-md-6">
-                    {{ form_row(form.color) }}
-                </div>
-            </div>
-            {% if form.recurrentWeeks is defined %}
-                {{ form_row(form.recurrentWeeks) }}
-            {% endif %}
-            {% if form.edit_mode is defined %}
-                {{ form_row(form.edit_mode) }}
-            {% endif %}
-            {{ form_row(form.comment) }}
             {{ form_rest(form) }}
         {% endblock %}
         {% block modal_footer %}
@@ -46,14 +74,14 @@
                     {% set deleteParams = deleteParams|merge({'date': date}) %}
                 {% endif %}
                 {% if activity.isRecurring %}
-                    <a class="btn btn-outline-danger me-auto modal-ajax-form"
+                    <a class="btn btn-outline-danger me-auto modal-ajax-form planner-btn-delete"
                         href="{{ path('planner_activity_delete', deleteParams) }}">
                         {{ icon('delete', true) }}
                         {{ 'action.delete'|trans }}
                     </a>
                 {% else %}
                     {% set deleteParams = deleteParams|merge({'token': csrf_token('planner_delete_' ~ activity.id)}) %}
-                    <a class="confirmation-link btn btn-outline-danger me-auto"
+                    <a class="confirmation-link btn btn-outline-danger me-auto planner-btn-delete"
                         href="{{ path('planner_activity_delete', deleteParams) }}"
                         data-question="confirm.delete">
                         {{ icon('delete', true) }}
@@ -61,13 +89,31 @@
                     </a>
                 {% endif %}
             {% endif %}
-            <button type="submit"
-                    class="btn btn-primary modal-form-save"
-                    data-loading-text="{{ 'action.save'|trans }}…"
-                    id="form_modal_save"
-                    data-hotkey="ctrl+Enter">
-                {{ 'action.save'|trans }}
-            </button>
+            {% if activity.isRecurring and form.edit_mode is defined %}
+                <button type="button"
+                        class="btn btn-secondary planner-btn-back d-none">
+                    {{ 'back'|trans }}
+                </button>
+                <button type="button"
+                        class="btn btn-primary planner-btn-prompt-save"
+                        data-hotkey="ctrl+Enter">
+                    {{ 'action.save'|trans }}
+                </button>
+                <button type="submit"
+                        class="btn btn-primary modal-form-save planner-btn-real-save d-none"
+                        data-loading-text="{{ 'action.save'|trans }}…"
+                        id="form_modal_save">
+                    {{ 'action.save'|trans }}
+                </button>
+            {% else %}
+                <button type="submit"
+                        class="btn btn-primary modal-form-save"
+                        data-loading-text="{{ 'action.save'|trans }}…"
+                        id="form_modal_save"
+                        data-hotkey="ctrl+Enter">
+                    {{ 'action.save'|trans }}
+                </button>
+            {% endif %}
             <button type="button"
                     class="btn btn-cancel"
                     data-bs-dismiss="modal">
@@ -97,6 +143,53 @@
                         </a>
                     {% endif %}
                 </div>
+            {% endif %}
+            {% if activity.isRecurring and form.edit_mode is defined %}
+                <script type="text/javascript">
+                    (function() {
+                        const modal = document.getElementById('remote_form_modal') || document;
+                        const form = modal.querySelector('form');
+                        const fields = modal.querySelector('.planner-edit-fields');
+                        const prompt = modal.querySelector('.planner-edit-recurring-prompt');
+                        const btnPromptSave = modal.querySelector('.planner-btn-prompt-save');
+                        const btnRealSave = modal.querySelector('.planner-btn-real-save');
+                        const btnBack = modal.querySelector('.planner-btn-back');
+                        const btnDelete = modal.querySelector('.planner-btn-delete');
+                        const titleInput = modal.querySelector('input[name$="[title]"]');
+                        const promptItemName = modal.querySelector('.planner-prompt-item-name strong');
+
+                        if (btnPromptSave && fields && prompt) {
+                            btnPromptSave.addEventListener('click', function(e) {
+                                e.preventDefault();
+                                if (form && form.checkValidity && !form.checkValidity()) {
+                                    form.reportValidity();
+                                    return;
+                                }
+                                if (titleInput && promptItemName && titleInput.value) {
+                                    promptItemName.textContent = titleInput.value;
+                                }
+                                fields.classList.add('d-none');
+                                prompt.classList.remove('d-none');
+                                btnPromptSave.classList.add('d-none');
+                                if (btnDelete) btnDelete.classList.add('d-none');
+                                if (btnBack) btnBack.classList.remove('d-none');
+                                if (btnRealSave) btnRealSave.classList.remove('d-none');
+                            });
+                        }
+
+                        if (btnBack && fields && prompt) {
+                            btnBack.addEventListener('click', function(e) {
+                                e.preventDefault();
+                                prompt.classList.add('d-none');
+                                fields.classList.remove('d-none');
+                                if (btnRealSave) btnRealSave.classList.add('d-none');
+                                btnBack.classList.add('d-none');
+                                if (btnDelete) btnDelete.classList.remove('d-none');
+                                if (btnPromptSave) btnPromptSave.classList.remove('d-none');
+                            });
+                        }
+                    })();
+                </script>
             {% endif %}
         {% endblock %}
     {% endembed %}

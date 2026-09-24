@@ -235,13 +235,6 @@ final class WeeklyPlannerController extends AbstractController
                     $mode = $deleteForm->get('delete_mode')->getData();
                     if (($mode === 'future' || $mode === 'all') && $activity->getRecurrenceGroup() !== null) {
                         $this->repository->deleteFutureRecurringActivities($activity);
-                    } elseif ($dateParam !== '') {
-                        try {
-                            $targetDate = new \DateTime($dateParam);
-                            $this->repository->removeDayFromActivity($activity, $targetDate);
-                        } catch (\Exception) {
-                            $this->repository->deletePlannedActivity($activity);
-                        }
                     } else {
                         $this->repository->deletePlannedActivity($activity);
                     }
@@ -270,16 +263,7 @@ final class WeeklyPlannerController extends AbstractController
         }
 
         try {
-            if ($dateParam !== '') {
-                try {
-                    $targetDate = new \DateTime($dateParam);
-                    $this->repository->removeDayFromActivity($activity, $targetDate);
-                } catch (\Exception) {
-                    $this->repository->deletePlannedActivity($activity);
-                }
-            } else {
-                $this->repository->deletePlannedActivity($activity);
-            }
+            $this->repository->deletePlannedActivity($activity);
             $this->flashSuccess('action.delete.success');
 
             return $this->redirectToRoute('planner_week', ['date' => $selectedDate]);

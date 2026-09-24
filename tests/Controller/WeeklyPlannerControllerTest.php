@@ -848,7 +848,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $this->assertSame('<html>Edit Form View With Date</html>', $response->getContent());
     }
 
-    public function testDeleteNonRecurringActivityWithDateCallsRemoveDayFromActivity(): void
+    public function testDeleteNonRecurringActivityDeletesPlannedActivity(): void
     {
         $user = new User();
         $ref = new \ReflectionProperty(User::class, 'id');
@@ -861,12 +861,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $activity->setEnd(new \DateTime('2026-09-16'));
 
         $repo = $this->createMock(PlannedActivityRepository::class);
-        $repo->expects($this->once())
-            ->method('removeDayFromActivity')
-            ->with($activity, $this->callback(function (\DateTimeInterface $target) {
-                return $target->format('Y-m-d') === '2026-09-15';
-            }));
-        $repo->expects($this->never())->method('deletePlannedActivity');
+        $repo->expects($this->once())->method('deletePlannedActivity')->with($activity);
 
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
@@ -913,7 +908,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $this->assertTrue($response->isRedirect('/planner/week/2026-09-15'));
     }
 
-    public function testDeleteRecurringActivitySubmitsDeleteSingleWithDateCallsRemoveDay(): void
+    public function testDeleteRecurringActivitySubmitsDeleteSingleDeletesPlannedActivity(): void
     {
         $user = new User();
         $ref = new \ReflectionProperty(User::class, 'id');
@@ -927,13 +922,9 @@ class WeeklyPlannerControllerTest extends TestCase
         $activity->setRecurrenceGroup('group-xyz');
 
         $repo = $this->createMock(PlannedActivityRepository::class);
-        $repo->expects($this->once())
-            ->method('removeDayFromActivity')
-            ->with($activity, $this->callback(function (\DateTimeInterface $target) {
-                return $target->format('Y-m-d') === '2026-09-15';
-            }));
-        $repo->expects($this->never())->method('deletePlannedActivity');
+        $repo->expects($this->once())->method('deletePlannedActivity')->with($activity);
         $repo->expects($this->never())->method('deleteRecurringActivities');
+        $repo->expects($this->never())->method('deleteFutureRecurringActivities');
 
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
