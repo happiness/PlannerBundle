@@ -40,12 +40,125 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $entityManager->flush();
     }
 
+    public function removeDayFromActivity(PlannedActivity $activity, \DateTimeInterface $targetDay): void
+    {
+        $begin = $activity->getBegin();
+        $end = $activity->getEnd();
+        if ($begin === null || $end === null) {
+            $this->deletePlannedActivity($activity);
+
+            return;
+        }
+
+        $targetStr = $targetDay->format('Y-m-d');
+        $beginStr = $begin->format('Y-m-d');
+        $endStr = $end->format('Y-m-d');
+
+        if ($targetStr < $beginStr || $targetStr > $endStr || ($beginStr === $endStr && $targetStr === $beginStr)) {
+            $this->deletePlannedActivity($activity);
+
+            return;
+        }
+
+        if ($targetStr === $beginStr) {
+            $activity->setBegin((clone $begin)->modify('+1 day'));
+            $this->savePlannedActivity($activity);
+
+            return;
+        }
+
+        if ($targetStr === $endStr) {
+            $activity->setEnd((clone $end)->modify('-1 day'));
+            $this->savePlannedActivity($activity);
+
+            return;
+        }
+
+        // Target day is in the middle: split into two activities
+        $targetDate = \DateTime::createFromInterface($targetDay);
+        $firstEnd = (clone $targetDate)->modify('-1 day');
+        $secondBegin = (clone $targetDate)->modify('+1 day');
+        $originalEnd = clone $end;
+
+        $activity->setEnd(new \DateTime($firstEnd->format('Y-m-d')));
+        $this->savePlannedActivity($activity);
+
+        $splitActivity = new PlannedActivity();
+        $splitActivity->setUser($activity->getUser());
+        $splitActivity->setTitle($activity->getTitle());
+        $splitActivity->setHoursPerDay($activity->getHoursPerDay());
+        $splitActivity->setColor($activity->getColor());
+        $splitActivity->setComment($activity->getComment());
+        $splitActivity->setRecurrenceGroup($activity->getRecurrenceGroup());
+        $splitActivity->setBegin(new \DateTime($secondBegin->format('Y-m-d')));
+        $splitActivity->setEnd(new \DateTime($originalEnd->format('Y-m-d')));
+
+        $this->savePlannedActivity($splitActivity);
+    }
+
     public function deleteRecurringActivities(string $recurrenceGroup): void
     {
         $activities = $this->findBy(['recurrenceGroup' => $recurrenceGroup]);
         $entityManager = $this->getEntityManager();
         foreach ($activities as $activity) {
             $entityManager->remove($activity);
+        }
+        $entityManager->flush();
+    }
+
+    public function deleteFutureRecurringActivities(PlannedActivity $activity): void
+    {
+        $recurrenceGroup = $activity->getRecurrenceGroup();
+        $begin = $activity->getBegin();
+        if ($recurrenceGroup === null || $recurrenceGroup === '' || $begin === null) {
+            $this->deletePlannedActivity($activity);
+
+            return;
+        }
+
+        $qb = $this->createQueryBuilder('p');
+        $qb->where('p.recurrenceGroup = :group')
+            ->andWhere('p.begin >= :begin')
+            ->setParameter('group', $recurrenceGroup)
+            ->setParameter('begin', $begin->format('Y-m-d'));
+
+        /** @var array<PlannedActivity> $futureActivities */
+        $futureActivities = $qb->getQuery()->getResult();
+
+        $entityManager = $this->getEntityManager();
+        foreach ($futureActivities as $future) {
+            $entityManager->remove($future);
+        }
+        $entityManager->flush();
+    }
+
+    public function updateFutureRecurringActivities(PlannedActivity $activity): void
+    {
+        $recurrenceGroup = $activity->getRecurrenceGroup();
+        $begin = $activity->getBegin();
+        if ($recurrenceGroup === null || $recurrenceGroup === '' || $begin === null) {
+            return;
+        }
+
+        $qb = $this->createQueryBuilder('p');
+        $qb->where('p.recurrenceGroup = :group')
+            ->andWhere('p.id != :currentId')
+            ->andWhere('p.begin >= :begin')
+            ->setParameter('group', $recurrenceGroup)
+            ->setParameter('currentId', $activity->getId())
+            ->setParameter('begin', $begin->format('Y-m-d'));
+
+        /** @var array<PlannedActivity> $futureActivities */
+        $futureActivities = $qb->getQuery()->getResult();
+
+        $entityManager = $this->getEntityManager();
+        foreach ($futureActivities as $future) {
+            $future->setUser($activity->getUser());
+            $future->setTitle($activity->getTitle());
+            $future->setHoursPerDay($activity->getHoursPerDay());
+            $future->setColor($activity->getColor());
+            $future->setComment($activity->getComment());
+            $entityManager->persist($future);
         }
         $entityManager->flush();
     }

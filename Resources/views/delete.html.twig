@@ -7,6 +7,6 @@
         'form': form,
         'delete_item_name': activity.title,
         'used': true,
-        'back': path('planner_week', {'date': activity.begin|date('Y-m-d')})
+        'back': path('planner_week', {'date': (date is defined and date is not empty ? date : (activity.begin ? activity.begin|date('Y-m-d') : 'now'|date('Y-m-d')))})
     }) }}
 {% endblock %}
