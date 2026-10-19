@@ -12,17 +12,22 @@ declare(strict_types=1);
 namespace KimaiPlugin\PlannerBundle\Entity;
 
 use App\Entity\ColorTrait;
+use App\Entity\Customer;
+use App\Entity\Project;
 use App\Entity\User;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use JMS\Serializer\Annotation as Serializer;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 #[ORM\Table(name: 'kimai2_planned_activities')]
 #[ORM\Index(columns: ['user_id'], name: 'IDX_PLANNED_ACTIVITY_USER')]
 #[ORM\Index(columns: ['date_begin', 'date_end'], name: 'IDX_PLANNED_ACTIVITY_DATES')]
 #[ORM\Index(columns: ['recurrence_group'], name: 'IDX_PLANNED_ACTIVITY_RECURRENCE')]
+#[ORM\Index(columns: ['customer_id'], name: 'IDX_PLANNED_ACTIVITY_CUSTOMER')]
+#[ORM\Index(columns: ['project_id'], name: 'IDX_PLANNED_ACTIVITY_PROJECT')]
 #[ORM\Entity(repositoryClass: PlannedActivityRepository::class)]
 #[ORM\ChangeTrackingPolicy('DEFERRED_EXPLICIT')]
 #[Serializer\ExclusionPolicy('all')]
@@ -57,11 +62,28 @@ class PlannedActivity
     #[Serializer\Groups(['Default'])]
     private ?\DateTime $end = null;
 
-    #[ORM\Column(name: 'title', type: Types::STRING, length: 255, nullable: false)]
-    #[Assert\NotBlank]
-    #[Assert\Length(max: 255)]
+    /**
+     * Nullable in the database only because rows created before customers were introduced have none;
+     * the validation requires a customer whenever an activity is saved through the form or the API.
+     */
+    #[ORM\ManyToOne(targetEntity: Customer::class)]
+    #[ORM\JoinColumn(name: 'customer_id', nullable: true, onDelete: 'CASCADE')]
+    #[Assert\NotNull]
     #[Serializer\Expose]
     #[Serializer\Groups(['Default'])]
+    private ?Customer $customer = null;
+
+    #[ORM\ManyToOne(targetEntity: Project::class)]
+    #[ORM\JoinColumn(name: 'project_id', nullable: true, onDelete: 'CASCADE')]
+    #[Serializer\Expose]
+    #[Serializer\Groups(['Default'])]
+    private ?Project $project = null;
+
+    /**
+     * Legacy free-text title, only kept for rows created before customers were introduced.
+     */
+    #[ORM\Column(name: 'title', type: Types::STRING, length: 255, nullable: true)]
+    #[Assert\Length(max: 255)]
     private ?string $title = null;
 
     #[ORM\Column(name: 'hours_per_day', type: Types::FLOAT, nullable: false)]
@@ -129,6 +151,33 @@ class PlannedActivity
         return $this;
     }
 
+    public function getCustomer(): ?Customer
+    {
+        return $this->customer;
+    }
+
+    public function setCustomer(?Customer $customer): self
+    {
+        $this->customer = $customer;
+
+        return $this;
+    }
+
+    public function getProject(): ?Project
+    {
+        return $this->project;
+    }
+
+    public function setProject(?Project $project): self
+    {
+        $this->project = $project;
+
+        return $this;
+    }
+
+    /**
+     * @deprecated legacy free-text title, use getName()
+     */
     public function getTitle(): ?string
     {
         return $this->title;
@@ -141,9 +190,35 @@ class PlannedActivity
         return $this;
     }
 
+    #[Serializer\VirtualProperty]
+    #[Serializer\SerializedName('name')]
+    #[Serializer\Groups(['Default'])]
     public function getName(): ?string
     {
+        if ($this->project !== null) {
+            return $this->project->getName();
+        }
+
+        if ($this->customer !== null) {
+            return $this->customer->getName();
+        }
+
         return $this->title;
+    }
+
+    #[Assert\Callback]
+    public function validateProjectBelongsToCustomer(ExecutionContextInterface $context): void
+    {
+        if ($this->project === null || $this->customer === null) {
+            return;
+        }
+
+        if ($this->project->getCustomer() !== $this->customer) {
+            $context->buildViolation('The project does not belong to the selected customer.')
+                ->atPath('project')
+                ->setTranslationDomain('validators')
+                ->addViolation();
+        }
     }
 
     public function getHoursPerDay(): float

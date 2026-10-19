@@ -133,4 +133,35 @@ class WeeklyPlannerServiceTest extends TestCase
         $this->assertNotNull($thursdayDay);
         $this->assertSame(0.0, $thursdayDay->getPlannedHours());
     }
+
+    /**
+     * @return array<string, array{int, int}>
+     */
+    public static function weekCounts(): array
+    {
+        return [
+            'one week' => [1, 7],
+            'four weeks' => [4, 28],
+            'eight weeks' => [8, 56],
+            'zero is raised to one' => [0, 7],
+            'too many is capped at eight' => [20, 56],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('weekCounts')]
+    public function testGetPlannerDataSpansRequestedWeeks(int $weeks, int $expectedDays): void
+    {
+        $service = new WeeklyPlannerService(
+            $this->createMock(PlannedActivityRepository::class),
+            $this->createMock(WorkingTimeService::class),
+            $this->createStatisticService()
+        );
+
+        $data = $service->getPlannerData([], new \DateTimeImmutable('2026-09-09'), $weeks);
+
+        $this->assertCount($expectedDays, $data->getDateHeaders());
+        $this->assertSame('2026-09-07', $data->getStart()->format('Y-m-d'));
+        $this->assertSame('Sunday', $data->getEnd()->format('l'));
+        $this->assertSame('23:59:59', $data->getEnd()->format('H:i:s'));
+    }
 }

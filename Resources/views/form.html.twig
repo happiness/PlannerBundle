@@ -15,7 +15,8 @@
                     {% if form.user is defined %}
                         {{ form_row(form.user) }}
                     {% endif %}
-                    {{ form_row(form.title) }}
+                    {{ form_row(form.customer) }}
+                    {{ form_row(form.project) }}
                     <div class="row">
                         <div class="col-md-6">
                             {{ form_row(form.begin) }}
@@ -35,7 +36,7 @@
                     {{ form_row(form.comment) }}
                 </div>
                 <div class="planner-edit-recurring-prompt d-none">
-                    <p class="planner-prompt-item-name"><strong>{{ activity.title }}</strong></p>
+                    <p class="planner-prompt-item-name"><strong>{{ activity.name }}</strong></p>
                     <p>{{ 'planner.edit_recurring_prompt'|trans }}</p>
                     {{ form_widget(form.edit_mode) }}
                 </div>
@@ -43,7 +44,8 @@
                 {% if form.user is defined %}
                     {{ form_row(form.user) }}
                 {% endif %}
-                {{ form_row(form.title) }}
+                {{ form_row(form.customer) }}
+                {{ form_row(form.project) }}
                 <div class="row">
                     <div class="col-md-6">
                         {{ form_row(form.begin) }}
@@ -155,18 +157,13 @@
                         const btnRealSave = modal.querySelector('.planner-btn-real-save');
                         const btnBack = modal.querySelector('.planner-btn-back');
                         const btnDelete = modal.querySelector('.planner-btn-delete');
-                        const titleInput = modal.querySelector('input[name$="[title]"]');
-                        const promptItemName = modal.querySelector('.planner-prompt-item-name strong');
-
+                        
                         if (btnPromptSave && fields && prompt) {
                             btnPromptSave.addEventListener('click', function(e) {
                                 e.preventDefault();
                                 if (form && form.checkValidity && !form.checkValidity()) {
                                     form.reportValidity();
                                     return;
-                                }
-                                if (titleInput && promptItemName && titleInput.value) {
-                                    promptItemName.textContent = titleInput.value;
                                 }
                                 fields.classList.add('d-none');
                                 prompt.classList.remove('d-none');

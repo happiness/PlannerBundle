@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace KimaiPlugin\PlannerBundle\Tests\Repository;
 
+use App\Entity\Customer;
+use App\Entity\Project;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
@@ -388,6 +390,11 @@ class PlannedActivityRepositoryTest extends TestCase
         $activity = new PlannedActivity();
         $activity->setUser($user);
         $activity->setTitle('Sprint Planning');
+        $customer = new Customer('ACME');
+        $project = new Project();
+        $project->setCustomer($customer);
+        $activity->setCustomer($customer);
+        $activity->setProject($project);
         $activity->setHoursPerDay(4.5);
         $activity->setColor('#ff0000');
         $activity->setComment('Weekly meeting');
@@ -407,6 +414,8 @@ class PlannedActivityRepositoryTest extends TestCase
 
         // Week 1 recurrence
         $this->assertSame($user, $created[0]->getUser());
+        $this->assertSame($customer, $created[0]->getCustomer());
+        $this->assertSame($project, $created[0]->getProject());
         $this->assertSame('Sprint Planning', $created[0]->getTitle());
         $this->assertSame(4.5, $created[0]->getHoursPerDay());
         $this->assertSame('#ff0000', $created[0]->getColor());
@@ -424,5 +433,65 @@ class PlannedActivityRepositoryTest extends TestCase
         $this->assertSame($activity->getRecurrenceGroup(), $created[1]->getRecurrenceGroup());
         $this->assertSame('2026-09-21', $created[1]->getBegin()?->format('Y-m-d'));
         $this->assertSame('2026-09-23', $created[1]->getEnd()?->format('Y-m-d'));
+    }
+
+    public function testFindByFilterWithoutUsersReturnsEmptyArray(): void
+    {
+        $repository = $this->createRepository($this->createMock(EntityManagerInterface::class));
+
+        $this->assertSame([], $repository->findByFilter([]));
+    }
+
+    public function testFindByFilterAppliesAllFilters(): void
+    {
+        $activity = new PlannedActivity();
+
+        $query = $this->createMock(Query::class);
+        $query->method('getResult')->willReturn([$activity]);
+
+        $conditions = [];
+        $qb = $this->createMock(QueryBuilder::class);
+        foreach (['select', 'from', 'leftJoin', 'addSelect', 'where', 'orderBy', 'addOrderBy', 'setParameter'] as $method) {
+            $qb->method($method)->willReturnSelf();
+        }
+        $qb->method('andWhere')->willReturnCallback(function (string $condition) use (&$conditions, $qb) {
+            $conditions[] = $condition;
+
+            return $qb;
+        });
+        $qb->method('getQuery')->willReturn($query);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('createQueryBuilder')->willReturn($qb);
+        $repository = $this->createRepository($em);
+
+        $project = new Project();
+        $result = $repository->findByFilter([new User()], new \DateTime('2026-10-01'), new \DateTime('2026-10-31'), [new Customer('ACME')], [$project]);
+
+        $this->assertSame([$activity], $result);
+        $this->assertSame([
+            'p.end >= :begin',
+            'p.begin <= :end',
+            'p.customer IN (:customers)',
+            'p.project IN (:projects)',
+        ], $conditions);
+    }
+
+    public function testFindCustomerAndProjectDelegateToEntityManager(): void
+    {
+        $customer = new Customer('ACME');
+        $project = new Project();
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('find')->willReturnCallback(static fn (string $class, int $id): ?object => match ([$class, $id]) {
+            [Customer::class, 3] => $customer,
+            [Project::class, 7] => $project,
+            default => null,
+        });
+        $repository = $this->createRepository($em);
+
+        $this->assertSame($customer, $repository->findCustomer(3));
+        $this->assertSame($project, $repository->findProject(7));
+        $this->assertNull($repository->findProject(8));
     }
 }

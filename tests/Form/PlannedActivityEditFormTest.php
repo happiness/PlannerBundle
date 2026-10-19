@@ -30,7 +30,9 @@ class PlannedActivityEditFormTest extends TypeTestCase
 
         $this->assertFalse($form->has('user'));
         $this->assertFalse($form->has('recurrentWeeks'));
-        $this->assertTrue($form->has('title'));
+        $this->assertFalse($form->has('title'));
+        $this->assertTrue($form->has('customer'));
+        $this->assertTrue($form->has('project'));
         $this->assertTrue($form->has('begin'));
         $this->assertTrue($form->has('end'));
         $this->assertTrue($form->has('hoursPerDay'));
@@ -50,7 +52,9 @@ class PlannedActivityEditFormTest extends TypeTestCase
 
         $this->assertTrue($form->has('user'));
         $this->assertFalse($form->has('recurrentWeeks'));
-        $this->assertTrue($form->has('title'));
+        $this->assertFalse($form->has('title'));
+        $this->assertTrue($form->has('customer'));
+        $this->assertTrue($form->has('project'));
         $this->assertTrue($form->has('begin'));
         $this->assertTrue($form->has('end'));
         $this->assertTrue($form->has('hoursPerDay'));
@@ -71,7 +75,9 @@ class PlannedActivityEditFormTest extends TypeTestCase
         $this->assertFalse($form->has('user'));
         $this->assertTrue($form->has('recurrentWeeks'));
         $this->assertFalse($form->has('edit_mode'));
-        $this->assertTrue($form->has('title'));
+        $this->assertFalse($form->has('title'));
+        $this->assertTrue($form->has('customer'));
+        $this->assertTrue($form->has('project'));
         $this->assertTrue($form->has('begin'));
         $this->assertTrue($form->has('end'));
         $this->assertTrue($form->has('hoursPerDay'));
@@ -92,7 +98,9 @@ class PlannedActivityEditFormTest extends TypeTestCase
         $this->assertFalse($form->has('user'));
         $this->assertFalse($form->has('recurrentWeeks'));
         $this->assertTrue($form->has('edit_mode'));
-        $this->assertTrue($form->has('title'));
+        $this->assertFalse($form->has('title'));
+        $this->assertTrue($form->has('customer'));
+        $this->assertTrue($form->has('project'));
         $this->assertTrue($form->has('begin'));
         $this->assertTrue($form->has('end'));
         $this->assertTrue($form->has('hoursPerDay'));

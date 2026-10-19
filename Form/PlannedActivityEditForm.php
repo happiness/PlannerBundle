@@ -12,7 +12,9 @@ declare(strict_types=1);
 namespace KimaiPlugin\PlannerBundle\Form;
 
 use App\Entity\User;
+use App\Form\FormTrait;
 use App\Form\Type\ColorPickerType;
+use App\Form\Type\CustomerType;
 use App\Form\Type\DatePickerType;
 use App\Form\Type\UserType;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
@@ -21,7 +23,6 @@ use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
-use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\GreaterThanOrEqual;
@@ -32,6 +33,8 @@ use Symfony\Component\Validator\Constraints\LessThanOrEqual;
  */
 class PlannedActivityEditForm extends AbstractType
 {
+    use FormTrait;
+
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         /** @var User $user */
@@ -48,14 +51,28 @@ class PlannedActivityEditForm extends AbstractType
             ]);
         }
 
+        /** @var PlannedActivity|null $activity */
+        $activity = $builder->getData();
+
+        $builder->add('customer', CustomerType::class, [
+            'label' => 'customer',
+            'required' => true,
+            'placeholder' => '',
+            'query_builder_for_user' => true,
+            'customers' => $activity?->getCustomer(),
+            'project_enabled' => true,
+            'attr' => [
+                'autofocus' => 'autofocus',
+            ],
+        ]);
+
+        $this->addProject($builder, $activity?->getId() === null, $activity?->getProject(), $activity?->getCustomer(), [
+            'label' => 'project',
+            'required' => false,
+            'activity_enabled' => false,
+        ]);
+
         $builder
-            ->add('title', TextType::class, [
-                'label' => 'label.title',
-                'required' => true,
-                'attr' => [
-                    'autofocus' => 'autofocus',
-                ],
-            ])
             ->add('begin', DatePickerType::class, [
                 'label' => 'label.begin',
                 'required' => true,

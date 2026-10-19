@@ -1,6 +1,6 @@
 # PlannerBundle for Kimai
 
-**PlannerBundle** is a lightweight weekly team capacity planner plugin for [Kimai](https://www.kimai.org/), inspired by tools like Forecastapp. It allows teams and team leaders to visually plan and balance workloads on a weekly timeline without the administrative friction of linking planned activities to customers or projects.
+**PlannerBundle** is a lightweight weekly team capacity planner plugin for [Kimai](https://www.kimai.org/), inspired by tools like Forecastapp. It allows teams and team leaders to visually plan and balance workloads on a weekly timeline. Every planned activity is linked to a customer and, optionally, a project.
 
 ---
 
@@ -11,7 +11,9 @@
   - Automatically calculates expected capacity from each user's working time contracts.
   - Highlights over-allocated, under-allocated, and balanced days with clear visual badges.
 - **Actual vs Planned Hours**: Directly compares planned allocations against actual recorded timesheet hours.
-- **Lightweight Scheduling**: Plan time blocks with custom titles, daily hours, date ranges, comments, and color badges.
+- **Lightweight Scheduling**: Plan time blocks for a customer (and optionally a project) with daily hours, date ranges, comments, and color badges.
+- **Multiple Weeks**: Show 1, 2, 4 (default) or 8 weeks at once; capacity is summarized per week.
+- **REST API**: Create, read, update and delete planned activities via `/api/planner/activities` (see the Kimai API docs under the "Planner" tag).
 - **Quick Modal Editing**: Create, update, or delete planned blocks seamlessly via modal dialogs.
 - **Date Navigation**: Fast week switcher controls (`Previous Week`, `Today`, `Next Week`, and date picker jump).
 - **Fine-Grained Permissions**: Full role-based access control supporting self-planning and team lead management.
@@ -109,3 +111,19 @@ vendor/bin/phpunit var/plugins/PlannerBundle/tests/
 ## License
 
 This bundle is licensed under the [AGPL-3.0-or-later License](https://www.gnu.org/licenses/agpl-3.0.html).
+
+## REST API
+
+All endpoints require an API token and the `view_planner` permission; write operations additionally respect `create_planner`, `edit_planner` and `delete_planner` as well as the `*_other_planner` permissions for other users' plans.
+
+| Method | Path | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/planner/activities` | List activities. Filters: `user`, `customers[]`, `projects[]`, `begin`, `end` (`Y-m-d`) |
+| `GET` | `/api/planner/activities/{id}` | Fetch one activity |
+| `POST` | `/api/planner/activities` | Create. Body: `customer` (required), `project`, `user` (defaults to you), `begin`, `end`, `hoursPerDay`, `color`, `comment`, `recurrentWeeks` |
+| `PATCH` | `/api/planner/activities/{id}` | Update any subset of fields; `edit_mode: "future"` also updates later activities of a recurring series |
+| `DELETE` | `/api/planner/activities/{id}` | Delete; `?mode=future` also deletes later activities of a recurring series |
+
+## Upgrading
+
+Activities created before customers were introduced keep their old free-text title and have no customer. They are still shown (using the old title) but must be given a customer the next time they are edited.

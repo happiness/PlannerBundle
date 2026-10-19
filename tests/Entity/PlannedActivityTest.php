@@ -11,9 +11,13 @@ declare(strict_types=1);
 
 namespace KimaiPlugin\PlannerBundle\Tests\Entity;
 
+use App\Entity\Customer;
+use App\Entity\Project;
 use App\Entity\User;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
+use Symfony\Component\Validator\Violation\ConstraintViolationBuilderInterface;
 
 class PlannedActivityTest extends TestCase
 {
@@ -84,5 +88,62 @@ class PlannedActivityTest extends TestCase
 
         $this->assertSame(5, $activity->getDaysCount());
         $this->assertSame(30.0, $activity->getTotalHours());
+    }
+
+    public function testNameIsDerivedFromProjectThenCustomerThenLegacyTitle(): void
+    {
+        $customer = new Customer('ACME');
+        $project = new Project();
+        $project->setName('Website');
+        $project->setCustomer($customer);
+
+        $activity = new PlannedActivity();
+        $this->assertNull($activity->getName());
+
+        $activity->setTitle('Legacy');
+        $this->assertSame('Legacy', $activity->getName());
+
+        $activity->setCustomer($customer);
+        $this->assertSame('ACME', $activity->getName());
+
+        $activity->setProject($project);
+        $this->assertSame('Website', $activity->getName());
+        $this->assertSame($customer, $activity->getCustomer());
+        $this->assertSame($project, $activity->getProject());
+    }
+
+    public function testProjectMustBelongToCustomer(): void
+    {
+        $customer = new Customer('ACME');
+        $other = new Customer('Other');
+        $project = new Project();
+        $project->setCustomer($other);
+
+        $activity = new PlannedActivity();
+        $activity->setCustomer($customer)->setProject($project);
+
+        $builder = $this->createMock(ConstraintViolationBuilderInterface::class);
+        $builder->method('atPath')->with('project')->willReturnSelf();
+        $builder->method('setTranslationDomain')->willReturnSelf();
+        $builder->expects($this->once())->method('addViolation');
+
+        $context = $this->createMock(ExecutionContextInterface::class);
+        $context->expects($this->once())->method('buildViolation')->willReturn($builder);
+
+        $activity->validateProjectBelongsToCustomer($context);
+    }
+
+    public function testMatchingProjectAndMissingParentsAreValid(): void
+    {
+        $customer = new Customer('ACME');
+        $project = new Project();
+        $project->setCustomer($customer);
+
+        $context = $this->createMock(ExecutionContextInterface::class);
+        $context->expects($this->never())->method('buildViolation');
+
+        (new PlannedActivity())->setCustomer($customer)->setProject($project)->validateProjectBelongsToCustomer($context);
+        (new PlannedActivity())->setCustomer($customer)->validateProjectBelongsToCustomer($context);
+        (new PlannedActivity())->validateProjectBelongsToCustomer($context);
     }
 }

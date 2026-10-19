@@ -42,6 +42,14 @@
                 <source>planner.this_week</source>
                 <target>Denna vecka</target>
             </trans-unit>
+            <trans-unit id="planner.weeks">
+                <source>planner.weeks</source>
+                <target>Antal veckor som visas</target>
+            </trans-unit>
+            <trans-unit id="planner.weeks_option">
+                <source>planner.weeks_option</source>
+                <target>%count% v</target>
+            </trans-unit>
             <trans-unit id="planner.toggle_all">
                 <source>planner.toggle_all</source>
                 <target>Visa/dölj alla</target>

@@ -7,13 +7,14 @@ Use this guide when working on the **PlannerBundle** plugin in `var/plugins/Plan
 ## Overview & Scope
 
 - **Plugin Name**: `PlannerBundle` (`happiness/planner-bundle` or `KimaiPlugin\PlannerBundle`)
-- **Description**: Lightweight weekly team capacity and workload planner for Kimai (inspired by Forecastapp). Allows team leads and users to plan, visualize, and balance workloads on a weekly timeline without mandatory linking to customers or projects.
+- **Description**: Lightweight weekly team capacity and workload planner for Kimai (inspired by Forecastapp). Allows team leads and users to plan, visualize, and balance workloads on a weekly timeline. Every planned activity belongs to a customer and optionally a project.
 - **Primary Capabilities**:
   - Weekly matrix grid overview showing planned activities and daily allocations (Monday through Sunday).
   - Capacity and workload calculations integrating with Kimai user working time contracts.
   - Visual status badges highlighting over-allocated, under-allocated, and balanced workdays.
   - Direct comparison of planned allocations against actual recorded timesheet hours.
   - Quick modal creation, editing, and deletion for planned time blocks.
+  - REST API (`/api/planner/activities`) with full CRUD, filtering and recurrence support.
   - Configurable recurring activities spanning multiple weeks.
   - Fast week navigation (previous, today, next, and date jumping).
   - Performance-optimized User and Team toolbar filtering with single-team pre-selection.
@@ -42,25 +43,32 @@ var/plugins/PlannerBundle/
 ├── README.md                          # Feature overview, setup, and permissions
 ├── phpstan.neon                       # Plugin-specific PHPStan configuration
 ├── .php-cs-fixer.dist.php             # Plugin-specific code style rules
+├── API/
+│   └── PlannedActivityController.php # REST API (GET/POST/PATCH/DELETE /api/planner/activities)
 ├── Controller/
 │   └── WeeklyPlannerController.php    # Weekly planner routes, week switching, modal CRUD actions
 ├── DependencyInjection/
 │   └── PlannerExtension.php          # Container configuration (prepends roles, sets, views)
 ├── Entity/
-│   └── PlannedActivity.php           # Planned time block entity (user, date range, daily hours, comments, color)
+│   └── PlannedActivity.php           # Planned time block entity (user, customer, project, date range, daily hours, comments, color)
 ├── EventSubscriber/
 │   ├── MenuSubscriber.php            # Injects "Planner" item into main navigation
 │   └── PermissionSubscriber.php      # Registers planner permissions
 ├── Form/
-│   └── PlannedActivityEditForm.php    # Modal form for creating/editing planned activities
+│   ├── PlannedActivityEditForm.php    # Modal form for creating/editing planned activities
+│   └── PlannedActivityApiForm.php     # API variant: ISO dates, no CSRF
 ├── Migrations/
 │   ├── doctrine_migrations.yaml       # Plugin migration configuration
 │   ├── Version20260909000000.php      # Initial planner schema (kimai2_planned_activities table)
-│   └── Version20260914000000.php      # Schema updates (recurring activities support)
+│   ├── Version20260914000000.php      # Schema updates (recurring activities support)
+│   └── Version20261019000000.php      # customer_id/project_id columns, title becomes nullable
 ├── Planner/
+│   ├── PlannerUserProvider.php        # Resolves which users' plans the current user may see (web + API)
 │   ├── WeeklyPlannerService.php       # Domain service aggregating week data, user rows, capacity & actuals
 │   ├── WeeklyPlannerData.php          # Value object representing complete week grid
 │   ├── WeeklyPlannerUserRow.php       # Per-user row containing daily breakdowns & contract summary
+│   ├── WeeklyPlannerWeek.php          # One user's capacity figures for one calendar week of the displayed range
+│   ├── WeeklyPlannerGroup.php         # One user's activities for one customer/project; builds merged day segments (one sub-row in the grid)
 │   └── WeeklyPlannerDay.php           # Daily metrics (planned hours, actual hours, contract hours, status)
 ├── Repository/
 │   └── PlannedActivityRepository.php  # PlannedActivity queries (date ranges, user filtering)
@@ -104,7 +112,21 @@ var/plugins/PlannerBundle/
    - Calculating working time contracts and daily work hours (`getWorkHoursForDay()`) for all 7 days of the week is computationally heavy.
    - Filter users at the database query level (`UserRepository::getUsersForQuery`) using toolbar team and user filters before instantiating contract calculators.
    - If the logged-in user belongs to exactly one team (`count($currentUser->getTeams()) === 1`), pre-select that team by default in the toolbar query to minimize initial page load latency.
-4. **Isolated Database Migrations**:
+4. **Customer/Project Link & Legacy Rows**:
+   - `customer_id` is nullable **in the database only** because rows created before the link existed have none; `PlannedActivity` validates `customer` as `NotNull`, so every save through the form or API requires one. `project` is optional and must belong to the customer.
+   - `title` is a legacy column (nullable, no longer in the form). Use `getName()`: project name, else customer name, else legacy title.
+   - Plugins are not loaded in Kimai's `test` environment, so plugin tests are unit tests (mocks / `TypeTestCase`); there is no HTTP-level API test. Core files must not be touched, which rules out registering the plugin for tests.
+   - The API doc bundle cannot dump the plugin's form models from the CLI (core forms using `UserType` fail the same way); review the generated docs in the logged-in `/api/doc` UI after changing API attributes.
+5. **Grid Layout (Forecast style)**:
+   - Per user there is one collapsible summary row (avatar, name, capacity bar) followed by one sub-row per customer/project (`WeeklyPlannerUserRow::getGroups()`). Day cells only show hours; consecutive days of the same activity are merged via `colspan` (`WeeklyPlannerGroup::getSegments()`).
+   - All of a user's rows share `data-user-id`; the toggle JS relies on that. Empty days in a sub-row open the create modal for that user/date (customer/project are not pre-filled yet).
+6. **Multiple Weeks**:
+   - The grid shows 1, 2, 4 (default) or 8 consecutive weeks (`WeeklyPlannerController::WEEK_OPTIONS`). The count comes from the `weeks` query parameter and is remembered in the session (`planner_weeks`), so it survives navigation and redirects after saving. The service clamps it to 1-8.
+   - The range always starts on the Monday of the selected week; previous/next move by one week. Capacity bars are per calendar week (`WeeklyPlannerUserRow::getWeeks()`), while sub-row bars run continuously across week borders. With more than one week day columns shrink to 44px and headers show weekday + day number.
+7. **Drag to Create**:
+   - Empty day cells carry `data-planner-date`; dragging across empty cells of one row opens the create dialog with `date`, `end`, `user` and, for sub-rows, `customer`/`project` (read from the row's `data-customer-id`/`data-project-id`). The JS lives in `index.html.twig`, reuses Kimai's delegated `.modal-ajax-form` click handler by clicking a temporary link, and suppresses the click that follows `mouseup`. A plain click still opens the single-day dialog. Mouse only, no touch support.
+   - `createActivity()` ignores an `end` before `date` and only pre-fills customer/project the user may `access`.
+8. **Isolated Database Migrations**:
    - Always run and test migrations using the bundle's dedicated configuration file:
      `bin/console doctrine:migrations:migrate --configuration=var/plugins/PlannerBundle/Migrations/doctrine_migrations.yaml --no-interaction`
 
@@ -120,6 +142,8 @@ var/plugins/PlannerBundle/
 | `delete_planner` | Delete own planned activities | `ROLE_USER`, `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `view_other_planner` | View other team members in the planner grid | `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `edit_other_planner` | Create, edit, and delete activities for others | `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
+
+The API additionally requires Kimai's core `API` permission. It reuses the same planner permissions and `PlannedActivityVoter`.
 
 ---
 
