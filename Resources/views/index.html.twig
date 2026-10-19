@@ -147,20 +147,20 @@
                                                 </td>
                                             {% endfor %}
                                         </tr>
-                                    {% else %}
-                                        <tr class="planner-row planner-row-details is-collapsed" data-user-id="{{ row.user.id }}">
-                                            <td colspan="2" class="planner-group-cell p-1 border-top-0"></td>
-                                            {% for day in row.days %}
-                                                <td class="position-relative border-1 day{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %} p-1 no-activities"{% if canCreate %} data-planner-date="{{ day.date|date('Y-m-d') }}"{% endif %}>
-                                                    {% if canCreate %}
-                                                        <a href="{{ path('planner_activity_create', {'user': row.user.id, 'date': day.date|date('Y-m-d')}) }}"
-                                                           class="stretched-link cursor-crosshair modal-ajax-form"
-                                                           title="{{ 'planner.planned_activity'|trans }}"></a>
-                                                    {% endif %}
-                                                </td>
-                                            {% endfor %}
-                                        </tr>
                                     {% endfor %}
+                                    {# always keep one empty row per user, so new planning can be dragged out #}
+                                    <tr class="planner-row planner-row-details is-collapsed" data-user-id="{{ row.user.id }}">
+                                        <td colspan="2" class="planner-group-cell p-1 border-top-0"></td>
+                                        {% for day in row.days %}
+                                            <td class="position-relative border-1 day{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %} p-1 no-activities"{% if canCreate %} data-planner-date="{{ day.date|date('Y-m-d') }}"{% endif %}>
+                                                {% if canCreate %}
+                                                    <a href="{{ path('planner_activity_create', {'user': row.user.id, 'date': day.date|date('Y-m-d')}) }}"
+                                                       class="stretched-link cursor-crosshair modal-ajax-form"
+                                                       title="{{ 'planner.planned_activity'|trans }}"></a>
+                                                {% endif %}
+                                            </td>
+                                        {% endfor %}
+                                    </tr>
                                 {% else %}
                                     <tr>
                                         <td colspan="10" class="text-center text-muted p-1">
