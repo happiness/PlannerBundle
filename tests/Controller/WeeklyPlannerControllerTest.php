@@ -13,7 +13,9 @@ namespace KimaiPlugin\PlannerBundle\Tests\Controller;
 
 use App\Entity\Customer;
 use App\Entity\Project;
+use App\Entity\Team;
 use App\Entity\User;
+use App\Repository\BookmarkRepository;
 use App\Repository\UserRepository;
 use KimaiPlugin\PlannerBundle\Controller\WeeklyPlannerController;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
@@ -21,6 +23,7 @@ use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerData;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
+use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Form\FormFactoryInterface;
@@ -66,15 +69,18 @@ class WeeklyPlannerControllerTest extends TestCase
             ->with('@Planner/index.html.twig', $this->isType('array'))
             ->willReturn('<html>Planner View</html>');
 
+        $formServices = $this->createFormServices();
         $container = $this->createMock(ContainerInterface::class);
         $container->method('has')->willReturnMap([
             ['security.authorization_checker', true],
             ['security.token_storage', true],
+            ...$this->formServiceMap('has', $formServices),
             ['twig', true],
         ]);
         $container->method('get')->willReturnMap([
             ['security.authorization_checker', $authChecker],
             ['security.token_storage', $tokenStorage],
+            ...$this->formServiceMap('get', $formServices),
             ['twig', $twig],
         ]);
 
@@ -143,15 +149,18 @@ class WeeklyPlannerControllerTest extends TestCase
             )
             ->willReturn('<html>Planner View</html>');
 
+        $formServices = $this->createFormServices();
         $container = $this->createMock(ContainerInterface::class);
         $container->method('has')->willReturnMap([
             ['security.authorization_checker', true],
             ['security.token_storage', true],
+            ...$this->formServiceMap('has', $formServices),
             ['twig', true],
         ]);
         $container->method('get')->willReturnMap([
             ['security.authorization_checker', $authChecker],
             ['security.token_storage', $tokenStorage],
+            ...$this->formServiceMap('get', $formServices),
             ['twig', $twig],
         ]);
 
@@ -205,15 +214,18 @@ class WeeklyPlannerControllerTest extends TestCase
             )
             ->willReturn('<html>Planner View</html>');
 
+        $formServices = $this->createFormServices();
         $container = $this->createMock(ContainerInterface::class);
         $container->method('has')->willReturnMap([
             ['security.authorization_checker', true],
             ['security.token_storage', true],
+            ...$this->formServiceMap('has', $formServices),
             ['twig', true],
         ]);
         $container->method('get')->willReturnMap([
             ['security.authorization_checker', $authChecker],
             ['security.token_storage', $tokenStorage],
+            ...$this->formServiceMap('get', $formServices),
             ['twig', $twig],
         ]);
 
@@ -1205,15 +1217,18 @@ class WeeklyPlannerControllerTest extends TestCase
             }))
             ->willReturn('<html></html>');
 
+        $formServices = $this->createFormServices();
         $container = $this->createMock(ContainerInterface::class);
         $container->method('has')->willReturnMap([
             ['security.authorization_checker', true],
             ['security.token_storage', true],
+            ...$this->formServiceMap('has', $formServices),
             ['twig', true],
         ]);
         $container->method('get')->willReturnMap([
             ['security.authorization_checker', $authChecker],
             ['security.token_storage', $tokenStorage],
+            ...$this->formServiceMap('get', $formServices),
             ['twig', $twig],
         ]);
         $controller->setContainer($container);
@@ -1230,6 +1245,126 @@ class WeeklyPlannerControllerTest extends TestCase
         if (isset($query['weeks']) && \in_array((int) $query['weeks'], WeeklyPlannerController::WEEK_OPTIONS, true)) {
             $this->assertSame($expectedWeeks, $session->get('planner_weeks'));
         }
+    }
+
+    /**
+     * @return array<string, array{int, bool}>
+     */
+    public static function teamPreSelectionScenarios(): array
+    {
+        return [
+            'single team is pre-selected' => [1, true],
+            'multiple teams are not pre-selected' => [2, false],
+            'no team is not pre-selected' => [0, false],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('teamPreSelectionScenarios')]
+    public function testTeamFilterIsPreSelectedOnlyForSingleTeam(int $teamCount, bool $expectPreSelection): void
+    {
+        $user = new User();
+        $ref = new \ReflectionProperty(User::class, 'id');
+        $ref->setValue($user, 1);
+        for ($i = 1; $i <= $teamCount; $i++) {
+            $user->addTeam(new Team('Team ' . $i));
+        }
+
+        $submittedQuery = null;
+        $form = $this->createMock(FormInterface::class);
+        $form->method('createView')->willReturn($this->createMock(FormView::class));
+        $form->method('isSubmitted')->willReturn(false);
+        $form->method('getData')->willReturnCallback(static function () use (&$submittedQuery) {
+            return $submittedQuery;
+        });
+
+        $formFactory = $this->createMock(FormFactoryInterface::class);
+        $formFactory->method('createNamed')->willReturnCallback(function (string $name, string $type, mixed $data) use ($form, &$submittedQuery) {
+            $submittedQuery = $data;
+
+            return $form;
+        });
+
+        $userProvider = $this->createMock(PlannerUserProvider::class);
+        $userProvider->expects($this->once())
+            ->method('getVisibleUsers')
+            ->with($user, $this->isInstanceOf(PlannerQuery::class))
+            ->willReturn([$user]);
+
+        $plannerService = $this->createMock(WeeklyPlannerService::class);
+        $plannerService->method('getPlannerData')
+            ->willReturn(new WeeklyPlannerData(new \DateTimeImmutable('2026-09-07'), new \DateTimeImmutable('2026-09-13')));
+
+        $controller = new WeeklyPlannerController(
+            $this->createMock(PlannedActivityRepository::class),
+            $plannerService,
+            $this->createMock(UserRepository::class),
+            $userProvider
+        );
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturn(false);
+        $tokenStorage = $this->createMock(TokenStorageInterface::class);
+        $tokenStorage->method('getToken')->willReturn(new UsernamePasswordToken($user, 'main', $user->getRoles()));
+
+        $twig = $this->createMock(Environment::class);
+        $twig->expects($this->once())
+            ->method('render')
+            ->with('@Planner/index.html.twig', $this->callback(function (array $context) use ($expectPreSelection): bool {
+                $this->assertInstanceOf(PlannerQuery::class, $context['query']);
+                $this->assertSame($expectPreSelection ? 1 : 0, \count($context['query']->getTeams()));
+                $this->assertArrayHasKey('toolbarForm', $context);
+
+                return true;
+            }))
+            ->willReturn('<html></html>');
+
+        $formServices = ['form.factory' => $formFactory, 'bookmark' => $this->createMock(BookmarkRepository::class)];
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnMap([
+            ['security.authorization_checker', true],
+            ['security.token_storage', true],
+            ...$this->formServiceMap('has', $formServices),
+            ['twig', true],
+        ]);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['security.token_storage', $tokenStorage],
+            ...$this->formServiceMap('get', $formServices),
+            ['twig', $twig],
+        ]);
+        $controller->setContainer($container);
+
+        $this->assertInstanceOf(Response::class, $controller->index());
+    }
+
+    /**
+     * @return array{form.factory: FormFactoryInterface, bookmark: BookmarkRepository}
+     */
+    private function createFormServices(?PlannerQuery $query = null): array
+    {
+        $form = $this->createMock(FormInterface::class);
+        $form->method('createView')->willReturn($this->createMock(FormView::class));
+        $form->method('getData')->willReturn($query ?? new PlannerQuery());
+        $form->method('isSubmitted')->willReturn(false);
+
+        $formFactory = $this->createMock(FormFactoryInterface::class);
+        $formFactory->method('createNamed')->willReturn($form);
+
+        return ['form.factory' => $formFactory, 'bookmark' => $this->createMock(BookmarkRepository::class)];
+    }
+
+    /**
+     * @param array{form.factory: FormFactoryInterface, bookmark: BookmarkRepository} $formServices
+     * @return array<int, array{string, mixed}>
+     */
+    private function formServiceMap(string $type, array $formServices): array
+    {
+        $value = static fn (mixed $service): mixed => $type === 'has' ? true : $service;
+
+        return [
+            ['form.factory', $value($formServices['form.factory'])],
+            [BookmarkRepository::class, $value($formServices['bookmark'])],
+        ];
     }
 
     /**

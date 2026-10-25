@@ -3,7 +3,7 @@
   "description": "Weekly team planner plugin.",
   "homepage": "https://github.com/happiness/PlannerBundle",
   "type": "kimai-plugin",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "require": {
     "php": ">=8.2",
     "kimai/kimai": ">=2.0.0"
@@ -18,7 +18,7 @@
     "kimai": {
       "require": 20000,
       "name": "Planner",
-      "version": "2.0.0"
+      "version": "2.0.1"
     }
   }
 }

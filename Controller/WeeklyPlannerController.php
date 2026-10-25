@@ -19,10 +19,12 @@ use App\Repository\UserRepository;
 use App\Utils\PageSetup;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Form\PlannedActivityEditForm;
+use KimaiPlugin\PlannerBundle\Form\Toolbar\PlannerToolbarForm;
 use KimaiPlugin\PlannerBundle\Planner\CommonProjectService;
 use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
+use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
 use KimaiPlugin\PlannerBundle\Voter\PlannedActivityVoter;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -50,13 +52,17 @@ final class WeeklyPlannerController extends AbstractController
     #[Route(path: '', name: 'planner', methods: ['GET'])]
     public function index(?Request $request = null): Response
     {
-        return $this->renderWeek((new \DateTimeImmutable('today'))->format('Y-m-d'), $this->resolveWeeks($request));
+        $request ??= new Request();
+
+        return $this->renderWeek((new \DateTimeImmutable('today'))->format('Y-m-d'), $request, $this->resolveWeeks($request));
     }
 
     #[Route(path: '/week/{date}', name: 'planner_week', methods: ['GET'])]
     public function week(string $date, ?Request $request = null): Response
     {
-        return $this->renderWeek($date, $this->resolveWeeks($request));
+        $request ??= new Request();
+
+        return $this->renderWeek($date, $request, $this->resolveWeeks($request));
     }
 
     /**
@@ -381,7 +387,7 @@ final class WeeklyPlannerController extends AbstractController
         return \is_int($stored) && \in_array($stored, self::WEEK_OPTIONS, true) ? $stored : self::DEFAULT_WEEKS;
     }
 
-    private function renderWeek(string $dateString, int $weeks): Response
+    private function renderWeek(string $dateString, Request $request, int $weeks): Response
     {
         try {
             $selectedDate = new \DateTimeImmutable($dateString);
@@ -390,12 +396,33 @@ final class WeeklyPlannerController extends AbstractController
         }
 
         $currentUser = $this->getUser();
-        $users = $this->userProvider->getVisibleUsers($currentUser);
+        $dateTimeFactory = $this->getDateTimeFactory($currentUser);
+
+        $query = new PlannerQuery();
+        $query->setCurrentUser($currentUser);
+
+        if (\count($currentUser->getTeams()) === 1) {
+            $query->setTeams($currentUser->getTeams());
+        }
+
+        $form = $this->createSearchForm(PlannerToolbarForm::class, $query, [
+            'timezone' => $dateTimeFactory->getTimezone()->getName(),
+        ]);
+
+        if ($this->handleSearch($form, $request)) {
+            return $this->redirectToRoute('planner_week', ['date' => $selectedDate->format('Y-m-d')]);
+        }
+
+        /** @var PlannerQuery $query */
+        $query = $form->getData();
+
+        $users = $this->userProvider->getVisibleUsers($currentUser, $query);
 
         $plannerData = $this->plannerService->getPlannerData($users, $selectedDate, $weeks);
 
         $page = new PageSetup('planner.title');
         $page->setHelp('planner.html');
+        $page->setPaginationForm($form);
 
         $currentWeekMonday = $selectedDate->modify('this week monday 00:00:00');
         $prevWeek = $currentWeekMonday->modify('-1 week')->format('Y-m-d');
@@ -404,6 +431,8 @@ final class WeeklyPlannerController extends AbstractController
 
         return $this->render('@Planner/index.html.twig', [
             'page_setup' => $page,
+            'toolbarForm' => $form->createView(),
+            'query' => $query,
             'plannerData' => $plannerData,
             'selectedDate' => $selectedDate,
             'currentWeek' => $currentWeekMonday,
