@@ -31,13 +31,19 @@ class WeeklyPlannerService
     ) {
     }
 
+    public const MIN_WEEKS = 1;
+    public const MAX_WEEKS = 8;
+
     /**
      * @param array<User> $users
+     * @param int $weeks number of calendar weeks to show, starting with the week of $selectedDate
      */
-    public function getPlannerData(array $users, \DateTimeInterface $selectedDate): WeeklyPlannerData
+    public function getPlannerData(array $users, \DateTimeInterface $selectedDate, int $weeks = 1): WeeklyPlannerData
     {
+        $weeks = max(self::MIN_WEEKS, min(self::MAX_WEEKS, $weeks));
+
         $start = \DateTimeImmutable::createFromInterface($selectedDate)->modify('this week monday 00:00:00');
-        $end = $start->modify('this week sunday 23:59:59');
+        $end = $start->modify(\sprintf('+%d days', $weeks * 7 - 1))->setTime(23, 59, 59);
 
         $plannerData = new WeeklyPlannerData($start, $end);
 

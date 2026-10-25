@@ -41,11 +41,37 @@ class PlannerExtension extends AbstractPluginExtension implements PrependExtensi
                         'edit_other_planner',
                     ],
                 ],
-                'maps' => [
-                    'ROLE_USER' => ['PLANNER'],
-                    'ROLE_TEAMLEAD' => ['PLANNER', 'PLANNER_OTHER'],
-                    'ROLE_ADMIN' => ['PLANNER', 'PLANNER_OTHER'],
-                    'ROLE_SUPER_ADMIN' => ['PLANNER', 'PLANNER_OTHER'],
+                'roles' => [
+                    'ROLE_USER' => [
+                        'view_planner',
+                        'create_planner',
+                        'edit_planner',
+                        'delete_planner',
+                    ],
+                    'ROLE_TEAMLEAD' => [
+                        'view_planner',
+                        'create_planner',
+                        'edit_planner',
+                        'delete_planner',
+                        'view_other_planner',
+                        'edit_other_planner',
+                    ],
+                    'ROLE_ADMIN' => [
+                        'view_planner',
+                        'create_planner',
+                        'edit_planner',
+                        'delete_planner',
+                        'view_other_planner',
+                        'edit_other_planner',
+                    ],
+                    'ROLE_SUPER_ADMIN' => [
+                        'view_planner',
+                        'create_planner',
+                        'edit_planner',
+                        'delete_planner',
+                        'view_other_planner',
+                        'edit_other_planner',
+                    ],
                 ],
             ],
         ]);

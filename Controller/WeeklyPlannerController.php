@@ -12,19 +12,22 @@ declare(strict_types=1);
 namespace KimaiPlugin\PlannerBundle\Controller;
 
 use App\Controller\AbstractController;
-use App\Entity\Team;
+use App\Entity\Customer;
+use App\Entity\Project;
 use App\Entity\User;
-use App\Repository\Query\UserQuery;
 use App\Repository\UserRepository;
 use App\Utils\PageSetup;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Form\PlannedActivityEditForm;
 use KimaiPlugin\PlannerBundle\Form\Toolbar\PlannerToolbarForm;
+use KimaiPlugin\PlannerBundle\Planner\CommonProjectService;
+use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
 use KimaiPlugin\PlannerBundle\Voter\PlannedActivityVoter;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -34,23 +37,68 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('view_planner')]
 final class WeeklyPlannerController extends AbstractController
 {
+    public const DEFAULT_WEEKS = 4;
+    public const WEEK_OPTIONS = [1, 2, 4, 8];
+    private const SESSION_KEY = 'planner_weeks';
+
     public function __construct(
         private readonly PlannedActivityRepository $repository,
         private readonly WeeklyPlannerService $plannerService,
-        private readonly UserRepository $userRepository
+        private readonly UserRepository $userRepository,
+        private readonly PlannerUserProvider $userProvider
     ) {
     }
 
     #[Route(path: '', name: 'planner', methods: ['GET'])]
-    public function index(Request $request = new Request()): Response
+    public function index(?Request $request = null): Response
     {
-        return $this->renderWeek((new \DateTimeImmutable('today'))->format('Y-m-d'), $request);
+        $request ??= new Request();
+
+        return $this->renderWeek((new \DateTimeImmutable('today'))->format('Y-m-d'), $request, $this->resolveWeeks($request));
     }
 
     #[Route(path: '/week/{date}', name: 'planner_week', methods: ['GET'])]
-    public function week(string $date, Request $request = new Request()): Response
+    public function week(string $date, ?Request $request = null): Response
     {
-        return $this->renderWeek($date, $request);
+        $request ??= new Request();
+
+        return $this->renderWeek($date, $request, $this->resolveWeeks($request));
+    }
+
+    /**
+     * Frequently used customer/project pairs of a user, one per project.
+     */
+    #[Route(path: '/combinations/{user}', name: 'planner_combinations', requirements: ['user' => '\d+'], methods: ['GET'])]
+    public function combinations(int $user, CommonProjectService $commonProjects): JsonResponse
+    {
+        $currentUser = $this->getUser();
+        $target = $currentUser;
+
+        if ($user > 0 && $user !== $currentUser->getId()) {
+            if (!$this->isGranted('edit_other_planner') && !$this->isGranted('view_all_data')) {
+                throw $this->createAccessDeniedException();
+            }
+            $target = $this->userRepository->find($user);
+            if (!$target instanceof User) {
+                throw $this->createNotFoundException();
+            }
+        }
+
+        $result = [];
+        foreach ($commonProjects->getProjects($target) as $project) {
+            $customer = $project->getCustomer();
+            if ($customer === null) {
+                continue;
+            }
+            $result[] = [
+                'customerId' => $customer->getId(),
+                'customerName' => $customer->getName(),
+                'projectId' => $project->getId(),
+                'projectName' => $project->getName(),
+            ];
+        }
+
+        return new JsonResponse($result);
     }
 
     #[Route(path: '/activity/create', name: 'planner_activity_create', methods: ['GET', 'POST'])]
@@ -80,6 +128,21 @@ final class WeeklyPlannerController extends AbstractController
                 // Keep default today
             }
         }
+
+        // a drag over several days in the planner passes the last day
+        $endParam = $request->query->getString('end');
+        if ($endParam !== '') {
+            try {
+                $end = new \DateTime($endParam);
+                if ($end >= $activity->getBegin()) {
+                    $activity->setEnd($end);
+                }
+            } catch (\Exception) {
+                // Keep the single day
+            }
+        }
+
+        $this->prefillCustomerAndProject($activity, $request);
 
         if (!$this->isGranted(PlannedActivityVoter::CREATE, $activity)) {
             throw $this->createAccessDeniedException();
@@ -138,11 +201,18 @@ final class WeeklyPlannerController extends AbstractController
         $currentUser = $this->getUser();
         $canEditOther = $this->isGranted('edit_other_planner') || $this->isGranted('view_all_data');
 
+        $dateParam = $request->query->getString('date');
+        $formActionParams = ['id' => $activity->getId()];
+        if ($dateParam !== '') {
+            $formActionParams['date'] = $dateParam;
+        }
+
         $form = $this->createForm(PlannedActivityEditForm::class, $activity, [
-            'action' => $this->generateUrl('planner_activity_edit', ['id' => $activity->getId()]),
+            'action' => $this->generateUrl('planner_activity_edit', $formActionParams),
             'method' => 'POST',
             'user' => $currentUser,
             'include_user' => $canEditOther,
+            'include_recurrence_mode' => $activity->isRecurring(),
         ]);
 
         $form->handleRequest($request);
@@ -150,6 +220,14 @@ final class WeeklyPlannerController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             try {
                 $this->repository->savePlannedActivity($activity);
+
+                if ($form->has('edit_mode') && $activity->isRecurring()) {
+                    $editMode = $form->get('edit_mode')->getData();
+                    if ($editMode === 'future') {
+                        $this->repository->updateFutureRecurringActivities($activity);
+                    }
+                }
+
                 $this->flashSuccess('action.update.success');
 
                 $selectedDate = $activity->getBegin() ? $activity->getBegin()->format('Y-m-d') : (new \DateTime('today'))->format('Y-m-d');
@@ -164,6 +242,7 @@ final class WeeklyPlannerController extends AbstractController
             'form' => $form->createView(),
             'activity' => $activity,
             'title' => 'planner.edit_entry',
+            'date' => $dateParam,
         ]);
     }
 
@@ -174,9 +253,26 @@ final class WeeklyPlannerController extends AbstractController
             throw $this->createAccessDeniedException();
         }
 
+        $dateParam = $request->query->getString('date');
+        if ($dateParam === '') {
+            $dateParam = $request->request->getString('date');
+        }
+
         $selectedDate = $activity->getBegin() ? $activity->getBegin()->format('Y-m-d') : (new \DateTime('today'))->format('Y-m-d');
+        if ($dateParam !== '') {
+            try {
+                $selectedDate = (new \DateTimeImmutable($dateParam))->format('Y-m-d');
+            } catch (\Exception) {
+                // Keep activity begin date
+            }
+        }
 
         if ($activity->isRecurring()) {
+            $deleteActionParams = ['id' => $activity->getId()];
+            if ($dateParam !== '') {
+                $deleteActionParams['date'] = $dateParam;
+            }
+
             $deleteForm = $this->createFormBuilder(null, [
                 'attr' => [
                     'data-form-event' => 'kimai.plannerActivityUpdate',
@@ -190,11 +286,11 @@ final class WeeklyPlannerController extends AbstractController
                     'multiple' => false,
                     'choices' => [
                         'planner.delete_single' => 'single',
-                        'planner.delete_all' => 'all',
+                        'planner.delete_future' => 'future',
                     ],
                     'data' => 'single',
                 ])
-                ->setAction($this->generateUrl('planner_activity_delete', ['id' => $activity->getId()]))
+                ->setAction($this->generateUrl('planner_activity_delete', $deleteActionParams))
                 ->setMethod('POST')
                 ->getForm();
 
@@ -203,8 +299,8 @@ final class WeeklyPlannerController extends AbstractController
             if ($deleteForm->isSubmitted() && $deleteForm->isValid()) {
                 try {
                     $mode = $deleteForm->get('delete_mode')->getData();
-                    if ($mode === 'all' && $activity->getRecurrenceGroup() !== null) {
-                        $this->repository->deleteRecurringActivities($activity->getRecurrenceGroup());
+                    if (($mode === 'future' || $mode === 'all') && $activity->getRecurrenceGroup() !== null) {
+                        $this->repository->deleteFutureRecurringActivities($activity);
                     } else {
                         $this->repository->deletePlannedActivity($activity);
                     }
@@ -221,6 +317,7 @@ final class WeeklyPlannerController extends AbstractController
             return $this->render('@Planner/delete.html.twig', [
                 'activity' => $activity,
                 'form' => $deleteForm->createView(),
+                'date' => $dateParam,
             ]);
         }
 
@@ -243,7 +340,54 @@ final class WeeklyPlannerController extends AbstractController
         }
     }
 
-    private function renderWeek(string $dateString, Request $request): Response
+    /**
+     * Pre-selects customer/project (e.g. from the row a day was dragged in), ignoring anything the user may not access.
+     */
+    private function prefillCustomerAndProject(PlannedActivity $activity, Request $request): void
+    {
+        $projectId = $request->query->getInt('project');
+        if ($projectId > 0) {
+            $project = $this->repository->findProject($projectId);
+            if ($project instanceof Project && $this->isGranted('access', $project)) {
+                $activity->setProject($project);
+                $activity->setCustomer($project->getCustomer());
+            }
+        }
+
+        $customerId = $request->query->getInt('customer');
+        if ($activity->getCustomer() === null && $customerId > 0) {
+            $customer = $this->repository->findCustomer($customerId);
+            if ($customer instanceof Customer && $this->isGranted('access', $customer)) {
+                $activity->setCustomer($customer);
+            }
+        }
+    }
+
+    /**
+     * The number of weeks comes from the "weeks" query parameter and is remembered in the session,
+     * so it survives navigation and the redirects after saving an activity.
+     */
+    private function resolveWeeks(?Request $request): int
+    {
+        if ($request === null) {
+            return self::DEFAULT_WEEKS;
+        }
+
+        $session = $request->hasSession() ? $request->getSession() : null;
+
+        $requested = $request->query->getInt('weeks');
+        if (\in_array($requested, self::WEEK_OPTIONS, true)) {
+            $session?->set(self::SESSION_KEY, $requested);
+
+            return $requested;
+        }
+
+        $stored = $session?->get(self::SESSION_KEY);
+
+        return \is_int($stored) && \in_array($stored, self::WEEK_OPTIONS, true) ? $stored : self::DEFAULT_WEEKS;
+    }
+
+    private function renderWeek(string $dateString, Request $request, int $weeks): Response
     {
         try {
             $selectedDate = new \DateTimeImmutable($dateString);
@@ -272,9 +416,9 @@ final class WeeklyPlannerController extends AbstractController
         /** @var PlannerQuery $query */
         $query = $form->getData();
 
-        $users = $this->getVisibleUsers($currentUser, $query);
+        $users = $this->userProvider->getVisibleUsers($currentUser, $query);
 
-        $plannerData = $this->plannerService->getPlannerData($users, $selectedDate);
+        $plannerData = $this->plannerService->getPlannerData($users, $selectedDate, $weeks);
 
         $page = new PageSetup('planner.title');
         $page->setHelp('planner.html');
@@ -295,59 +439,9 @@ final class WeeklyPlannerController extends AbstractController
             'prevWeek' => $prevWeek,
             'nextWeek' => $nextWeek,
             'todayWeek' => $todayWeek,
+            'weeks' => $weeks,
+            'weekOptions' => self::WEEK_OPTIONS,
             'canCreate' => $this->isGranted('create_planner'),
         ]);
-    }
-
-    /**
-     * @return array<User>
-     */
-    private function getVisibleUsers(User $currentUser, PlannerQuery $plannerQuery): array
-    {
-        $canSeeOther = $this->isGranted('view_other_planner') || $this->isGranted('view_all_data');
-
-        if (!$canSeeOther) {
-            return [$currentUser];
-        }
-
-        $query = new UserQuery();
-        $query->setSystemAccount(false);
-        $query->setCurrentUser($currentUser);
-        $query->setOrder(UserQuery::ORDER_ASC);
-        $query->setOrderBy('username');
-
-        $hasViewAllData = $this->isGranted('view_all_data');
-
-        if (!$hasViewAllData) {
-            /** @var Team[] $ledTeams */
-            $ledTeams = array_values(array_filter($currentUser->getTeams(), fn (Team $team) => $currentUser->isTeamleadOf($team)));
-            if ($ledTeams === []) {
-                return [];
-            }
-            $query->setSearchTeams($ledTeams);
-        }
-
-        if ($plannerQuery->hasTeams()) {
-            $selectedTeams = $plannerQuery->getTeams();
-            if (!$hasViewAllData) {
-                /** @var Team[] $ledTeams */
-                $ledTeams = array_values(array_filter($currentUser->getTeams(), fn (Team $team) => $currentUser->isTeamleadOf($team)));
-                $ledTeamIds = array_map(fn (Team $t) => $t->getId(), $ledTeams);
-                $selectedTeams = array_values(array_filter($selectedTeams, fn (Team $t) => \in_array($t->getId(), $ledTeamIds, true)));
-                if ($selectedTeams === []) {
-                    return [];
-                }
-            }
-            $query->setSearchTeams($selectedTeams);
-        }
-
-        $users = $this->userRepository->getUsersForQuery($query);
-
-        if ($plannerQuery->hasUsers()) {
-            $selectedUserIds = array_map(fn (User $u) => $u->getId(), $plannerQuery->getUsers());
-            $users = array_values(array_filter($users, fn (User $u) => \in_array($u->getId(), $selectedUserIds, true)));
-        }
-
-        return $users;
     }
 }

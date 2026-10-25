@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace KimaiPlugin\PlannerBundle\Tests\Planner;
 
+use App\Entity\Customer;
 use App\Entity\User;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerDay;
@@ -60,5 +61,42 @@ class WeeklyPlannerUserRowTest extends TestCase
 
         $emptyRow = new WeeklyPlannerUserRow(new User());
         $this->assertSame(0, $emptyRow->getPlannedPercentage());
+    }
+
+    public function testGetGroupsGroupsByCustomerAndProjectAndSortsByName(): void
+    {
+        $zeta = new Customer('Zeta');
+        $acme = new Customer('Acme');
+
+        $makeActivity = static fn (Customer $customer): PlannedActivity => (new PlannedActivity())->setCustomer($customer);
+
+        $row = new WeeklyPlannerUserRow(new User());
+        $row->addUniqueActivity($makeActivity($zeta));
+        $row->addUniqueActivity($makeActivity($acme));
+        $row->addUniqueActivity($makeActivity($zeta));
+
+        $groups = $row->getGroups();
+
+        $this->assertCount(2, $groups);
+        $this->assertSame('Acme', $groups[0]->getCustomerName());
+        $this->assertSame('Zeta', $groups[1]->getCustomerName());
+        $this->assertCount(2, $groups[1]->getActivities());
+    }
+
+    public function testGetWeeksSplitsDaysIntoCalendarWeeks(): void
+    {
+        $row = new WeeklyPlannerUserRow(new User());
+        $monday = new \DateTimeImmutable('2026-10-19');
+        for ($i = 0; $i < 14; ++$i) {
+            $row->addDay(new WeeklyPlannerDay($monday->modify('+' . $i . ' day'), $i < 5 ? 8.0 : 0.0));
+        }
+
+        $weeks = $row->getWeeks();
+
+        $this->assertCount(2, $weeks);
+        $this->assertCount(7, $weeks[0]->getDays());
+        $this->assertSame('2026-10-26', $weeks[1]->getStart()?->format('Y-m-d'));
+        $this->assertSame(40.0, $weeks[0]->getTotalExpectedHours());
+        $this->assertSame(0.0, $weeks[1]->getTotalExpectedHours());
     }
 }

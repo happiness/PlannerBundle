@@ -68,6 +68,38 @@ final class WeeklyPlannerUserRow
         return $this->uniqueActivities;
     }
 
+    /**
+     * The displayed days split into calendar weeks (the range always starts on a Monday).
+     *
+     * @return array<WeeklyPlannerWeek>
+     */
+    public function getWeeks(): array
+    {
+        return array_map(
+            static fn (array $days): WeeklyPlannerWeek => new WeeklyPlannerWeek($days),
+            array_chunk(array_values($this->days), 7)
+        );
+    }
+
+    /**
+     * Activities grouped by customer/project, ordered by customer and project name.
+     *
+     * @return array<WeeklyPlannerGroup>
+     */
+    public function getGroups(): array
+    {
+        $groups = [];
+        foreach ($this->uniqueActivities as $activity) {
+            $key = WeeklyPlannerGroup::keyFor($activity);
+            $groups[$key] ??= WeeklyPlannerGroup::createFor($activity);
+            $groups[$key]->addActivity($activity);
+        }
+
+        uasort($groups, static fn (WeeklyPlannerGroup $a, WeeklyPlannerGroup $b): int => [$a->getCustomerName(), $a->getProjectName() ?? ''] <=> [$b->getCustomerName(), $b->getProjectName() ?? '']);
+
+        return array_values($groups);
+    }
+
     public function getTotalExpectedHours(): float
     {
         $total = 0.0;

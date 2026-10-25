@@ -4,3 +4,8 @@ kimai_planner:
     prefix: /{_locale}
     defaults:
         _locale: '%locale%'
+
+kimai_planner_api:
+    resource: '../../API/'
+    type: attribute
+    prefix: /api
