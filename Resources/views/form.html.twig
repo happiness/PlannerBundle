@@ -44,6 +44,93 @@
                 {% if form.user is defined %}
                     {{ form_row(form.user) }}
                 {% endif %}
+                {% if activity.id is null %}
+                    <style>
+                        .planner-combination { max-width: calc((100% - 1rem) / 3); text-align: left; line-height: 1.25; }
+                        .planner-combination-text { display: block; min-width: 0; font-size: .75em; }
+                        .planner-combination-customer { margin-bottom: .2rem; opacity: .85; }
+                    </style>
+                    <div class="mb-3 row planner-combinations d-none"
+                         data-customer="{{ form.customer.vars.id }}"
+                         data-project="{{ form.project.vars.id }}"
+                         data-user="{{ form.user is defined ? form.user.vars.id : '' }}"
+                         data-initial-user="{{ activity.user.id ?? app.user.id }}"
+                         data-url="{{ path('planner_combinations', {user: 0}) }}">
+                        <label class="col-form-label col-sm-2">{{ 'happiness.suggestions.title'|trans({}, 'happiness') }}</label>
+                        <div class="col-sm-10 d-flex flex-wrap gap-2 align-items-center planner-combinations-list"></div>
+                    </div>
+                    <script type="text/javascript">
+                        (function () {
+                            const modal = document.getElementById('remote_form_modal') || document;
+                            const box = modal.querySelector('.planner-combinations');
+                            if (box === null) {
+                                return;
+                            }
+                            const customer = document.getElementById(box.dataset.customer);
+                            const project = document.getElementById(box.dataset.project);
+                            const userSelect = box.dataset.user !== '' ? document.getElementById(box.dataset.user) : null;
+                            if (customer === null || project === null) {
+                                return;
+                            }
+                            const list = box.querySelector('.planner-combinations-list');
+
+                            const setValue = (select, value) => {
+                                select.tomselect !== undefined ? select.tomselect.setValue(value) : (select.value = value, select.dispatchEvent(new Event('change', {bubbles: true})));
+                            };
+
+                            // The customer select reloads the project select via the API and dispatches "data-reloaded" when done.
+                            const apply = (customerId, projectId) => {
+                                if (customer.value === customerId) {
+                                    setValue(project, projectId);
+                                    return;
+                                }
+                                const onReloaded = () => {
+                                    project.removeEventListener('data-reloaded', onReloaded);
+                                    setValue(project, projectId);
+                                };
+                                project.addEventListener('data-reloaded', onReloaded);
+                                setValue(customer, customerId);
+                            };
+
+                            const render = (items) => {
+                                list.replaceChildren();
+                                items.forEach((item) => {
+                                    const button = document.createElement('button');
+                                    button.type = 'button';
+                                    button.className = 'btn btn-sm btn-outline planner-combination';
+                                    button.title = item.customerName + ' › ' + item.projectName;
+                                    const text = document.createElement('span');
+                                    text.className = 'planner-combination-text';
+                                    const customerLine = document.createElement('span');
+                                    customerLine.className = 'planner-combination-customer d-block text-truncate';
+                                    customerLine.textContent = item.customerName;
+                                    const projectLine = document.createElement('span');
+                                    projectLine.className = 'd-block text-truncate';
+                                    projectLine.textContent = item.projectName;
+                                    text.append(customerLine, projectLine);
+                                    button.append(text);
+                                    button.addEventListener('click', () => apply(String(item.customerId), String(item.projectId)));
+                                    list.append(button);
+                                });
+                                box.classList.toggle('d-none', items.length === 0);
+                            };
+
+                            let requestId = 0;
+                            const load = (userId) => {
+                                const current = ++requestId;
+                                fetch(box.dataset.url.replace(/0$/, String(userId)), {headers: {'Accept': 'application/json'}})
+                                    .then((response) => response.ok ? response.json() : [])
+                                    .then((items) => current === requestId && render(items))
+                                    .catch(() => current === requestId && render([]));
+                            };
+
+                            if (userSelect !== null) {
+                                userSelect.addEventListener('change', () => load(userSelect.value));
+                            }
+                            load(userSelect !== null && userSelect.value !== '' ? userSelect.value : box.dataset.initialUser);
+                        })();
+                    </script>
+                {% endif %}
                 {{ form_row(form.customer) }}
                 {{ form_row(form.project) }}
                 <div class="row">

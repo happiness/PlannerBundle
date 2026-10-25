@@ -17,6 +17,7 @@ use App\Entity\Project;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use App\Utils\PageSetup;
+use KimaiPlugin\HappinessBundle\Service\CommonCombinationService;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Form\PlannedActivityEditForm;
 use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
@@ -24,6 +25,7 @@ use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use KimaiPlugin\PlannerBundle\Voter\PlannedActivityVoter;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -55,6 +57,43 @@ final class WeeklyPlannerController extends AbstractController
     public function week(string $date, ?Request $request = null): Response
     {
         return $this->renderWeek($date, $this->resolveWeeks($request));
+    }
+
+    /**
+     * Frequently used customer/project pairs of a user, one per project.
+     */
+    #[Route(path: '/combinations/{user}', name: 'planner_combinations', requirements: ['user' => '\d+'], methods: ['GET'])]
+    public function combinations(int $user, CommonCombinationService $combinations): JsonResponse
+    {
+        $currentUser = $this->getUser();
+        $target = $currentUser;
+
+        if ($user > 0 && $user !== $currentUser->getId()) {
+            if (!$this->isGranted('edit_other_planner') && !$this->isGranted('view_all_data')) {
+                throw $this->createAccessDeniedException();
+            }
+            $target = $this->userRepository->find($user);
+            if (!$target instanceof User) {
+                throw $this->createNotFoundException();
+            }
+        }
+
+        $result = [];
+        foreach ($combinations->getCombinations($target) as $combination) {
+            $project = $combination['project'];
+            $customer = $project->getCustomer();
+            if ($customer === null || isset($result[$project->getId()])) {
+                continue;
+            }
+            $result[$project->getId()] = [
+                'customerId' => $customer->getId(),
+                'customerName' => $customer->getName(),
+                'projectId' => $project->getId(),
+                'projectName' => $project->getName(),
+            ];
+        }
+
+        return new JsonResponse(array_values($result));
     }
 
     #[Route(path: '/activity/create', name: 'planner_activity_create', methods: ['GET', 'POST'])]
