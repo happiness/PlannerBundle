@@ -162,6 +162,10 @@
                 <source>planner.toggle_activities</source>
                 <target>Visa/dölj aktiviteter</target>
             </trans-unit>
+            <trans-unit id="planner.suggestions">
+                <source>planner.suggestions</source>
+                <target>Ofta använda</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>

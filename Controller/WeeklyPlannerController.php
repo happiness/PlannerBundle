@@ -17,9 +17,9 @@ use App\Entity\Project;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use App\Utils\PageSetup;
-use KimaiPlugin\HappinessBundle\Service\CommonCombinationService;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Form\PlannedActivityEditForm;
+use KimaiPlugin\PlannerBundle\Planner\CommonProjectService;
 use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
@@ -63,7 +63,7 @@ final class WeeklyPlannerController extends AbstractController
      * Frequently used customer/project pairs of a user, one per project.
      */
     #[Route(path: '/combinations/{user}', name: 'planner_combinations', requirements: ['user' => '\d+'], methods: ['GET'])]
-    public function combinations(int $user, CommonCombinationService $combinations): JsonResponse
+    public function combinations(int $user, CommonProjectService $commonProjects): JsonResponse
     {
         $currentUser = $this->getUser();
         $target = $currentUser;
@@ -79,13 +79,12 @@ final class WeeklyPlannerController extends AbstractController
         }
 
         $result = [];
-        foreach ($combinations->getCombinations($target) as $combination) {
-            $project = $combination['project'];
+        foreach ($commonProjects->getProjects($target) as $project) {
             $customer = $project->getCustomer();
-            if ($customer === null || isset($result[$project->getId()])) {
+            if ($customer === null) {
                 continue;
             }
-            $result[$project->getId()] = [
+            $result[] = [
                 'customerId' => $customer->getId(),
                 'customerName' => $customer->getName(),
                 'projectId' => $project->getId(),
@@ -93,7 +92,7 @@ final class WeeklyPlannerController extends AbstractController
             ];
         }
 
-        return new JsonResponse(array_values($result));
+        return new JsonResponse($result);
     }
 
     #[Route(path: '/activity/create', name: 'planner_activity_create', methods: ['GET', 'POST'])]

@@ -162,6 +162,10 @@
                 <source>planner.toggle_activities</source>
                 <target>Expand/collapse activities</target>
             </trans-unit>
+            <trans-unit id="planner.suggestions">
+                <source>planner.suggestions</source>
+                <target>Frequently used</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>
