@@ -1,0 +1,7 @@
+items:
+    happiness-planner:
+        title: "Planner"
+        intro: "Weekly team capacity planner. Plan customer and project work across your team and compare it with the actual tracked hours."
+screenshots:
+    happiness-planner0:
+        description: Weekly team overview over four weeks with capacity per user and planned activities per project

@@ -7,3 +7,5 @@ download: https://github.com/happiness/PlannerBundle
 bundle:
     name: "PlannerBundle"
     clone: "https://github.com/happiness/PlannerBundle.git"
+screenshots:
+    - happiness-planner0

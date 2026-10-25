@@ -1,12 +1,12 @@
 {
   "name": "happiness/planner-bundle",
-  "description": "Weekly team planner plugin.",
+  "description": "a lightweight weekly team capacity planner plugin for Kimai, inspired by tools like Forecastapp. It allows teams and team leaders to visually plan and balance workloads on a weekly timeline.",
   "homepage": "https://github.com/happiness/PlannerBundle",
   "type": "kimai-plugin",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "require": {
     "php": ">=8.2",
-    "kimai/kimai": ">=2.0.0"
+    "kimai/kimai": ">=2.60.0"
   },
   "keywords": [
     "kimai",
@@ -16,9 +16,9 @@
   "license": "AGPL-3.0-or-later",
   "extra": {
     "kimai": {
-      "require": 20000,
+      "require": 26000,
       "name": "Planner",
-      "version": "2.0.1"
+      "version": "2.0.2"
     }
   }
 }

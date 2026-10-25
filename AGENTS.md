@@ -25,7 +25,7 @@ Use this guide when working on the **PlannerBundle** plugin in `var/plugins/Plan
 
 ## Stack & Requirements
 
-- **Kimai Version**: `>= 2.0.0` (Kimai 2.x)
+- **Kimai Version**: `>= 2.60.0` (Kimai 2.x)
 - **PHP Version**: `8.2` - `8.4` (DDEV default: `8.4`, PHP 8.4 compatible)
 - **Framework**: Symfony 6.4 LTS, Twig, Doctrine ORM
 - **Database Migrations**: Plugin-isolated Doctrine migrations via `Migrations/doctrine_migrations.yaml`

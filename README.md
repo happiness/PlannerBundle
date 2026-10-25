@@ -24,7 +24,7 @@
 
 ## Requirements
 
-- Kimai `>= 2.0.0`
+- Kimai `>= 2.60.0`
 - PHP `>= 8.2`
 
 ---
