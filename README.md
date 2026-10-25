@@ -12,6 +12,8 @@
   - Highlights over-allocated, under-allocated, and balanced days with clear visual badges.
 - **Actual vs Planned Hours**: Directly compares planned allocations against actual recorded timesheet hours.
 - **Lightweight Scheduling**: Plan time blocks for a customer (and optionally a project) with daily hours, date ranges, comments, and color badges.
+- **Drag to Plan**: Drag across empty day cells of a row to create a planning spanning several days. A transparent preview block is shown while dragging and stays visible while the dialog is open.
+- **Shortcuts**: Frequently used customers and projects are offered as shortcuts when creating a planning.
 - **Multiple Weeks**: Show 1, 2, 4 (default) or 8 weeks at once; capacity is summarized per week.
 - **REST API**: Create, read, update and delete planned activities via `/api/planner/activities` (see the Kimai API docs under the "Planner" tag).
 - **Quick Modal Editing**: Create, update, or delete planned blocks seamlessly via modal dialogs.
@@ -126,4 +128,20 @@ All endpoints require an API token and the `view_planner` permission; write oper
 
 ## Upgrading
 
-Activities created before customers were introduced keep their old free-text title and have no customer. They are still shown (using the old title) but must be given a customer the next time they are edited.
+### From 1.x to 2.0.0
+
+Version 2.0.0 contains a breaking change: planned activities are now linked to a customer and optionally a project instead of carrying a free-text title.
+
+What changed:
+
+- **Customers and projects**: Every planned activity belongs to a customer and optionally a project. The free-text title is legacy and optional.
+- **New migration**: `Version20261019000000` adds `customer_id` and `project_id` to `kimai2_planned_activities` and makes `title` nullable. Run it after updating (see [Installation](#installation)).
+- **REST API**: New endpoints under `/api/planner/activities` (see below). `customer` is required when creating an activity.
+- **Multi-week grid**: The planner shows 1, 2, 4 (default) or 8 weeks, with capacity summarized per week. Activities of the same customer/project are grouped in sub-rows per user, and consecutive days are merged into one block.
+- **Always an empty row per user**, so new plannings can be dragged out even when a user has no activities.
+- **Drag to plan**: Dragging over empty days opens the create dialog with the whole date range, showing a transparent preview of the planning.
+- **Shortcuts** for frequently used customers and projects when creating a planning; they no longer depend on HappinessBundle.
+- **Recurring activities**: Edit or delete only one instance or all upcoming activities of a series.
+- **Compact header** with the current day highlighted.
+
+Existing data is kept. Activities created before customers were introduced keep their old free-text title and have no customer. They are still shown (using the old title) but must be given a customer the next time they are edited.
