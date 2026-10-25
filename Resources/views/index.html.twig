@@ -64,6 +64,12 @@
                 <div class="card mt-2 mb-3">
                     <div class="card-body p-0">
                         <table class="table table-hover dataTable"{% if canCreate %} data-planner-create-url="{{ path('planner_activity_create') }}"{% endif %}>
+                            <colgroup>
+                                <col span="2">
+                                {% for day in plannerData.dateHeaders %}
+                                    <col{% if day is today %} class="today"{% endif %}>
+                                {% endfor %}
+                            </colgroup>
                             <thead class="sticky-top">
                                 {% set compact = weeks > 1 %}
                                 {% if compact %}
@@ -71,8 +77,16 @@
                                         <th class="border-bottom p-1" colspan="2"></th>
                                         {% for week in plannerData.dateHeaders|batch(7) %}
                                             <th class="text-center border-bottom border-start p-1" colspan="7">
-                                                {{ 'stats.workingTimeWeekShort'|trans({'%week%': week|first|date('W')}) }}
-                                                <span class="text-muted fw-normal">{{ week|first|date('j') }} {{ week|first|month_name(true) }}</span>
+                                                {% set weekStart = week|first %}
+                                                {% set weekEnd = week|last %}
+                                                <span class="badge bg-blue-lt me-1">{{ 'planner.week_header'|trans({'%week%': weekStart|date('W')}) }}</span>
+                                                <span class="text-muted fw-normal">
+                                                    {%- if weekStart|date('n') == weekEnd|date('n') -%}
+                                                        {{ weekStart|date('j') }}-{{ weekEnd|date('j') }} {{ weekEnd|month_name|slice(0, 3)|lower }}
+                                                    {%- else -%}
+                                                        {{ weekStart|date('j') }} {{ weekStart|month_name|slice(0, 3)|lower }} - {{ weekEnd|date('j') }} {{ weekEnd|month_name|slice(0, 3)|lower }}
+                                                    {%- endif -%}
+                                                </span>
                                             </th>
                                         {% endfor %}
                                     </tr>
@@ -81,12 +95,7 @@
                                     <th class="w-avatar border-bottom p-1" colspan="2"></th>
                                     {% for day in plannerData.dateHeaders %}
                                         <th class="text-center border-bottom{% if loop.index0 % 7 == 0 %} border-start{% endif %}{% if day is weekend %} weekend{% endif %}{% if day is today %} today{% endif %} p-1" style="min-width: {{ compact ? 44 : 110 }}px;">
-                                            {% if compact %}
-                                                <div class="small">{{ day|day_name(true) }}</div>
-                                                <div>{{ day|date('j') }}</div>
-                                            {% else %}
-                                                {{ day|date_weekday }}
-                                            {% endif %}
+                                            {{ day|date('j') }}
                                         </th>
                                     {% endfor %}
                                 </tr>
@@ -123,7 +132,7 @@
                                             <td class="planner-group-cell p-1 border-top-0" colspan="2">
                                                 <div class="d-flex justify-content-between align-items-center planner-group-label" title="{{ group.customerName }}{% if group.projectName %} / {{ group.projectName }}{% endif %}">
                                                     <div class="text-truncate">
-                                                        <span class="fw-bold">{{ group.customerName }}</span>{% if group.projectName %}<span class="text-muted"> / {{ group.projectName }}</span>{% endif %}
+                                                        <span class="fw-bold small">{{ group.customerName }}</span>{% if group.projectName %}<span class="text-muted small"> / {{ group.projectName }}</span>{% endif %}
                                                     </div>
                                                     <span class="text-muted small ms-2 flex-shrink-0">{{ group.getPlannedHours(row.days) }}h</span>
                                                 </div>
@@ -181,7 +190,7 @@
                                         {% for day in plannerData.dateHeaders %}
                                             {% set dayTotalPlanned = plannerData.getTotalPlannedHoursForDay(day) %}
                                             {% set dayTotalActual = plannerData.getTotalActualHoursForDay(day) %}
-                                            <td class="align-top text-center p-1">
+                                            <td class="align-top text-center{% if day is today %} today{% endif %} p-1">
                                                 <div>{{ dayTotalPlanned }}h</div>
                                                 {% if dayTotalActual > 0 %}
                                                     <div class="small text-muted fw-normal">{{ dayTotalActual }}h</div>
@@ -223,7 +232,17 @@
         }
         .planner-group-label {
             padding-left: 2.5rem;
-            max-width: 22rem;
+            max-width: 18rem;
+        }
+        col.today {
+            background-color: var(--tblr-highlight-bg);
+        }
+        table.dataTable tbody td.today,
+        table.dataTable tfoot td.today {
+            background-color: var(--tblr-highlight-bg) !important;
+        }
+        table.dataTable tbody td.today:hover {
+            background-color: #ccc !important;
         }
         td.day:hover {
             background-color: #ccc;

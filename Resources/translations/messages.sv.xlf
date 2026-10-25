@@ -42,6 +42,10 @@
                 <source>planner.this_week</source>
                 <target>Denna vecka</target>
             </trans-unit>
+            <trans-unit id="planner.week_header">
+                <source>planner.week_header</source>
+                <target>V. %week%</target>
+            </trans-unit>
             <trans-unit id="planner.weeks">
                 <source>planner.weeks</source>
                 <target>Antal veckor som visas</target>
