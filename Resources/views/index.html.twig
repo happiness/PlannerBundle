@@ -222,9 +222,18 @@
         }
         td.day.planner-drag-selected,
         td.day.planner-drag-selected:hover {
-            background-color: rgba(32, 107, 196, 0.35) !important;
-            outline: 2px solid #206bc4;
-            outline-offset: -2px;
+            background-color: transparent !important;
+        }
+        .planner-drag-preview {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 3;
+            pointer-events: none;
+            min-height: 1.75rem;
+            background-color: rgba(32, 107, 196, 0.55);
+            color: #fff;
+            border: 1px dashed #206bc4;
         }
         body.planner-dragging {
             cursor: crosshair;
@@ -465,13 +474,35 @@
 
             function paint(d) {
                 const bounds = range(d);
-                cellsOf(d.row).forEach(function (cell) {
+                const selected = cellsOf(d.row).filter(function (cell) {
                     const date = cell.dataset.plannerDate;
-                    cell.classList.toggle('planner-drag-selected', date >= bounds[0] && date <= bounds[1]);
+                    const inRange = date >= bounds[0] && date <= bounds[1];
+                    cell.classList.toggle('planner-drag-selected', inRange);
+                    return inRange;
+                });
+                removePreview();
+                if (selected.length < 2) {
+                    return;
+                }
+                // one block spanning the selected cells, like a saved activity
+                const first = selected[0].getBoundingClientRect();
+                const last = selected[selected.length - 1].getBoundingClientRect();
+                const pad = 4;
+                const preview = document.createElement('div');
+                preview.className = 'planner-drag-preview d-flex align-items-center px-2 py-1 rounded shadow-sm';
+                preview.style.left = pad + 'px';
+                preview.style.width = (last.right - first.left - 2 * pad) + 'px';
+                selected[0].appendChild(preview);
+            }
+
+            function removePreview() {
+                document.querySelectorAll('.planner-drag-preview').forEach(function (el) {
+                    el.remove();
                 });
             }
 
             function reset() {
+                removePreview();
                 document.querySelectorAll('.planner-drag-selected').forEach(function (cell) {
                     cell.classList.remove('planner-drag-selected');
                 });
@@ -510,7 +541,15 @@
                 if (!cell) {
                     return;
                 }
+                reset();
                 drag = {row: cell.closest('tr'), start: cell.dataset.plannerDate, current: cell.dataset.plannerDate};
+            });
+
+            // the cell's stretched link would otherwise start a native link drag, which swallows mouseover and mouseup
+            document.addEventListener('dragstart', function (e) {
+                if (e.target.closest && e.target.closest(CELL)) {
+                    e.preventDefault();
+                }
             });
 
             document.addEventListener('mouseover', function (e) {
@@ -538,6 +577,8 @@
                     return;
                 }
                 openCreateDialog(finished);
+                // keep the preview visible while the dialog is open
+                paint(finished);
                 // the click event following mouseup must not open the single-day dialog as well
                 suppressClick = true;
                 setTimeout(function () { suppressClick = false; }, 0);
@@ -549,6 +590,12 @@
                     e.stopPropagation();
                 }
             }, true);
+
+            document.addEventListener('hidden.bs.modal', function () {
+                if (drag === null) {
+                    reset();
+                }
+            });
 
             document.addEventListener('keydown', function (e) {
                 if (e.key === 'Escape' && drag !== null) {
