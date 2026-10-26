@@ -13,6 +13,7 @@
 - **Actual vs Planned Hours**: Directly compares planned allocations against actual recorded timesheet hours.
 - **Lightweight Scheduling**: Plan time blocks for a customer (and optionally a project) with daily hours, date ranges, comments, and color badges.
 - **Drag to Plan**: Drag across empty day cells of a row to create a planning spanning several days. A transparent preview block is shown while dragging and stays visible while the dialog is open.
+- **Move and Resize**: Drag a planned activity to another day or row, or drag its left/right handle to extend or shorten it.
 - **Shortcuts**: Frequently used customers and projects are offered as shortcuts when creating a planning.
 - **Multiple Weeks**: Show 1, 2, 4 (default) or 8 weeks at once; capacity is summarized per week.
 - **REST API**: Create, read, update and delete planned activities via `/api/planner/activities` (see the Kimai API docs under the "Planner" tag).
@@ -140,6 +141,7 @@ What changed:
 - **Multi-week grid**: The planner shows 1, 2, 4 (default) or 8 weeks, with capacity summarized per week. Activities of the same customer/project are grouped in sub-rows per user, and consecutive days are merged into one block.
 - **Always an empty row per user**, so new plannings can be dragged out even when a user has no activities.
 - **Drag to plan**: Dragging over empty days opens the create dialog with the whole date range, showing a transparent preview of the planning.
+- **Move and resize**: Drag a planned activity to another day or row (other user, customer/project). Drag the handle on its left or right edge to extend or shorten it. Whole days only, the hours per day stay the same. Requires the edit permission for the activity.
 - **Shortcuts** for frequently used customers and projects when creating a planning; they no longer depend on HappinessBundle.
 - **Recurring activities**: Edit or delete only one instance or all upcoming activities of a series.
 - **Compact header** with the current day highlighted.

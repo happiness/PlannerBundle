@@ -3,7 +3,7 @@
   "description": "a lightweight weekly team capacity planner plugin for Kimai, inspired by tools like Forecastapp. It allows teams and team leaders to visually plan and balance workloads on a weekly timeline.",
   "homepage": "https://github.com/happiness/PlannerBundle",
   "type": "kimai-plugin",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "require": {
     "php": ">=8.2",
     "kimai/kimai": ">=2.60.0"
@@ -18,7 +18,7 @@
     "kimai": {
       "require": 26000,
       "name": "Planner",
-      "version": "2.0.2"
+      "version": "2.1.0"
     }
   }
 }

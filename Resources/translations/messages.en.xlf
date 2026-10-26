@@ -66,6 +66,10 @@
                 <source>planner.edit_entry</source>
                 <target>Edit planned activity</target>
             </trans-unit>
+            <trans-unit id="planner.move_error">
+                <source>planner.move_error</source>
+                <target>The planned activity could not be moved.</target>
+            </trans-unit>
             <trans-unit id="planner.add_activity">
                 <source>planner.add_activity</source>
                 <target>Plan activity for this day</target>

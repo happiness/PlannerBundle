@@ -109,7 +109,7 @@
             <section class="content">
                 <div class="card mt-2 mb-3">
                     <div class="card-body p-0">
-                        <table class="table table-hover dataTable"{% if canCreate %} data-planner-create-url="{{ path('planner_activity_create') }}"{% endif %}>
+                        <table class="table table-hover dataTable" data-planner-move-token="{{ csrf_token('planner_move') }}" data-planner-move-error="{{ 'planner.move_error'|trans }}"{% if canCreate %} data-planner-create-url="{{ path('planner_activity_create') }}"{% endif %}>
                             <colgroup>
                                 <col span="2">
                                 {% for day in plannerData.dateHeaders %}
@@ -140,7 +140,7 @@
                                 <tr>
                                     <th class="w-avatar border-bottom p-1" colspan="2"></th>
                                     {% for day in plannerData.dateHeaders %}
-                                        <th class="text-center border-bottom{% if loop.index0 % 7 == 0 %} border-start{% endif %}{% if day is weekend %} weekend{% endif %}{% if day is today %} today{% endif %} p-1" style="min-width: {{ compact ? 44 : 110 }}px;">
+                                        <th data-planner-day="{{ day|date('Y-m-d') }}" class="text-center border-bottom{% if loop.index0 % 7 == 0 %} border-start{% endif %}{% if day is weekend %} weekend{% endif %}{% if day is today %} today{% endif %} p-1" style="min-width: {{ compact ? 44 : 110 }}px;">
                                             {{ day|date('j') }}
                                         </th>
                                     {% endfor %}
@@ -191,12 +191,17 @@
                                                            class="stretched-link cursor-crosshair modal-ajax-form"
                                                            title="{{ 'planner.planned_activity'|trans }}"></a>
                                                     {% endif %}
+                                                    {% set segmentEnd = date.modify('+' ~ (segment.span - 1) ~ ' day') %}
                                                     {% for activity in segment.activities %}
+                                                        {% set canMove = is_granted('edit', activity) %}
                                                         <a href="{{ path('planner_activity_edit', {'id': activity.id, 'date': date|date('Y-m-d')}) }}"
-                                                           class="planner-activity position-relative z-2 d-flex justify-content-between align-items-center px-2 py-1 rounded text-decoration-none modal-ajax-form shadow-sm{% if not loop.first %} mt-1{% endif %}"
+                                                           class="planner-activity position-relative z-2 d-flex justify-content-between align-items-center px-2 py-1 rounded text-decoration-none modal-ajax-form shadow-sm{% if not loop.first %} mt-1{% endif %}{% if canMove %} planner-movable{% endif %}"
                                                            style="background-color: {{ activity.colorSafe }}; color: {{ activity.colorSafe|font_contrast }};"
+                                                           {% if canMove %}data-planner-move-url="{{ path('planner_activity_move', {'id': activity.id}) }}" data-planner-begin="{{ activity.begin|date('Y-m-d') }}" data-planner-end="{{ activity.end|date('Y-m-d') }}"{% endif %}
                                                            title="{{ activity.name }} ({{ activity.hoursPerDay }}h){% if activity.hasComment %}: {{ activity.comment|u.truncate(1024, '...') }}{% endif %}">
+                                                            {% if canMove and activity.begin|date('Y-m-d') == date|date('Y-m-d') %}<span class="planner-handle planner-handle-start" data-planner-handle="start"></span>{% endif %}
                                                             <span class="text-truncate small">{% if activity.hasComment %}{{ icon('comment') }} {% endif %}{{ activity.hoursPerDay }}h</span>
+                                                            {% if canMove and activity.end|date('Y-m-d') == segmentEnd|date('Y-m-d') %}<span class="planner-handle planner-handle-end" data-planner-handle="end"></span>{% endif %}
                                                         </a>
                                                     {% endfor %}
                                                 </td>
@@ -311,6 +316,46 @@
         }
         .planner-activity {
             min-width: 100%;
+        }
+        .planner-activity.planner-movable {
+            cursor: grab;
+        }
+        .planner-handle {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 8px;
+            cursor: ew-resize;
+            background-color: rgba(0, 0, 0, 0.25);
+            opacity: 0;
+            transition: opacity 0.1s ease-in-out;
+        }
+        .planner-handle-start {
+            left: 0;
+            border-radius: 0.25rem 0 0 0.25rem;
+        }
+        .planner-handle-end {
+            right: 0;
+            border-radius: 0 0.25rem 0.25rem 0;
+        }
+        .planner-activity:hover .planner-handle,
+        body.planner-moving .planner-handle {
+            opacity: 1;
+        }
+        .planner-move-preview {
+            position: fixed;
+            z-index: 1100;
+            pointer-events: none;
+            background-color: rgba(32, 107, 196, 0.35);
+            border: 1px dashed #206bc4;
+            border-radius: 0.25rem;
+        }
+        body.planner-moving {
+            cursor: grabbing;
+            user-select: none;
+        }
+        body.planner-moving .planner-activity {
+            opacity: 0.6;
         }
         td.planner-week-summary {
             padding: 0 !important;
@@ -652,6 +697,227 @@
 
             document.addEventListener('keydown', function (e) {
                 if (e.key === 'Escape' && drag !== null) {
+                    reset();
+                }
+            });
+        })();
+
+        /*
+         * Drag a planned activity to another day/row, or drag its left/right handle to extend or shorten it.
+         * Only whole days are moved, the hours per day of the activity stay the same.
+         * The pointer column is found through the day headers, because merged cells do not map to a single day.
+         */
+        (function () {
+            const THRESHOLD = 4;
+            let move = null;
+            let suppressClick = false;
+
+            function addDays(date, days) {
+                const d = new Date(date + 'T00:00:00Z');
+                d.setUTCDate(d.getUTCDate() + days);
+                return d.toISOString().slice(0, 10);
+            }
+
+            function diffDays(a, b) {
+                return Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000);
+            }
+
+            function headerAt(x) {
+                const headers = document.querySelectorAll('th[data-planner-day]');
+                for (let i = 0; i < headers.length; i++) {
+                    const r = headers[i].getBoundingClientRect();
+                    if (x >= r.left && x < r.right) {
+                        return headers[i];
+                    }
+                }
+                return null;
+            }
+
+            function headerOf(date) {
+                return document.querySelector('th[data-planner-day="' + date + '"]');
+            }
+
+            function rowAt(y) {
+                const rows = document.querySelectorAll('tr.planner-row-details');
+                for (let i = 0; i < rows.length; i++) {
+                    const r = rows[i].getBoundingClientRect();
+                    if (r.height > 0 && y >= r.top && y < r.bottom) {
+                        return rows[i];
+                    }
+                }
+                return null;
+            }
+
+            function removePreview() {
+                document.querySelectorAll('.planner-move-preview').forEach(function (el) {
+                    el.remove();
+                });
+            }
+
+            function reset() {
+                removePreview();
+                document.body.classList.remove('planner-moving');
+                move = null;
+            }
+
+            // new dates for the pointer position, null when the pointer is outside the day columns
+            function target(m, x, y) {
+                const header = headerAt(x);
+                const row = rowAt(y);
+                if (header === null || row === null) {
+                    return null;
+                }
+                const delta = diffDays(m.grabbedDay, header.dataset.plannerDay);
+                let begin = m.begin;
+                let end = m.end;
+                if (m.handle === 'start') {
+                    begin = addDays(m.begin, delta);
+                    if (begin > m.end) {
+                        begin = m.end;
+                    }
+                } else if (m.handle === 'end') {
+                    end = addDays(m.end, delta);
+                    if (end < m.begin) {
+                        end = m.begin;
+                    }
+                } else {
+                    begin = addDays(m.begin, delta);
+                    end = addDays(m.end, delta);
+                }
+                return {begin: begin, end: end, row: m.handle === null ? row : m.row};
+            }
+
+            function paint(m, t) {
+                removePreview();
+                if (t === null) {
+                    return;
+                }
+                const first = headerOf(t.begin);
+                const last = headerOf(t.end);
+                if (first === null && last === null) {
+                    return;
+                }
+                // a range reaching beyond the displayed weeks is cut at the edge of the grid
+                const all = document.querySelectorAll('th[data-planner-day]');
+                const rowRect = t.row.getBoundingClientRect();
+                const left = (first || all[0]).getBoundingClientRect().left;
+                const right = (last || all[all.length - 1]).getBoundingClientRect().right;
+                const preview = document.createElement('div');
+                preview.className = 'planner-move-preview';
+                preview.style.left = left + 'px';
+                preview.style.width = (right - left) + 'px';
+                preview.style.top = (rowRect.top + 2) + 'px';
+                preview.style.height = (rowRect.height - 4) + 'px';
+                document.body.appendChild(preview);
+            }
+
+            function save(m, t) {
+                const table = document.querySelector('table[data-planner-move-token]');
+                const body = new URLSearchParams({_token: table.dataset.plannerMoveToken, begin: t.begin, end: t.end});
+                if (t.row.dataset.userId !== m.row.dataset.userId) {
+                    body.set('user', t.row.dataset.userId);
+                }
+                if (t.row.dataset.customerId && (t.row.dataset.customerId !== m.row.dataset.customerId || t.row.dataset.projectId !== m.row.dataset.projectId)) {
+                    body.set('customer', t.row.dataset.customerId);
+                    if (t.row.dataset.projectId) {
+                        body.set('project', t.row.dataset.projectId);
+                    }
+                }
+                fetch(m.url, {method: 'POST', body: body, headers: {'X-Requested-With': 'XMLHttpRequest'}})
+                    .then(function (response) {
+                        if (response.ok) {
+                            document.dispatchEvent(new CustomEvent('kimai.plannerActivityUpdate'));
+                            return null;
+                        }
+                        return response.json().catch(function () { return {}; }).then(function (data) {
+                            const message = response.status === 422 && data.message ? data.message : table.dataset.plannerMoveError;
+                            if (window.kimai) {
+                                window.kimai.getPlugin('alert').error(message);
+                            } else {
+                                window.alert(message);
+                            }
+                        });
+                    })
+                    .catch(function () {
+                        window.alert(table.dataset.plannerMoveError);
+                    });
+            }
+
+            document.addEventListener('mousedown', function (e) {
+                if (e.button !== 0) {
+                    return;
+                }
+                const activity = e.target.closest('.planner-activity[data-planner-move-url]');
+                const header = headerAt(e.clientX);
+                if (!activity || header === null) {
+                    return;
+                }
+                const handle = e.target.closest('[data-planner-handle]');
+                move = {
+                    url: activity.dataset.plannerMoveUrl,
+                    begin: activity.dataset.plannerBegin,
+                    end: activity.dataset.plannerEnd,
+                    handle: handle ? handle.dataset.plannerHandle : null,
+                    row: activity.closest('tr'),
+                    grabbedDay: header.dataset.plannerDay,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    active: false,
+                    target: null
+                };
+            });
+
+            // the activity is a link, a native link drag would swallow mousemove and mouseup
+            document.addEventListener('dragstart', function (e) {
+                if (e.target.closest && e.target.closest('.planner-movable')) {
+                    e.preventDefault();
+                }
+            });
+
+            document.addEventListener('mousemove', function (e) {
+                if (move === null) {
+                    return;
+                }
+                if (!move.active) {
+                    if (Math.abs(e.clientX - move.startX) < THRESHOLD && Math.abs(e.clientY - move.startY) < THRESHOLD) {
+                        return;
+                    }
+                    move.active = true;
+                    document.body.classList.add('planner-moving');
+                }
+                move.target = target(move, e.clientX, e.clientY);
+                paint(move, move.target);
+            });
+
+            document.addEventListener('mouseup', function () {
+                if (move === null) {
+                    return;
+                }
+                const finished = move;
+                reset();
+                if (!finished.active) {
+                    return;
+                }
+                // the click following mouseup must not open the edit dialog
+                suppressClick = true;
+                setTimeout(function () { suppressClick = false; }, 0);
+
+                const t = finished.target;
+                if (t === null || (t.begin === finished.begin && t.end === finished.end && t.row === finished.row)) {
+                    return;
+                }
+                save(finished, t);
+            });
+
+            document.addEventListener('click', function (e) {
+                if (suppressClick) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }, true);
+
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && move !== null) {
                     reset();
                 }
             });
