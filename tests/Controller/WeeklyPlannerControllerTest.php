@@ -29,12 +29,18 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\FormView;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\RouterInterface;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
+use Symfony\Component\Security\Core\Exception\AccessDeniedException;
+use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
+use Symfony\Component\Validator\ConstraintViolation;
+use Symfony\Component\Validator\ConstraintViolationList;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Twig\Environment;
 
 class WeeklyPlannerControllerTest extends TestCase
@@ -1479,5 +1485,197 @@ class WeeklyPlannerControllerTest extends TestCase
             $this->assertNull($activity->getCustomer());
             $this->assertNull($activity->getProject());
         });
+    }
+
+    /**
+     * @param array<string, string> $post
+     * @param callable(string, mixed): bool|null $isGranted
+     */
+    private function runMoveActivity(
+        PlannedActivity $activity,
+        array $post,
+        ?PlannedActivityRepository $repo = null,
+        ?UserRepository $userRepo = null,
+        bool $validToken = true,
+        ?callable $isGranted = null,
+        int $violations = 0
+    ): JsonResponse {
+        $repo ??= $this->createMock(PlannedActivityRepository::class);
+        $userRepo ??= $this->createMock(UserRepository::class);
+
+        $controller = new WeeklyPlannerController($repo, $this->createMock(WeeklyPlannerService::class), $userRepo, $this->createMock(PlannerUserProvider::class));
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturnCallback($isGranted ?? static fn (): bool => true);
+
+        $csrfManager = $this->createMock(CsrfTokenManagerInterface::class);
+        $csrfManager->method('isTokenValid')->willReturn($validToken);
+
+        $list = new ConstraintViolationList();
+        for ($i = 0; $i < $violations; ++$i) {
+            $list->add(new ConstraintViolation('Invalid dates', null, [], null, 'end', null));
+        }
+        $validator = $this->createMock(ValidatorInterface::class);
+        $validator->method('validate')->willReturn($list);
+
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturn(true);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['security.csrf.token_manager', $csrfManager],
+        ]);
+        $controller->setContainer($container);
+
+        return $controller->moveActivity($activity, new Request([], $post), $validator);
+    }
+
+    private function createMovableActivity(): PlannedActivity
+    {
+        $user = new User();
+        (new \ReflectionProperty(User::class, 'id'))->setValue($user, 1);
+
+        $activity = new PlannedActivity();
+        $activity->setUser($user);
+        $activity->setBegin(new \DateTime('2026-10-19'));
+        $activity->setEnd(new \DateTime('2026-10-20'));
+        $activity->setHoursPerDay(6.0);
+
+        return $activity;
+    }
+
+    public function testMoveActivityChangesDatesAndKeepsHours(): void
+    {
+        $activity = $this->createMovableActivity();
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->once())->method('savePlannedActivity')->with($activity);
+
+        $response = $this->runMoveActivity($activity, ['begin' => '2026-10-21', 'end' => '2026-10-23'], $repo);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('2026-10-21', $activity->getBegin()?->format('Y-m-d'));
+        $this->assertSame('2026-10-23', $activity->getEnd()?->format('Y-m-d'));
+        $this->assertSame(6.0, $activity->getHoursPerDay());
+    }
+
+    public function testMoveActivityChangesUserCustomerAndProject(): void
+    {
+        $activity = $this->createMovableActivity();
+
+        $newUser = new User();
+        (new \ReflectionProperty(User::class, 'id'))->setValue($newUser, 2);
+        $customer = new Customer('ACME');
+        $project = new Project();
+        $project->setCustomer($customer);
+
+        $userRepo = $this->createMock(UserRepository::class);
+        $userRepo->method('find')->with(2)->willReturn($newUser);
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->method('findCustomer')->with(3)->willReturn($customer);
+        $repo->method('findProject')->with(7)->willReturn($project);
+        $repo->expects($this->once())->method('savePlannedActivity');
+
+        $this->runMoveActivity($activity, ['begin' => '2026-10-19', 'end' => '2026-10-20', 'user' => '2', 'customer' => '3', 'project' => '7'], $repo, $userRepo);
+
+        $this->assertSame($newUser, $activity->getUser());
+        $this->assertSame($customer, $activity->getCustomer());
+        $this->assertSame($project, $activity->getProject());
+    }
+
+    public function testMoveActivityWithoutProjectClearsProject(): void
+    {
+        $activity = $this->createMovableActivity();
+        $activity->setProject(new Project());
+        $customer = new Customer('ACME');
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->method('findCustomer')->willReturn($customer);
+
+        $this->runMoveActivity($activity, ['begin' => '2026-10-19', 'end' => '2026-10-20', 'customer' => '3'], $repo);
+
+        $this->assertSame($customer, $activity->getCustomer());
+        $this->assertNull($activity->getProject());
+    }
+
+    public function testMoveActivityRejectsInvalidToken(): void
+    {
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->never())->method('savePlannedActivity');
+
+        $response = $this->runMoveActivity($this->createMovableActivity(), ['begin' => '2026-10-21', 'end' => '2026-10-22'], $repo, null, false);
+
+        $this->assertSame(403, $response->getStatusCode());
+    }
+
+    public function testMoveActivityRejectsInvalidDates(): void
+    {
+        $activity = $this->createMovableActivity();
+
+        $response = $this->runMoveActivity($activity, ['begin' => 'nope', 'end' => '2026-10-22']);
+
+        $this->assertSame(400, $response->getStatusCode());
+        $this->assertSame('2026-10-19', $activity->getBegin()?->format('Y-m-d'));
+    }
+
+    public function testMoveActivityDeniedWithoutEditPermission(): void
+    {
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->never())->method('savePlannedActivity');
+
+        $this->expectException(AccessDeniedException::class);
+
+        $this->runMoveActivity($this->createMovableActivity(), ['begin' => '2026-10-21', 'end' => '2026-10-22'], $repo, null, true, static fn (): bool => false);
+    }
+
+    public function testMoveActivityDeniedWhenMovedToUserWithoutPermission(): void
+    {
+        $activity = $this->createMovableActivity();
+        $newUser = new User();
+        (new \ReflectionProperty(User::class, 'id'))->setValue($newUser, 2);
+
+        $userRepo = $this->createMock(UserRepository::class);
+        $userRepo->method('find')->willReturn($newUser);
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->never())->method('savePlannedActivity');
+
+        $this->expectException(AccessDeniedException::class);
+
+        $this->runMoveActivity(
+            $activity,
+            ['begin' => '2026-10-21', 'end' => '2026-10-22', 'user' => '2'],
+            $repo,
+            $userRepo,
+            true,
+            static fn (string $attribute, mixed $subject): bool => !($subject instanceof PlannedActivity && $subject->getUser()?->getId() === 2)
+        );
+    }
+
+    public function testMoveActivityDeniedForInaccessibleCustomer(): void
+    {
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->method('findCustomer')->willReturn(new Customer('Secret'));
+        $repo->expects($this->never())->method('savePlannedActivity');
+
+        $this->expectException(AccessDeniedException::class);
+
+        $this->runMoveActivity(
+            $this->createMovableActivity(),
+            ['begin' => '2026-10-21', 'end' => '2026-10-22', 'customer' => '3'],
+            $repo,
+            null,
+            true,
+            static fn (string $attribute): bool => $attribute !== 'access'
+        );
+    }
+
+    public function testMoveActivityReturnsValidationMessageAndDoesNotSave(): void
+    {
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->never())->method('savePlannedActivity');
+
+        $response = $this->runMoveActivity($this->createMovableActivity(), ['begin' => '2026-10-21', 'end' => '2026-10-22'], $repo, null, true, null, 1);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('Invalid dates', (string) $response->getContent());
     }
 }

@@ -32,6 +32,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[Route(path: '/planner')]
 #[IsGranted('view_planner')]
@@ -40,6 +41,7 @@ final class WeeklyPlannerController extends AbstractController
     public const DEFAULT_WEEKS = 4;
     public const WEEK_OPTIONS = [1, 2, 4, 8];
     private const SESSION_KEY = 'planner_weeks';
+    private const MOVE_TOKEN = 'planner_move';
 
     public function __construct(
         private readonly PlannedActivityRepository $repository,
@@ -246,6 +248,74 @@ final class WeeklyPlannerController extends AbstractController
         ]);
     }
 
+    /**
+     * Moves (drag and drop) or resizes an activity in the grid: new dates and, when dropped on another row,
+     * a new user and customer/project. The hours per day stay as they are, so resizing repeats them on the added days.
+     */
+    #[Route(path: '/activity/{id}/move', name: 'planner_activity_move', methods: ['POST'])]
+    public function moveActivity(PlannedActivity $activity, Request $request, ValidatorInterface $validator): JsonResponse
+    {
+        if (!$this->isCsrfTokenValid(self::MOVE_TOKEN, $request->request->getString('_token'))) {
+            return new JsonResponse([], Response::HTTP_FORBIDDEN);
+        }
+
+        if (!$this->canEdit($activity)) {
+            throw $this->createAccessDeniedException();
+        }
+
+        try {
+            $begin = new \DateTime($request->request->getString('begin'));
+            $end = new \DateTime($request->request->getString('end'));
+        } catch (\Exception) {
+            return new JsonResponse([], Response::HTTP_BAD_REQUEST);
+        }
+
+        $activity->setBegin($begin);
+        $activity->setEnd($end);
+
+        $userId = $request->request->getInt('user');
+        if ($userId > 0 && $userId !== $activity->getUser()?->getId()) {
+            $user = $this->userRepository->find($userId);
+            if (!$user instanceof User) {
+                throw $this->createNotFoundException();
+            }
+            $activity->setUser($user);
+        }
+
+        $customerId = $request->request->getInt('customer');
+        if ($customerId > 0) {
+            $customer = $this->repository->findCustomer($customerId);
+            $projectId = $request->request->getInt('project');
+            $project = $projectId > 0 ? $this->repository->findProject($projectId) : null;
+
+            if (!$customer instanceof Customer || !$this->isGranted('access', $customer)
+                || ($projectId > 0 && (!$project instanceof Project || !$this->isGranted('access', $project)))) {
+                throw $this->createAccessDeniedException();
+            }
+
+            $activity->setCustomer($customer);
+            $activity->setProject($project);
+        }
+
+        // the voter looks at the (possibly new) owner, so a user may not move planning to somebody they cannot plan for
+        if (!$this->canEdit($activity)) {
+            throw $this->createAccessDeniedException();
+        }
+
+        $violations = $validator->validate($activity);
+        if (\count($violations) > 0) {
+            return new JsonResponse(['message' => $violations->get(0)->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        try {
+            $this->repository->savePlannedActivity($activity);
+        } catch (\Exception $ex) {
+            return new JsonResponse([], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        return new JsonResponse(['id' => $activity->getId()]);
+    }
+
     #[Route(path: '/activity/{id}/delete', name: 'planner_activity_delete', methods: ['GET', 'POST'])]
     public function deleteActivity(PlannedActivity $activity, Request $request): Response
     {
@@ -338,6 +408,14 @@ final class WeeklyPlannerController extends AbstractController
 
             return $this->redirectToRoute('planner');
         }
+    }
+
+    /**
+     * @phpstan-impure the voter looks at the activity, which is changed between two checks
+     */
+    private function canEdit(PlannedActivity $activity): bool
+    {
+        return $this->isGranted(PlannedActivityVoter::EDIT, $activity);
     }
 
     /**

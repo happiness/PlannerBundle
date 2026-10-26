@@ -126,7 +126,10 @@ var/plugins/PlannerBundle/
 7. **Drag to Create**:
    - Empty day cells carry `data-planner-date`; dragging across empty cells of one row opens the create dialog with `date`, `end`, `user` and, for sub-rows, `customer`/`project` (read from the row's `data-customer-id`/`data-project-id`). The JS lives in `index.html.twig`, reuses Kimai's delegated `.modal-ajax-form` click handler by clicking a temporary link, and suppresses the click that follows `mouseup`. A plain click still opens the single-day dialog. Mouse only, no touch support.
    - `createActivity()` ignores an `end` before `date` and only pre-fills customer/project the user may `access`.
-8. **Isolated Database Migrations**:
+8. **Move and Resize**:
+   - Activities with the edit permission carry `data-planner-move-url`/`-begin`/`-end`; a left/right handle (`data-planner-handle`) is rendered only where the activity really begins/ends. The JS maps the pointer to a day through the `th[data-planner-day]` headers (merged cells do not map to one day) and to a row through `tr.planner-row-details`.
+   - `POST /planner/activity/{id}/move` (CSRF token `planner_move`) takes `begin`, `end` and optionally `user`, `customer`, `project`. The voter is checked before and after the changes, so planning cannot be moved to someone the user may not plan for. Hours per day are never changed. Only the single activity is moved, also when it is recurring.
+9. **Isolated Database Migrations**:
    - Always run and test migrations using the bundle's dedicated configuration file:
      `bin/console doctrine:migrations:migrate --configuration=var/plugins/PlannerBundle/Migrations/doctrine_migrations.yaml --no-interaction`
 
