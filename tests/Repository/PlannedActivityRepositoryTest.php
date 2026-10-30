@@ -148,6 +148,94 @@ class PlannedActivityRepositoryTest extends TestCase
         $this->assertSame('2026-09-16', $split->getEnd()?->format('Y-m-d'));
     }
 
+    public function testSavePlannedActivityInRangesSavesOnePartPerRangeAtOnce(): void
+    {
+        $user = new User();
+        $activity = (new PlannedActivity())
+            ->setUser($user)
+            ->setHoursPerDay(6.0)
+            ->setComment('Launch')
+            ->setBegin(new \DateTime('2026-11-06'))
+            ->setEnd(new \DateTime('2026-11-10'));
+
+        $persisted = [];
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->exactly(2))->method('persist')->willReturnCallback(function ($entity) use (&$persisted) {
+            $persisted[] = $entity;
+        });
+        $em->expects($this->once())->method('flush');
+
+        $saved = $this->createRepository($em)->savePlannedActivityInRanges($activity, [
+            [new \DateTime('2026-11-06'), new \DateTime('2026-11-06')],
+            [new \DateTime('2026-11-09'), new \DateTime('2026-11-10')],
+        ]);
+
+        $this->assertSame($persisted, $saved);
+        $this->assertSame($activity, $saved[0]);
+        $this->assertSame('2026-11-06', $activity->getEnd()?->format('Y-m-d'));
+        $this->assertSame('2026-11-09', $saved[1]->getBegin()?->format('Y-m-d'));
+        $this->assertSame('2026-11-10', $saved[1]->getEnd()?->format('Y-m-d'));
+        $this->assertSame($user, $saved[1]->getUser());
+        $this->assertSame(6.0, $saved[1]->getHoursPerDay());
+        $this->assertSame('Launch', $saved[1]->getComment());
+        // the parts belong together, also without repeating weeks
+        $this->assertNotNull($activity->getRecurrenceGroup());
+        $this->assertSame($activity->getRecurrenceGroup(), $saved[1]->getRecurrenceGroup());
+    }
+
+    public function testSavePlannedActivityInOneTrimmedRangeIsNoSeries(): void
+    {
+        $activity = (new PlannedActivity())->setBegin(new \DateTime('2026-11-07'))->setEnd(new \DateTime('2026-11-10'));
+
+        $saved = $this->createRepository($this->createMock(EntityManagerInterface::class))->savePlannedActivityInRanges($activity, [
+            [new \DateTime('2026-11-09'), new \DateTime('2026-11-10')],
+        ]);
+
+        $this->assertSame([$activity], $saved);
+        $this->assertSame('2026-11-09', $activity->getBegin()?->format('Y-m-d'));
+        $this->assertNull($activity->getRecurrenceGroup());
+    }
+
+    public function testSavePlannedActivityInRangesWithoutRangesSavesItAsItIs(): void
+    {
+        $activity = (new PlannedActivity())->setBegin(new \DateTime('2026-11-02'))->setEnd(new \DateTime('2026-11-06'));
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->once())->method('persist')->with($activity);
+        $em->expects($this->once())->method('flush');
+
+        $this->assertSame([$activity], $this->createRepository($em)->savePlannedActivityInRanges($activity, []));
+        $this->assertSame('2026-11-06', $activity->getEnd()?->format('Y-m-d'));
+    }
+
+    public function testCreateRecurringActivitiesForAllRepeatsEveryPartInOneSeries(): void
+    {
+        $friday = (new PlannedActivity())->setBegin(new \DateTime('2026-11-06'))->setEnd(new \DateTime('2026-11-06'));
+        $monday = (new PlannedActivity())->setBegin(new \DateTime('2026-11-09'))->setEnd(new \DateTime('2026-11-10'));
+
+        $persisted = [];
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('persist')->willReturnCallback(function ($entity) use (&$persisted) {
+            $persisted[] = $entity;
+        });
+
+        $this->createRepository($em)->createRecurringActivitiesForAll([$friday, $monday], 2);
+
+        $this->assertNotNull($friday->getRecurrenceGroup());
+        $this->assertSame($friday->getRecurrenceGroup(), $monday->getRecurrenceGroup());
+        // both parts are saved with the series, then two weekly copies of each
+        $this->assertContains($friday, $persisted);
+        $this->assertContains($monday, $persisted);
+        $copies = array_values(array_filter($persisted, static fn (PlannedActivity $a): bool => $a !== $friday && $a !== $monday));
+        $this->assertSame(
+            ['2026-11-13..2026-11-13', '2026-11-20..2026-11-20', '2026-11-16..2026-11-17', '2026-11-23..2026-11-24'],
+            array_map(static fn (PlannedActivity $a): string => $a->getBegin()?->format('Y-m-d') . '..' . $a->getEnd()?->format('Y-m-d'), $copies)
+        );
+        foreach ($copies as $copy) {
+            $this->assertSame($friday->getRecurrenceGroup(), $copy->getRecurrenceGroup());
+        }
+    }
+
     public function testRemoveDayWhenNullOrOutOfRange(): void
     {
         $activity = new PlannedActivity();

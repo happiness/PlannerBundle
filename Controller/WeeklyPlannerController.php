@@ -23,6 +23,7 @@ use KimaiPlugin\PlannerBundle\Form\Toolbar\PlannerToolbarForm;
 use KimaiPlugin\PlannerBundle\Planner\CommonProjectService;
 use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
+use KimaiPlugin\PlannerBundle\Planner\WorkingDayRanges;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
 use KimaiPlugin\PlannerBundle\Voter\PlannedActivityVoter;
@@ -104,7 +105,7 @@ final class WeeklyPlannerController extends AbstractController
     }
 
     #[Route(path: '/activity/create', name: 'planner_activity_create', methods: ['GET', 'POST'])]
-    public function createActivity(Request $request): Response
+    public function createActivity(Request $request, WorkingDayRanges $workingDays): Response
     {
         $currentUser = $this->getUser();
         $targetUserId = $request->query->getInt('user', 0);
@@ -161,24 +162,27 @@ final class WeeklyPlannerController extends AbstractController
             'user' => $currentUser,
             'include_user' => $canEditOther,
             'include_recurrence' => true,
+            'skip_days_off' => true,
         ]);
 
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
             try {
-                $this->repository->savePlannedActivity($activity);
+                // the week the user planned in, also when its first days were days off
+                $selectedDate = $activity->getBegin() ? $activity->getBegin()->format('Y-m-d') : (new \DateTime('today'))->format('Y-m-d');
+
+                // a range over days the user does not work becomes one activity per run of working days
+                $activities = $this->repository->savePlannedActivityInRanges($activity, $workingDays->forActivity($activity));
 
                 if ($form->has('recurrentWeeks')) {
                     $recurrentWeeksData = $form->get('recurrentWeeks')->getData();
                     if (\is_int($recurrentWeeksData) && $recurrentWeeksData > 0) {
-                        $this->repository->createRecurringActivities($activity, $recurrentWeeksData);
+                        $this->repository->createRecurringActivitiesForAll($activities, $recurrentWeeksData);
                     }
                 }
 
                 $this->flashSuccess('action.update.success');
-
-                $selectedDate = $activity->getBegin() ? $activity->getBegin()->format('Y-m-d') : (new \DateTime('today'))->format('Y-m-d');
 
                 return $this->redirectToRoute('planner_week', ['date' => $selectedDate]);
             } catch (\Exception $ex) {

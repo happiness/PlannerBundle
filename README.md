@@ -13,6 +13,7 @@
 - **Actual vs Planned Hours**: Directly compares planned allocations against actual recorded timesheet hours.
 - **Lightweight Scheduling**: Plan time blocks for a customer (and optionally a project) with daily hours, date ranges, comments, and color badges.
 - **Drag to Plan**: Drag across empty day cells of a row to create a planning spanning several days. A transparent preview block is shown while dragging and stays visible while the dialog is open.
+- **Working Days Only**: A new planning whose dates cross days the user does not work (no hours in their working time contract) is saved as one planning per run of working days: Friday to Tuesday becomes Friday, and Monday to Tuesday. A planning on days off only is kept as entered.
 - **Move and Resize**: Drag a planned activity to another day or row, or drag its left/right handle to extend or shorten it.
 - **Shortcuts**: Frequently used customers and projects are offered as shortcuts when creating a planning.
 - **Multiple Weeks**: Show 1, 2, 4 (default) or 8 weeks at once; capacity is summarized per week.
