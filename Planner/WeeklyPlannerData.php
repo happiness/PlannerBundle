@@ -129,6 +129,19 @@ final class WeeklyPlannerData
         return $total;
     }
 
+    /**
+     * Contract hours minus time off, for all users.
+     */
+    public function getTotalCapacityHours(): float
+    {
+        $total = 0.0;
+        foreach ($this->rows as $row) {
+            $total += $row->getTotalCapacityHours();
+        }
+
+        return $total;
+    }
+
     public function getTotalPlannedHours(): float
     {
         $total = 0.0;

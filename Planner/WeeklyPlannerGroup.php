@@ -27,6 +27,8 @@ final class WeeklyPlannerGroup
      */
     private array $activities = [];
 
+    public const TIME_OFF_KEY = 'off';
+
     public function __construct(
         private readonly string $key,
         private readonly ?Customer $customer,
@@ -37,6 +39,10 @@ final class WeeklyPlannerGroup
 
     public static function keyFor(PlannedActivity $activity): string
     {
+        if ($activity->isTimeOff()) {
+            return self::TIME_OFF_KEY;
+        }
+
         if ($activity->getCustomer() === null) {
             return 'legacy:' . ($activity->getTitle() ?? '');
         }
@@ -57,6 +63,11 @@ final class WeeklyPlannerGroup
     public function getKey(): string
     {
         return $this->key;
+    }
+
+    public function isTimeOff(): bool
+    {
+        return $this->key === self::TIME_OFF_KEY;
     }
 
     public function getCustomer(): ?Customer
@@ -95,7 +106,7 @@ final class WeeklyPlannerGroup
     }
 
     /**
-     * Planned hours of this group within the given days only.
+     * Planned hours of this group within the given days only, for time off the hours taken off.
      *
      * @param array<WeeklyPlannerDay> $days
      */
@@ -105,7 +116,9 @@ final class WeeklyPlannerGroup
         foreach ($days as $day) {
             foreach ($this->activities as $activity) {
                 if ($activity->coversDate($day->getDate())) {
-                    $total += $activity->getHoursPerDay();
+                    $hours = $day->getHoursOf($activity);
+                    // like the day itself, time off never takes more than the contract hours
+                    $total += $activity->isTimeOff() ? min($hours, $day->getExpectedHours()) : $hours;
                 }
             }
         }

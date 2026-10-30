@@ -144,7 +144,13 @@ final class WeeklyPlannerController extends AbstractController
             }
         }
 
-        $this->prefillCustomerAndProject($activity, $request);
+        // dragging in the time off row of a user creates time off, for the whole day unless hours are entered
+        if ($request->query->getBoolean('off')) {
+            $activity->setTimeOff(true);
+            $activity->setHoursPerDay(null);
+        } else {
+            $this->prefillCustomerAndProject($activity, $request);
+        }
 
         if (!$this->isGranted(PlannedActivityVoter::CREATE, $activity)) {
             throw $this->createAccessDeniedException();
@@ -282,8 +288,9 @@ final class WeeklyPlannerController extends AbstractController
             $activity->setUser($user);
         }
 
+        // time off has no customer or project, it only moves in time and between users
         $customerId = $request->request->getInt('customer');
-        if ($customerId > 0) {
+        if ($customerId > 0 && !$activity->isTimeOff()) {
             $customer = $this->repository->findCustomer($customerId);
             $projectId = $request->request->getInt('project');
             $project = $projectId > 0 ? $this->repository->findProject($projectId) : null;

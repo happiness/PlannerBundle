@@ -63,12 +63,11 @@ class PlannedActivity
     private ?\DateTime $end = null;
 
     /**
-     * Nullable in the database only because rows created before customers were introduced have none;
-     * the validation requires a customer whenever an activity is saved through the form or the API.
+     * Nullable in the database because rows created before customers were introduced have none and time off has none;
+     * the validation requires a customer for every other activity saved through the form or the API.
      */
     #[ORM\ManyToOne(targetEntity: Customer::class)]
     #[ORM\JoinColumn(name: 'customer_id', nullable: true, onDelete: 'CASCADE')]
-    #[Assert\NotNull]
     #[Serializer\Expose]
     #[Serializer\Groups(['Default'])]
     private ?Customer $customer = null;
@@ -86,13 +85,23 @@ class PlannedActivity
     #[Assert\Length(max: 255)]
     private ?string $title = null;
 
-    #[ORM\Column(name: 'hours_per_day', type: Types::FLOAT, nullable: false)]
-    #[Assert\NotNull]
+    /**
+     * Only time off may leave it empty, which means the whole working day of the user's contract.
+     */
+    #[ORM\Column(name: 'hours_per_day', type: Types::FLOAT, nullable: true)]
     #[Assert\Positive]
     #[Assert\LessThanOrEqual(24.0)]
     #[Serializer\Expose]
     #[Serializer\Groups(['Default'])]
-    private float $hoursPerDay = 8.0;
+    private ?float $hoursPerDay = 8.0;
+
+    /**
+     * The user is not available: no customer or project, and the hours are taken off the day's capacity instead of being planned.
+     */
+    #[ORM\Column(name: 'time_off', type: Types::BOOLEAN, nullable: false, options: ['default' => false])]
+    #[Serializer\Expose]
+    #[Serializer\Groups(['Default'])]
+    private bool $timeOff = false;
 
     #[ORM\Column(name: 'comment', type: Types::TEXT, nullable: true)]
     #[Serializer\Expose]
@@ -207,6 +216,28 @@ class PlannedActivity
     }
 
     #[Assert\Callback]
+    public function validateRequiredFields(ExecutionContextInterface $context): void
+    {
+        if ($this->timeOff) {
+            return;
+        }
+
+        if ($this->customer === null) {
+            $context->buildViolation('This value should not be null.')
+                ->atPath('customer')
+                ->setTranslationDomain('validators')
+                ->addViolation();
+        }
+
+        if ($this->hoursPerDay === null) {
+            $context->buildViolation('This value should not be null.')
+                ->atPath('hoursPerDay')
+                ->setTranslationDomain('validators')
+                ->addViolation();
+        }
+    }
+
+    #[Assert\Callback]
     public function validateProjectBelongsToCustomer(ExecutionContextInterface $context): void
     {
         if ($this->project === null || $this->customer === null) {
@@ -221,16 +252,42 @@ class PlannedActivity
         }
     }
 
-    public function getHoursPerDay(): float
+    public function getHoursPerDay(): ?float
     {
         return $this->hoursPerDay;
     }
 
-    public function setHoursPerDay(float $hoursPerDay): self
+    public function setHoursPerDay(?float $hoursPerDay): self
     {
         $this->hoursPerDay = $hoursPerDay;
 
         return $this;
+    }
+
+    public function isTimeOff(): bool
+    {
+        return $this->timeOff;
+    }
+
+    /**
+     * Time off belongs to no customer or project, switching it on drops them.
+     */
+    public function setTimeOff(bool $timeOff): self
+    {
+        $this->timeOff = $timeOff;
+
+        if ($timeOff) {
+            $this->customer = null;
+            $this->project = null;
+            $this->title = null;
+        }
+
+        return $this;
+    }
+
+    public function isWholeDay(): bool
+    {
+        return $this->timeOff && $this->hoursPerDay === null;
     }
 
     public function getComment(): ?string
@@ -293,6 +350,6 @@ class PlannedActivity
 
     public function getTotalHours(): float
     {
-        return $this->getDaysCount() * $this->hoursPerDay;
+        return $this->getDaysCount() * ($this->hoursPerDay ?? 0.0);
     }
 }
