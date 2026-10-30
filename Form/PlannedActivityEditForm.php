@@ -80,6 +80,8 @@ class PlannedActivityEditForm extends AbstractType
             ->add('end', DatePickerType::class, [
                 'label' => 'label.end',
                 'required' => true,
+                // creating splits the range into runs of working days (see WorkingDayRanges)
+                'help' => $options['skip_days_off'] ? 'planner.skip_days_off_help' : null,
             ])
             ->add('hoursPerDay', NumberType::class, [
                 'label' => 'planner.hours_per_day',
@@ -149,6 +151,7 @@ class PlannedActivityEditForm extends AbstractType
             'include_user' => false,
             'include_recurrence' => false,
             'include_recurrence_mode' => false,
+            'skip_days_off' => false,
             'attr' => [
                 'data-form-event' => 'kimai.plannerActivityUpdate',
             ],
@@ -159,5 +162,6 @@ class PlannedActivityEditForm extends AbstractType
         $resolver->setAllowedTypes('include_user', 'bool');
         $resolver->setAllowedTypes('include_recurrence', 'bool');
         $resolver->setAllowedTypes('include_recurrence_mode', 'bool');
+        $resolver->setAllowedTypes('skip_days_off', 'bool');
     }
 }
