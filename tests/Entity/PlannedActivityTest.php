@@ -146,4 +146,62 @@ class PlannedActivityTest extends TestCase
         (new PlannedActivity())->setCustomer($customer)->validateProjectBelongsToCustomer($context);
         (new PlannedActivity())->validateProjectBelongsToCustomer($context);
     }
+
+    public function testTimeOffDropsCustomerAndProject(): void
+    {
+        $customer = new Customer('ACME');
+        $project = new Project();
+        $project->setCustomer($customer);
+
+        $activity = (new PlannedActivity())->setCustomer($customer)->setProject($project)->setTitle('Legacy');
+        $this->assertFalse($activity->isTimeOff());
+
+        $activity->setTimeOff(true);
+
+        $this->assertTrue($activity->isTimeOff());
+        $this->assertNull($activity->getCustomer());
+        $this->assertNull($activity->getProject());
+        $this->assertNull($activity->getTitle());
+        $this->assertNull($activity->getName());
+    }
+
+    public function testOnlyTimeOffWithoutHoursIsAWholeDay(): void
+    {
+        $activity = (new PlannedActivity())->setTimeOff(true)->setHoursPerDay(null);
+        $this->assertTrue($activity->isWholeDay());
+        $this->assertSame(0.0, $activity->getTotalHours());
+
+        $activity->setHoursPerDay(4.0);
+        $this->assertFalse($activity->isWholeDay());
+
+        $this->assertFalse((new PlannedActivity())->setHoursPerDay(null)->isWholeDay());
+    }
+
+    public function testWorkNeedsCustomerAndHours(): void
+    {
+        $paths = [];
+        $builder = $this->createMock(ConstraintViolationBuilderInterface::class);
+        $builder->method('atPath')->willReturnCallback(function (string $path) use ($builder, &$paths) {
+            $paths[] = $path;
+
+            return $builder;
+        });
+        $builder->method('setTranslationDomain')->willReturnSelf();
+
+        $context = $this->createMock(ExecutionContextInterface::class);
+        $context->method('buildViolation')->willReturn($builder);
+
+        (new PlannedActivity())->setHoursPerDay(null)->validateRequiredFields($context);
+
+        $this->assertSame(['customer', 'hoursPerDay'], $paths);
+    }
+
+    public function testTimeOffNeedsNeitherCustomerNorHours(): void
+    {
+        $context = $this->createMock(ExecutionContextInterface::class);
+        $context->expects($this->never())->method('buildViolation');
+
+        (new PlannedActivity())->setTimeOff(true)->setHoursPerDay(null)->validateRequiredFields($context);
+        (new PlannedActivity())->setCustomer(new Customer('ACME'))->validateRequiredFields($context);
+    }
 }

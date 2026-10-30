@@ -435,6 +435,25 @@ class PlannedActivityRepositoryTest extends TestCase
         $this->assertSame('2026-09-23', $created[1]->getEnd()?->format('Y-m-d'));
     }
 
+    public function testCreateRecurringActivitiesKeepsTimeOff(): void
+    {
+        $activity = (new PlannedActivity())
+            ->setUser(new User())
+            ->setTimeOff(true)
+            ->setHoursPerDay(null)
+            ->setBegin(new \DateTime('2026-11-06'))
+            ->setEnd(new \DateTime('2026-11-06'));
+
+        $repository = $this->createRepository($this->createMock(EntityManagerInterface::class));
+        $created = $repository->createRecurringActivities($activity, 1);
+
+        $this->assertCount(1, $created);
+        $this->assertTrue($created[0]->isTimeOff());
+        $this->assertNull($created[0]->getHoursPerDay());
+        $this->assertNull($created[0]->getCustomer());
+        $this->assertSame('2026-11-13', $created[0]->getBegin()?->format('Y-m-d'));
+    }
+
     public function testFindByFilterWithoutUsersReturnsEmptyArray(): void
     {
         $repository = $this->createRepository($this->createMock(EntityManagerInterface::class));

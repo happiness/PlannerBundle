@@ -1471,6 +1471,19 @@ class WeeklyPlannerControllerTest extends TestCase
         });
     }
 
+    public function testCreateActivityInTheTimeOffRowCreatesTimeOffForTheWholeDay(): void
+    {
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->never())->method('findCustomer');
+        $repo->expects($this->never())->method('findProject');
+
+        $this->runCreateActivity(['date' => '2026-11-06', 'off' => '1', 'customer' => '3', 'project' => '7'], true, $repo, function (PlannedActivity $activity): void {
+            $this->assertTrue($activity->isTimeOff());
+            $this->assertNull($activity->getHoursPerDay());
+            $this->assertNull($activity->getCustomer());
+        });
+    }
+
     public function testCreateActivityDoesNotPrefillInaccessibleCustomerOrProject(): void
     {
         $customer = new Customer('Secret');
@@ -1595,6 +1608,23 @@ class WeeklyPlannerControllerTest extends TestCase
 
         $this->assertSame($customer, $activity->getCustomer());
         $this->assertNull($activity->getProject());
+    }
+
+    public function testMoveTimeOffIgnoresTheCustomerOfTheTargetRow(): void
+    {
+        $activity = $this->createMovableActivity();
+        $activity->setTimeOff(true);
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->never())->method('findCustomer');
+        $repo->expects($this->once())->method('savePlannedActivity');
+
+        $response = $this->runMoveActivity($activity, ['begin' => '2026-10-21', 'end' => '2026-10-21', 'customer' => '3', 'project' => '7'], $repo);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertTrue($activity->isTimeOff());
+        $this->assertNull($activity->getCustomer());
+        $this->assertSame('2026-10-21', $activity->getBegin()?->format('Y-m-d'));
     }
 
     public function testMoveActivityRejectsInvalidToken(): void

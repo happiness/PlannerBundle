@@ -118,4 +118,32 @@ class WeeklyPlannerGroupTest extends TestCase
 
         $this->assertSame(6.0, $group->getPlannedHours($this->createWeek()));
     }
+
+    public function testTimeOffHasItsOwnGroupAndCountsWholeDays(): void
+    {
+        $timeOff = $this->createActivity('2026-10-19', '2026-10-20')->setTimeOff(true)->setHoursPerDay(null);
+        $this->assertSame(WeeklyPlannerGroup::TIME_OFF_KEY, WeeklyPlannerGroup::keyFor($timeOff));
+
+        $group = WeeklyPlannerGroup::createFor($timeOff);
+        $group->addActivity($timeOff);
+
+        $this->assertTrue($group->isTimeOff());
+        $this->assertSame(14.0, $group->getPlannedHours([
+            new WeeklyPlannerDay(new \DateTimeImmutable('2026-10-19'), 8.0),
+            new WeeklyPlannerDay(new \DateTimeImmutable('2026-10-20'), 6.0),
+            new WeeklyPlannerDay(new \DateTimeImmutable('2026-10-21'), 8.0),
+        ]));
+
+        // a weekend and more hours than the contract day are not taken off
+        $long = $this->createActivity('2026-10-24', '2026-10-25', 10.0)->setTimeOff(true);
+        $longGroup = WeeklyPlannerGroup::createFor($long);
+        $longGroup->addActivity($long);
+        $this->assertSame(8.0, $longGroup->getPlannedHours([
+            new WeeklyPlannerDay(new \DateTimeImmutable('2026-10-24'), 8.0),
+            new WeeklyPlannerDay(new \DateTimeImmutable('2026-10-25'), 0.0),
+        ]));
+
+        $work = $this->createActivity('2026-10-19', '2026-10-19')->setCustomer(new Customer('ACME'));
+        $this->assertFalse(WeeklyPlannerGroup::createFor($work)->isTimeOff());
+    }
 }

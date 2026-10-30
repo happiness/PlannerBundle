@@ -99,4 +99,31 @@ class WeeklyPlannerUserRowTest extends TestCase
         $this->assertSame(40.0, $weeks[0]->getTotalExpectedHours());
         $this->assertSame(0.0, $weeks[1]->getTotalExpectedHours());
     }
+
+    public function testTimeOffGroupComesFirst(): void
+    {
+        $row = new WeeklyPlannerUserRow(new User());
+        $row->addUniqueActivity((new PlannedActivity())->setCustomer(new Customer('Acme')));
+        $row->addUniqueActivity((new PlannedActivity())->setTimeOff(true));
+
+        $groups = $row->getGroups();
+
+        $this->assertCount(2, $groups);
+        $this->assertTrue($groups[0]->isTimeOff());
+        $this->assertSame('Acme', $groups[1]->getCustomerName());
+    }
+
+    public function testTimeOffIsTakenOffTheCapacity(): void
+    {
+        $row = new WeeklyPlannerUserRow(new User());
+        $day = new WeeklyPlannerDay(new \DateTimeImmutable('2026-11-06'), 8.0);
+        $day->addActivity((new PlannedActivity())->setTimeOff(true)->setHoursPerDay(2.0));
+        $day->addActivity((new PlannedActivity())->setHoursPerDay(6.0));
+        $row->addDay($day);
+
+        $this->assertSame(8.0, $row->getTotalExpectedHours());
+        $this->assertSame(6.0, $row->getTotalCapacityHours());
+        $this->assertSame(100, $row->getPlannedPercentage());
+        $this->assertTrue($row->isBalanced());
+    }
 }
