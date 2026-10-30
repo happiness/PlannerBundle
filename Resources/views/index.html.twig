@@ -187,7 +187,15 @@
                                                 {% set date = segment.date %}
                                                 <td colspan="{{ segment.span }}" class="position-relative align-middle border-1 day{% if date is weekend %} weekend{% endif %}{% if date is today %} today{% endif %} p-1 {{ segment.activities is not empty ? 'has-activities' : 'no-activities' }}"{% if canCreate and segment.activities is empty %} data-planner-date="{{ date|date('Y-m-d') }}"{% endif %}>
                                                     {% if canCreate and segment.activities is empty %}
-                                                        <a href="{{ path('planner_activity_create', {'user': row.user.id, 'date': date|date('Y-m-d')}) }}"
+                                                        {# like dragging, a click in a customer/project row pre-selects them #}
+                                                        {% set createParams = {'user': row.user.id, 'date': date|date('Y-m-d')} %}
+                                                        {% if group.customer %}
+                                                            {% set createParams = createParams|merge({'customer': group.customer.id}) %}
+                                                        {% endif %}
+                                                        {% if group.project %}
+                                                            {% set createParams = createParams|merge({'project': group.project.id}) %}
+                                                        {% endif %}
+                                                        <a href="{{ path('planner_activity_create', createParams) }}"
                                                            class="stretched-link cursor-crosshair modal-ajax-form"
                                                            title="{{ 'planner.planned_activity'|trans }}"></a>
                                                     {% endif %}
