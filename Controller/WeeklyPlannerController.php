@@ -209,6 +209,10 @@ final class WeeklyPlannerController extends AbstractController
             $formActionParams['date'] = $dateParam;
         }
 
+        // the form changes the activity in place, keep the dates to move the rest of a recurring series alike
+        $previousBegin = $activity->getBegin() !== null ? clone $activity->getBegin() : null;
+        $previousEnd = $activity->getEnd() !== null ? clone $activity->getEnd() : null;
+
         $form = $this->createForm(PlannedActivityEditForm::class, $activity, [
             'action' => $this->generateUrl('planner_activity_edit', $formActionParams),
             'method' => 'POST',
@@ -226,7 +230,7 @@ final class WeeklyPlannerController extends AbstractController
                 if ($form->has('edit_mode') && $activity->isRecurring()) {
                     $editMode = $form->get('edit_mode')->getData();
                     if ($editMode === 'future') {
-                        $this->repository->updateFutureRecurringActivities($activity);
+                        $this->repository->updateFutureRecurringActivities($activity, $previousBegin, $previousEnd);
                     }
                 }
 
