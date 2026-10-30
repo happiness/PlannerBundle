@@ -13,7 +13,8 @@
 - **Actual vs Planned Hours**: Directly compares planned allocations against actual recorded timesheet hours.
 - **Lightweight Scheduling**: Plan time blocks for a customer (and optionally a project) with daily hours, date ranges, comments, and color badges.
 - **Drag to Plan**: Drag across empty day cells of a row to create a planning spanning several days. A transparent preview block is shown while dragging and stays visible while the dialog is open.
-- **Move and Resize**: Drag a planned activity to another day or row, or drag its left/right handle to extend or shorten it.
+- **Move and Resize**: Drag a planned activity to another day or row, or drag its left/right handle to extend or shorten it. A user cannot have the same project planned twice on one day: a move, resize, new planning or API call that would overlap is refused.
+- **Split and Join**: Hover the border between two days of a planning and click the scissors to split it into two. Two side-by-side parts that are the same planning show a link icon on the gap between them; a click joins them again.
 - **Shortcuts**: Frequently used customers and projects are offered as shortcuts when creating a planning.
 - **Multiple Weeks**: Show 1, 2, 4 (default) or 8 weeks at once; capacity is summarized per week.
 - **REST API**: Create, read, update and delete planned activities via `/api/planner/activities` (see the Kimai API docs under the "Planner" tag).

@@ -109,7 +109,7 @@
             <section class="content">
                 <div class="card mt-2 mb-3">
                     <div class="card-body p-0">
-                        <table class="table table-hover dataTable" data-planner-move-token="{{ csrf_token('planner_move') }}" data-planner-move-error="{{ 'planner.move_error'|trans }}"{% if canCreate %} data-planner-create-url="{{ path('planner_activity_create') }}"{% endif %}>
+                        <table class="table table-hover dataTable" data-planner-move-token="{{ csrf_token('planner_move') }}" data-planner-move-error="{{ 'planner.move_error'|trans }}" data-planner-split-title="{{ 'planner.split_here'|trans }}" data-planner-join-title="{{ 'planner.join_here'|trans }}"{% if canCreate %} data-planner-create-url="{{ path('planner_activity_create') }}"{% endif %}>
                             <colgroup>
                                 <col span="2">
                                 {% for day in plannerData.dateHeaders %}
@@ -194,10 +194,15 @@
                                                     {% set segmentEnd = date.modify('+' ~ (segment.span - 1) ~ ' day') %}
                                                     {% for activity in segment.activities %}
                                                         {% set canMove = is_granted('edit', activity) %}
+                                                        {# the next part of a split planning, joined back from the marker on the border between the two #}
+                                                        {% set joinable = canMove and activity.end|date('Y-m-d') == segmentEnd|date('Y-m-d') ? group.getJoinableAfter(activity) : null %}
+                                                        {% if joinable is not null and not is_granted('delete', joinable) %}
+                                                            {% set joinable = null %}
+                                                        {% endif %}
                                                         <a href="{{ path('planner_activity_edit', {'id': activity.id, 'date': date|date('Y-m-d')}) }}"
                                                            class="planner-activity position-relative z-2 d-flex justify-content-between align-items-center px-2 py-1 rounded text-decoration-none modal-ajax-form shadow-sm{% if not loop.first %} mt-1{% endif %}{% if canMove %} planner-movable{% endif %}"
                                                            style="background-color: {{ activity.colorSafe }}; color: {{ activity.colorSafe|font_contrast }};"
-                                                           {% if canMove %}data-planner-move-url="{{ path('planner_activity_move', {'id': activity.id}) }}" data-planner-begin="{{ activity.begin|date('Y-m-d') }}" data-planner-end="{{ activity.end|date('Y-m-d') }}"{% endif %}
+                                                           {% if canMove %}data-planner-move-url="{{ path('planner_activity_move', {'id': activity.id}) }}" data-planner-begin="{{ activity.begin|date('Y-m-d') }}" data-planner-end="{{ activity.end|date('Y-m-d') }}"{% if activity.daysCount > 1 %} data-planner-split-url="{{ path('planner_activity_split', {'id': activity.id}) }}"{% endif %}{% if joinable is not null %} data-planner-join-url="{{ path('planner_activity_join', {'id': activity.id, 'other': joinable.id}) }}" data-planner-join-day="{{ joinable.begin|date('Y-m-d') }}"{% endif %}{% endif %}
                                                            title="{{ activity.name }} ({{ activity.hoursPerDay }}h){% if activity.hasComment %}: {{ activity.comment|u.truncate(1024, '...') }}{% endif %}">
                                                             {% if canMove and activity.begin|date('Y-m-d') == date|date('Y-m-d') %}<span class="planner-handle planner-handle-start" data-planner-handle="start"></span>{% endif %}
                                                             <span class="text-truncate small">{% if activity.hasComment %}{{ icon('comment') }} {% endif %}{{ activity.hoursPerDay }}h</span>
@@ -356,6 +361,36 @@
         }
         body.planner-moving .planner-activity {
             opacity: 0.6;
+        }
+        .planner-split-hint {
+            position: fixed;
+            z-index: 1050;
+            width: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .planner-split-line {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 7px;
+            border-left: 2px dashed var(--tblr-body-color);
+        }
+        .planner-join-hint .planner-split-line {
+            left: 3px;
+        }
+        .planner-split-hint i {
+            position: relative;
+            /* the icon is wider than a join marker: clicks beside the gap go to the bars and their handles */
+            pointer-events: none;
+            padding: 3px;
+            font-size: 0.65rem;
+            border-radius: 50%;
+            color: var(--tblr-body-color);
+            background-color: var(--tblr-bg-surface);
+            box-shadow: 0 0 0 1px var(--tblr-border-color);
         }
         td.planner-week-summary {
             padding: 0 !important;
@@ -921,6 +956,141 @@
                     reset();
                 }
             });
+        })();
+
+        /**
+         * Split a multi-day activity in two, or join two parts of a split planning back into one.
+         * Hovering the border between two days of an activity shows scissors, hovering the gap between two parts
+         * that are the same planning shows a link; a click splits or joins there. Each undoes the other, so there
+         * is no confirmation. The day borders come from the day headers, like moving does.
+         */
+        (function () {
+            const SPLIT_ZONE = 6;
+            // only the gap between the two bars (their cells' padding), so the resize handles next to it stay reachable
+            const JOIN_ZONE = 3;
+            let hint = null;
+
+            function removeHint() {
+                if (hint !== null) {
+                    hint.remove();
+                    hint = null;
+                }
+            }
+
+            function borderOf(day) {
+                const header = document.querySelector('th[data-planner-day="' + day + '"]');
+                return header === null ? null : header.getBoundingClientRect().left;
+            }
+
+            // the marker for the pointer position in a row: a border inside a bar (split) or between two parts (join)
+            function markerAt(row, x, y) {
+                const bars = row.querySelectorAll('.planner-activity[data-planner-split-url], .planner-activity[data-planner-join-url]');
+                for (let i = 0; i < bars.length; i++) {
+                    const bar = bars[i];
+                    const rect = bar.getBoundingClientRect();
+                    if (y < rect.top || y > rect.bottom) {
+                        continue;
+                    }
+                    if (bar.dataset.plannerJoinUrl) {
+                        const border = borderOf(bar.dataset.plannerJoinDay);
+                        if (border !== null && Math.abs(border - x) <= JOIN_ZONE) {
+                            return {type: 'join', bar: bar, day: bar.dataset.plannerJoinDay, x: border, rect: rect};
+                        }
+                    }
+                    if (bar.dataset.plannerSplitUrl && x > rect.left + SPLIT_ZONE && x < rect.right - SPLIT_ZONE) {
+                        const headers = document.querySelectorAll('th[data-planner-day]');
+                        for (let j = 0; j < headers.length; j++) {
+                            const day = headers[j].dataset.plannerDay;
+                            if (day <= bar.dataset.plannerBegin || day > bar.dataset.plannerEnd) {
+                                continue;
+                            }
+                            const border = headers[j].getBoundingClientRect().left;
+                            if (border > rect.left + SPLIT_ZONE && border < rect.right - SPLIT_ZONE && Math.abs(border - x) <= SPLIT_ZONE) {
+                                return {type: 'split', bar: bar, day: day, x: border, rect: rect};
+                            }
+                        }
+                    }
+                }
+                return null;
+            }
+
+            function showHint(marker) {
+                if (hint !== null && hint.plannerMarker.type === marker.type && hint.plannerMarker.bar === marker.bar && hint.plannerMarker.day === marker.day) {
+                    return;
+                }
+                removeHint();
+                const table = marker.bar.closest('table');
+                hint = document.createElement('div');
+                hint.className = 'planner-split-hint planner-' + marker.type + '-hint';
+                hint.title = marker.type === 'join' ? table.dataset.plannerJoinTitle : table.dataset.plannerSplitTitle;
+                hint.plannerMarker = marker;
+                const width = marker.type === 'join' ? 8 : 16;
+                hint.style.left = (marker.x - width / 2) + 'px';
+                hint.style.width = width + 'px';
+                hint.style.top = (marker.rect.top - 3) + 'px';
+                hint.style.height = (marker.rect.height + 6) + 'px';
+                const line = document.createElement('span');
+                line.className = 'planner-split-line';
+                const icon = document.createElement('i');
+                icon.className = marker.type === 'join' ? 'fas fa-link' : 'fas fa-scissors';
+                hint.append(line, icon);
+                document.body.appendChild(hint);
+            }
+
+            function send(marker) {
+                const table = marker.bar.closest('table');
+                const url = marker.type === 'join' ? marker.bar.dataset.plannerJoinUrl : marker.bar.dataset.plannerSplitUrl;
+                const body = new URLSearchParams({_token: table.dataset.plannerMoveToken});
+                if (marker.type === 'split') {
+                    body.set('date', marker.day);
+                }
+                fetch(url, {method: 'POST', body: body, headers: {'X-Requested-With': 'XMLHttpRequest'}})
+                    .then(function (response) {
+                        if (response.ok) {
+                            document.dispatchEvent(new CustomEvent('kimai.plannerActivityUpdate'));
+                        } else if (window.kimai) {
+                            window.kimai.getPlugin('alert').error(table.dataset.plannerMoveError);
+                        } else {
+                            window.alert(table.dataset.plannerMoveError);
+                        }
+                    })
+                    .catch(function () {
+                        window.alert(table.dataset.plannerMoveError);
+                    });
+            }
+
+            document.addEventListener('mousemove', function (e) {
+                // a slight movement while clicking the marker must not remove it
+                if (e.target.closest('.planner-split-hint')) {
+                    return;
+                }
+                if (e.buttons !== 0 || document.body.classList.contains('planner-moving') || document.body.classList.contains('planner-dragging')) {
+                    removeHint();
+                    return;
+                }
+                const row = e.target.closest('tr.planner-row-details');
+                const marker = row ? markerAt(row, e.clientX, e.clientY) : null;
+                if (marker === null) {
+                    removeHint();
+                    return;
+                }
+                showHint(marker);
+            });
+
+            document.addEventListener('click', function (e) {
+                const target = e.target.closest('.planner-split-hint');
+                if (target === null) {
+                    return;
+                }
+                e.preventDefault();
+                const marker = target.plannerMarker;
+                removeHint();
+                send(marker);
+            });
+
+            // the marker is positioned on the viewport
+            window.addEventListener('scroll', removeHint, true);
+            document.addEventListener('kimai.reloadPage', removeHint);
         })();
     </script>
 {% endblock %}

@@ -19,6 +19,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use JMS\Serializer\Annotation as Serializer;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
+use KimaiPlugin\PlannerBundle\Validator\Constraints\NoOverlappingPlanning;
 use Symfony\Component\Validator\Constraints as Assert;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
@@ -30,6 +31,7 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 #[ORM\Index(columns: ['project_id'], name: 'IDX_PLANNED_ACTIVITY_PROJECT')]
 #[ORM\Entity(repositoryClass: PlannedActivityRepository::class)]
 #[ORM\ChangeTrackingPolicy('DEFERRED_EXPLICIT')]
+#[NoOverlappingPlanning]
 #[Serializer\ExclusionPolicy('all')]
 class PlannedActivity
 {
@@ -289,6 +291,36 @@ class PlannedActivity
         $interval = $this->begin->diff($this->end);
 
         return (int) $interval->days + 1;
+    }
+
+    /**
+     * Whether $next starts the day after this one ends and is the same planning in everything but its dates,
+     * so the two can be joined into one again (as after a split).
+     */
+    public function isJoinableWith(PlannedActivity $next): bool
+    {
+        if ($next === $this || $this->end === null || $next->getBegin() === null) {
+            return false;
+        }
+
+        if ((clone $this->end)->modify('+1 day')->format('Y-m-d') !== $next->getBegin()->format('Y-m-d')) {
+            return false;
+        }
+
+        // weekly instances of a seven-day series also sit side by side; parts of one instance span a week at most
+        if ($this->isRecurring() && $this->begin !== null && $next->getEnd() !== null
+            && $this->begin->diff($next->getEnd())->days >= 7) {
+            return false;
+        }
+
+        return $this->user === $next->getUser()
+            && $this->customer === $next->getCustomer()
+            && $this->project === $next->getProject()
+            && $this->title === $next->getTitle()
+            && $this->hoursPerDay === $next->getHoursPerDay()
+            && $this->getColor() === $next->getColor()
+            && ($this->comment ?? '') === ($next->getComment() ?? '')
+            && $this->recurrenceGroup === $next->getRecurrenceGroup();
     }
 
     public function getTotalHours(): float

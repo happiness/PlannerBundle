@@ -74,6 +74,14 @@
                 <source>planner.add_activity</source>
                 <target>Planera aktivitet för denna dag</target>
             </trans-unit>
+            <trans-unit id="planner.split_here">
+                <source>planner.split_here</source>
+                <target>Dela här</target>
+            </trans-unit>
+            <trans-unit id="planner.join_here">
+                <source>planner.join_here</source>
+                <target>Slå ihop</target>
+            </trans-unit>
             <trans-unit id="planner.recurrent_weeks">
                 <source>planner.recurrent_weeks</source>
                 <target>Återkommande veckor</target>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
+    <file source-language="en" target-language="en" datatype="plaintext" original="none">
+        <body>
+            <trans-unit id="planner.overlapping">
+                <source>This project is already planned for this user on one of these days.</source>
+                <target>This project is already planned for this user on one of these days.</target>
+            </trans-unit>
+            <trans-unit id="planner.overlapping_series">
+                <source>This project is already planned for this user in one of the following weeks.</source>
+                <target>This project is already planned for this user in one of the following weeks.</target>
+            </trans-unit>
+        </body>
+    </file>
+</xliff>
