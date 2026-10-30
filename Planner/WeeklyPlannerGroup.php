@@ -114,6 +114,20 @@ final class WeeklyPlannerGroup
     }
 
     /**
+     * The activity of this group that can be joined to the end of $activity, if one is shown.
+     */
+    public function getJoinableAfter(PlannedActivity $activity): ?PlannedActivity
+    {
+        foreach ($this->activities as $next) {
+            if ($activity->isJoinableWith($next)) {
+                return $next;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Splits the days into render segments: a single activity covering several consecutive days becomes one
      * segment with a span, empty days and days with more than one activity are one segment each.
      *
