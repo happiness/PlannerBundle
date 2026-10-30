@@ -368,7 +368,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $controller->setContainer($container);
 
         $request = new Request();
-        $response = $controller->editActivity($activity, $request);
+        $response = $controller->editActivity($activity, $request, $this->createStub(WorkingDayRanges::class));
 
         $this->assertInstanceOf(Response::class, $response);
         $this->assertSame('<html>Edit Form View</html>', $response->getContent());
@@ -942,7 +942,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $controller->setContainer($container);
 
         $request = new Request(['date' => '2026-09-15']);
-        $response = $controller->editActivity($activity, $request);
+        $response = $controller->editActivity($activity, $request, $this->createStub(WorkingDayRanges::class));
 
         $this->assertInstanceOf(Response::class, $response);
         $this->assertSame('<html>Edit Form View With Date</html>', $response->getContent());
@@ -1105,7 +1105,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $activity->setRecurrenceGroup('group-rec-1');
 
         $repo = $this->createMock(PlannedActivityRepository::class);
-        $repo->expects($this->once())->method('savePlannedActivity')->with($activity);
+        $repo->expects($this->once())->method('savePlannedActivityInRanges')->with($activity, []);
         $repo->expects($this->never())->method('updateFutureRecurringActivities');
 
         $plannerService = $this->createMock(WeeklyPlannerService::class);
@@ -1162,7 +1162,7 @@ class WeeklyPlannerControllerTest extends TestCase
 
         $controller->setContainer($container);
 
-        $response = $controller->editActivity($activity, $request);
+        $response = $controller->editActivity($activity, $request, $this->createStub(WorkingDayRanges::class));
 
         $this->assertInstanceOf(Response::class, $response);
         $this->assertTrue($response->isRedirect('/planner/week/2026-09-14'));
@@ -1239,7 +1239,7 @@ class WeeklyPlannerControllerTest extends TestCase
 
         $controller->setContainer($container);
 
-        $response = $controller->editActivity($activity, $request);
+        $response = $controller->editActivity($activity, $request, $this->createStub(WorkingDayRanges::class));
 
         $this->assertInstanceOf(Response::class, $response);
         $this->assertTrue($response->isRedirect('/planner/week/2026-09-14'));
@@ -1574,7 +1574,8 @@ class WeeklyPlannerControllerTest extends TestCase
         ?UserRepository $userRepo = null,
         bool $validToken = true,
         ?callable $isGranted = null,
-        int $violations = 0
+        int $violations = 0,
+        ?WorkingDayRanges $workingDays = null
     ): JsonResponse {
         $repo ??= $this->createMock(PlannedActivityRepository::class);
         $userRepo ??= $this->createMock(UserRepository::class);
@@ -1602,7 +1603,7 @@ class WeeklyPlannerControllerTest extends TestCase
         ]);
         $controller->setContainer($container);
 
-        return $controller->moveActivity($activity, new Request([], $post), $validator);
+        return $controller->moveActivity($activity, new Request([], $post), $validator, $workingDays ?? $this->createStub(WorkingDayRanges::class));
     }
 
     private function createMovableActivity(): PlannedActivity
@@ -1624,7 +1625,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $activity = $this->createMovableActivity();
 
         $repo = $this->createMock(PlannedActivityRepository::class);
-        $repo->expects($this->once())->method('savePlannedActivity')->with($activity);
+        $repo->expects($this->once())->method('savePlannedActivityInRanges')->with($activity, []);
 
         $response = $this->runMoveActivity($activity, ['begin' => '2026-10-21', 'end' => '2026-10-23'], $repo);
 
@@ -1649,7 +1650,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $repo = $this->createMock(PlannedActivityRepository::class);
         $repo->method('findCustomer')->with(3)->willReturn($customer);
         $repo->method('findProject')->with(7)->willReturn($project);
-        $repo->expects($this->once())->method('savePlannedActivity');
+        $repo->expects($this->once())->method('savePlannedActivityInRanges');
 
         $this->runMoveActivity($activity, ['begin' => '2026-10-19', 'end' => '2026-10-20', 'user' => '2', 'customer' => '3', 'project' => '7'], $repo, $userRepo);
 
@@ -1673,10 +1674,26 @@ class WeeklyPlannerControllerTest extends TestCase
         $this->assertNull($activity->getProject());
     }
 
+    public function testStretchingOverTheWeekendSavesTheWorkingDays(): void
+    {
+        $activity = $this->createMovableActivity();
+        // Thursday stretched to the next Monday
+        $ranges = [[new \DateTime('2026-11-05'), new \DateTime('2026-11-06')], [new \DateTime('2026-11-09'), new \DateTime('2026-11-09')]];
+        $workingDays = $this->createMock(WorkingDayRanges::class);
+        $workingDays->expects($this->once())->method('forActivity')->with($activity)->willReturn($ranges);
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->once())->method('savePlannedActivityInRanges')->with($activity, $ranges);
+
+        $response = $this->runMoveActivity($activity, ['begin' => '2026-11-05', 'end' => '2026-11-09'], $repo, null, true, null, 0, $workingDays);
+
+        $this->assertSame(200, $response->getStatusCode());
+    }
+
     public function testMoveActivityRejectsInvalidToken(): void
     {
         $repo = $this->createMock(PlannedActivityRepository::class);
-        $repo->expects($this->never())->method('savePlannedActivity');
+        $repo->expects($this->never())->method('savePlannedActivityInRanges');
 
         $response = $this->runMoveActivity($this->createMovableActivity(), ['begin' => '2026-10-21', 'end' => '2026-10-22'], $repo, null, false);
 
@@ -1696,7 +1713,7 @@ class WeeklyPlannerControllerTest extends TestCase
     public function testMoveActivityDeniedWithoutEditPermission(): void
     {
         $repo = $this->createMock(PlannedActivityRepository::class);
-        $repo->expects($this->never())->method('savePlannedActivity');
+        $repo->expects($this->never())->method('savePlannedActivityInRanges');
 
         $this->expectException(AccessDeniedException::class);
 
@@ -1712,7 +1729,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $userRepo = $this->createMock(UserRepository::class);
         $userRepo->method('find')->willReturn($newUser);
         $repo = $this->createMock(PlannedActivityRepository::class);
-        $repo->expects($this->never())->method('savePlannedActivity');
+        $repo->expects($this->never())->method('savePlannedActivityInRanges');
 
         $this->expectException(AccessDeniedException::class);
 
@@ -1730,7 +1747,7 @@ class WeeklyPlannerControllerTest extends TestCase
     {
         $repo = $this->createMock(PlannedActivityRepository::class);
         $repo->method('findCustomer')->willReturn(new Customer('Secret'));
-        $repo->expects($this->never())->method('savePlannedActivity');
+        $repo->expects($this->never())->method('savePlannedActivityInRanges');
 
         $this->expectException(AccessDeniedException::class);
 
@@ -1747,7 +1764,7 @@ class WeeklyPlannerControllerTest extends TestCase
     public function testMoveActivityReturnsValidationMessageAndDoesNotSave(): void
     {
         $repo = $this->createMock(PlannedActivityRepository::class);
-        $repo->expects($this->never())->method('savePlannedActivity');
+        $repo->expects($this->never())->method('savePlannedActivityInRanges');
 
         $response = $this->runMoveActivity($this->createMovableActivity(), ['begin' => '2026-10-21', 'end' => '2026-10-22'], $repo, null, true, null, 1);
 
