@@ -467,6 +467,12 @@
         td.planner-day-muted {
             color: #94a3b8;
         }
+        /* the dark text above disappears on the tinted cells of the dark theme */
+        [data-bs-theme="dark"] td.planner-day-success,
+        [data-bs-theme="dark"] td.planner-day-warning,
+        [data-bs-theme="dark"] td.planner-day-danger {
+            color: #ffffff;
+        }
         .planner-user-cell {
             cursor: pointer;
             user-select: none;
