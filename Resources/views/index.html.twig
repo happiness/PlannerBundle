@@ -159,7 +159,16 @@
                                             </div>
                                         </td>
                                         {% for week in row.weeks %}
-                                            {% set barColorClass = week.isOverAllocated ? 'planner-bar-danger' : (week.totalPlannedHours > 0 ? 'planner-bar-success' : 'planner-bar-muted') %}
+                                            {# amber with space left, green when full, red when overbooked, like the day cells below #}
+                                            {% if week.isOverAllocated %}
+                                                {% set barColorClass = 'planner-bar-danger' %}
+                                            {% elseif week.totalPlannedHours > 0 and week.isBalanced %}
+                                                {% set barColorClass = 'planner-bar-success' %}
+                                            {% elseif week.totalPlannedHours > 0 %}
+                                                {% set barColorClass = 'planner-bar-warning' %}
+                                            {% else %}
+                                                {% set barColorClass = 'planner-bar-muted' %}
+                                            {% endif %}
                                             <td colspan="{{ week.days|length }}" class="planner-week-summary align-middle p-0{% if compact %} border-start{% endif %}">
                                                 <div class="planner-summary-bar {{ barColorClass }}">
                                                     <div class="planner-summary-badge">
@@ -169,6 +178,37 @@
                                                         </div>
                                                     </div>
                                                 </div>
+                                            </td>
+                                        {% endfor %}
+                                    </tr>
+                                    {# planned against contract hours per day, aligned with the day columns and always visible #}
+                                    <tr class="planner-row-days">
+                                        <td colspan="2" class="p-0 border-top-0"></td>
+                                        {% for day in row.days %}
+                                            {# the cell fills up to the planned share of the day: amber with space left, green when full, red when overbooked #}
+                                            {% if day.isOverAllocated %}
+                                                {% set dayClass = 'planner-day-danger' %}
+                                                {% set dayFill = 100 %}
+                                            {% elseif day.plannedHours > 0 and day.isBalanced %}
+                                                {% set dayClass = 'planner-day-success' %}
+                                                {% set dayFill = 100 %}
+                                            {% elseif day.plannedHours > 0 %}
+                                                {% set dayClass = 'planner-day-warning' %}
+                                                {% set dayFill = day.plannedPercentage %}
+                                            {% else %}
+                                                {% set dayClass = 'planner-day-muted' %}
+                                                {% set dayFill = 0 %}
+                                            {% endif %}
+                                            {% set dayHours = day.plannedHours ~ '/' ~ day.expectedHours ~ ' hrs (' ~ day.actualHours ~ ' hrs)' %}
+                                            <td class="planner-day-summary text-center border-top-0 {{ dayClass }}{% if loop.index0 % 7 == 0 %} border-start{% endif %}{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %}" style="--planner-day-fill: {{ dayFill }}%;" title="{{ dayHours }}">
+                                                {% if day.isWorkingDay %}
+                                                    {% if not compact %}<div class="planner-day-hours">{{ day.plannedHours }}/{{ day.expectedHours }}h</div>{% endif %}
+                                                    <div class="planner-day-pct">{{ day.plannedPercentage }}%</div>
+                                                {% elseif day.plannedHours > 0 %}
+                                                    <div class="planner-day-pct">{{ day.plannedHours }}h</div>
+                                                {% else %}
+                                                    <div class="planner-day-pct">&ndash;</div>
+                                                {% endif %}
                                             </td>
                                         {% endfor %}
                                     </tr>
@@ -371,6 +411,9 @@
         .planner-bar-success {
             background-color: #5fa675;
         }
+        .planner-bar-warning {
+            background-color: #e0a43a;
+        }
         .planner-bar-danger {
             background-color: #db5c5c;
         }
@@ -397,6 +440,38 @@
             line-height: 1.2;
             white-space: nowrap;
             color: rgba(255, 255, 255, 0.95);
+        }
+        td.planner-day-summary {
+            --planner-day-color: transparent;
+            padding: 2px 0 !important;
+            font-size: 0.75rem;
+            line-height: 1.2;
+            white-space: nowrap;
+            background-image: linear-gradient(to top, var(--planner-day-color) var(--planner-day-fill, 0%), transparent var(--planner-day-fill, 0%));
+        }
+        .planner-day-pct {
+            font-weight: 600;
+        }
+        td.planner-day-success {
+            --planner-day-color: rgba(95, 166, 117, 0.35);
+            color: #2f6b42;
+        }
+        td.planner-day-warning {
+            --planner-day-color: rgba(240, 173, 78, 0.4);
+            color: #8a5a12;
+        }
+        td.planner-day-danger {
+            --planner-day-color: rgba(219, 92, 92, 0.4);
+            color: #a32626;
+        }
+        td.planner-day-muted {
+            color: #94a3b8;
+        }
+        /* the dark text above disappears on the tinted cells of the dark theme */
+        [data-bs-theme="dark"] td.planner-day-success,
+        [data-bs-theme="dark"] td.planner-day-warning,
+        [data-bs-theme="dark"] td.planner-day-danger {
+            color: #ffffff;
         }
         .planner-user-cell {
             cursor: pointer;
