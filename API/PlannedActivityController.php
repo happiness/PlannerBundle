@@ -176,8 +176,10 @@ final class PlannedActivityController extends BaseApiController
         $currentUser = $this->getUser();
 
         $data = $request->request->all();
-        $editMode = $data['edit_mode'] ?? 'single';
-        unset($data['edit_mode']);
+        // Kimai's API turns snake_case JSON keys into camelCase before they get here (edit_mode arrives as editMode),
+        // and the form rejects either as an extra field
+        $editMode = $data['editMode'] ?? $data['edit_mode'] ?? 'single';
+        unset($data['editMode'], $data['edit_mode']);
         if (!\in_array($editMode, ['single', 'future'], true)) {
             throw new BadRequestHttpException('Invalid edit_mode, allowed values: single, future');
         }

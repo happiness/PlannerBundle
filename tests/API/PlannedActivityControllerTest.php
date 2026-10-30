@@ -20,6 +20,8 @@ use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\Form\FormFactoryInterface;
+use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\InputBag;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -126,5 +128,49 @@ class PlannedActivityControllerTest extends TestCase
         $this->expectException(BadRequestHttpException::class);
 
         $this->createController($repository)->patchAction($request, new PlannedActivity());
+    }
+
+    public function testPatchReadsTheEditModeAsTheApiDeliversIt(): void
+    {
+        $repository = $this->createMock(PlannedActivityRepository::class);
+        $repository->expects($this->never())->method('savePlannedActivity');
+
+        $request = new Request();
+        $request->request = new InputBag(['editMode' => 'everything']);
+
+        $this->expectException(BadRequestHttpException::class);
+
+        $this->createController($repository)->patchAction($request, new PlannedActivity());
+    }
+
+    public function testPatchDoesNotSubmitTheEditModeToTheForm(): void
+    {
+        $form = $this->createMock(FormInterface::class);
+        $form->expects($this->exactly(2))->method('submit')->with(['comment' => 'x'], false);
+        $form->method('isValid')->willReturn(false);
+        $formFactory = $this->createStub(FormFactoryInterface::class);
+        $formFactory->method('create')->willReturn($form);
+
+        $viewHandler = $this->createStub(ViewHandlerInterface::class);
+        $viewHandler->method('handle')->willReturn(new Response());
+
+        $controller = $this->createController($this->createStub(PlannedActivityRepository::class), $viewHandler);
+        $user = new User();
+        $tokenStorage = $this->createStub(TokenStorageInterface::class);
+        $tokenStorage->method('getToken')->willReturn(new UsernamePasswordToken($user, 'main', $user->getRoles()));
+        $container = $this->createStub(ContainerInterface::class);
+        $container->method('has')->willReturn(true);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $this->createStub(AuthorizationCheckerInterface::class)],
+            ['security.token_storage', $tokenStorage],
+            ['form.factory', $formFactory],
+        ]);
+        $controller->setContainer($container);
+
+        foreach (['editMode', 'edit_mode'] as $key) {
+            $request = new Request();
+            $request->request = new InputBag([$key => 'single', 'comment' => 'x']);
+            $controller->patchAction($request, new PlannedActivity());
+        }
     }
 }
