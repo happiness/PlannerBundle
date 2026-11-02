@@ -166,7 +166,7 @@ final class PlannedActivityController extends BaseApiController
      * Update a planned activity
      */
     #[IsGranted('edit', 'activity')]
-    #[OA\Patch(description: 'Update an existing planned activity, you can pass all or just a subset of attributes. Pass "edit_mode": "future" to apply the change to all following activities of a recurring series (default: "single").', responses: [new OA\Response(response: 200, description: 'Returns the updated planned activity', content: new OA\JsonContent(ref: new Model(type: PlannedActivity::class, groups: self::GROUPS_ENTITY)))])]
+    #[OA\Patch(description: 'Update an existing planned activity, you can pass all or just a subset of attributes. Pass "edit_mode": "future" to apply the change to all following activities of a recurring series (default: "single"); a changed begin or end moves their dates by the same number of days.', responses: [new OA\Response(response: 200, description: 'Returns the updated planned activity', content: new OA\JsonContent(ref: new Model(type: PlannedActivity::class, groups: self::GROUPS_ENTITY)))])]
     #[OA\RequestBody(required: true, content: new OA\JsonContent(ref: new Model(type: PlannedActivityApiForm::class)))]
     #[OA\Parameter(name: 'id', in: 'path', description: 'Planned activity ID to update', required: true)]
     #[Route(methods: ['PATCH'], path: '/{id}', name: 'patch_planned_activity', requirements: ['id' => '\d+'])]
@@ -183,6 +183,8 @@ final class PlannedActivityController extends BaseApiController
         }
 
         $previousUser = $activity->getUser();
+        $previousBegin = $activity->getBegin() !== null ? clone $activity->getBegin() : null;
+        $previousEnd = $activity->getEnd() !== null ? clone $activity->getEnd() : null;
 
         $form = $this->createForm(PlannedActivityApiForm::class, $activity, [
             'user' => $currentUser,
@@ -203,7 +205,7 @@ final class PlannedActivityController extends BaseApiController
         $this->repository->savePlannedActivity($activity);
 
         if ($editMode === 'future' && $activity->isRecurring()) {
-            $this->repository->updateFutureRecurringActivities($activity);
+            $this->repository->updateFutureRecurringActivities($activity, $previousBegin, $previousEnd);
         }
 
         $view = new View($activity, Response::HTTP_OK);

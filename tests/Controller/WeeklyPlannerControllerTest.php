@@ -1107,7 +1107,13 @@ class WeeklyPlannerControllerTest extends TestCase
 
         $repo = $this->createMock(PlannedActivityRepository::class);
         $repo->expects($this->once())->method('savePlannedActivity')->with($activity);
-        $repo->expects($this->once())->method('updateFutureRecurringActivities')->with($activity);
+        // the dates the activity had before the form changed it, to move the rest of the series alike
+        $previousEnd = $activity->getEnd()?->format('Y-m-d');
+        $repo->expects($this->once())->method('updateFutureRecurringActivities')->with(
+            $activity,
+            $this->callback(fn ($begin) => $begin instanceof \DateTimeInterface && $begin->format('Y-m-d') === '2026-09-14'),
+            $this->callback(fn ($end) => $end?->format('Y-m-d') === $previousEnd)
+        );
 
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
