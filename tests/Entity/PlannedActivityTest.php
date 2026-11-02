@@ -27,6 +27,10 @@ class PlannedActivityTest extends TestCase
 
         $this->assertNull($activity->getId());
 
+        $this->assertFalse($activity->isTentative());
+        $this->assertSame($activity, $activity->setTentative(true));
+        $this->assertTrue($activity->isTentative());
+
         $user = new User();
         $this->assertSame($activity, $activity->setUser($user));
         $this->assertSame($user, $activity->getUser());
@@ -145,5 +149,132 @@ class PlannedActivityTest extends TestCase
         (new PlannedActivity())->setCustomer($customer)->setProject($project)->validateProjectBelongsToCustomer($context);
         (new PlannedActivity())->setCustomer($customer)->validateProjectBelongsToCustomer($context);
         (new PlannedActivity())->validateProjectBelongsToCustomer($context);
+    }
+
+    public function testTimeOffDropsCustomerAndProject(): void
+    {
+        $customer = new Customer('ACME');
+        $project = new Project();
+        $project->setCustomer($customer);
+
+        $activity = (new PlannedActivity())->setCustomer($customer)->setProject($project)->setTitle('Legacy');
+        $this->assertFalse($activity->isTimeOff());
+
+        $activity->setTimeOff(true);
+
+        $this->assertTrue($activity->isTimeOff());
+        $this->assertNull($activity->getCustomer());
+        $this->assertNull($activity->getProject());
+        $this->assertNull($activity->getTitle());
+        $this->assertNull($activity->getName());
+    }
+
+    public function testOnlyTimeOffWithoutHoursIsAWholeDay(): void
+    {
+        $activity = (new PlannedActivity())->setTimeOff(true)->setHoursPerDay(null);
+        $this->assertTrue($activity->isWholeDay());
+        $this->assertSame(0.0, $activity->getTotalHours());
+
+        $activity->setHoursPerDay(4.0);
+        $this->assertFalse($activity->isWholeDay());
+
+        $this->assertFalse((new PlannedActivity())->setHoursPerDay(null)->isWholeDay());
+    }
+
+    public function testWorkNeedsCustomerAndHours(): void
+    {
+        $paths = [];
+        $builder = $this->createMock(ConstraintViolationBuilderInterface::class);
+        $builder->method('atPath')->willReturnCallback(function (string $path) use ($builder, &$paths) {
+            $paths[] = $path;
+
+            return $builder;
+        });
+        $builder->method('setTranslationDomain')->willReturnSelf();
+
+        $context = $this->createMock(ExecutionContextInterface::class);
+        $context->method('buildViolation')->willReturn($builder);
+
+        (new PlannedActivity())->setHoursPerDay(null)->validateRequiredFields($context);
+
+        $this->assertSame(['customer', 'hoursPerDay'], $paths);
+    }
+
+    public function testTimeOffNeedsNeitherCustomerNorHours(): void
+    {
+        $context = $this->createMock(ExecutionContextInterface::class);
+        $context->expects($this->never())->method('buildViolation');
+
+        (new PlannedActivity())->setTimeOff(true)->setHoursPerDay(null)->validateRequiredFields($context);
+        (new PlannedActivity())->setCustomer(new Customer('ACME'))->validateRequiredFields($context);
+    }
+
+    public function testOnlyTheNextDayOfTheSamePlanningIsJoinable(): void
+    {
+        $user = new User();
+        $customer = new Customer('ACME');
+        $make = static function (string $begin, string $end) use ($user, $customer): PlannedActivity {
+            $activity = (new PlannedActivity())
+                ->setUser($user)
+                ->setCustomer($customer)
+                ->setHoursPerDay(4.0)
+                ->setComment(null)
+                ->setRecurrenceGroup('series')
+                ->setBegin(new \DateTime($begin))
+                ->setEnd(new \DateTime($end));
+            $activity->setColor('#ff0000');
+
+            return $activity;
+        };
+
+        $first = $make('2026-11-02', '2026-11-03');
+        $this->assertTrue($first->isJoinableWith($make('2026-11-04', '2026-11-06')));
+        $this->assertTrue($first->isJoinableWith($make('2026-11-04', '2026-11-04')->setComment('')));
+
+        $this->assertFalse($first->isJoinableWith($first));
+        $this->assertFalse($first->isJoinableWith($make('2026-11-05', '2026-11-06')), 'a gap');
+        $this->assertFalse($first->isJoinableWith($make('2026-11-03', '2026-11-04')), 'overlapping');
+        $this->assertFalse($make('2026-11-04', '2026-11-06')->isJoinableWith($first), 'wrong order');
+        $this->assertFalse($first->isJoinableWith($make('2026-11-04', '2026-11-04')->setHoursPerDay(2.0)));
+        $this->assertFalse($first->isJoinableWith($make('2026-11-04', '2026-11-04')->setComment('other')));
+        $this->assertFalse($first->isJoinableWith($make('2026-11-04', '2026-11-04')->setRecurrenceGroup(null)));
+        $this->assertFalse($first->isJoinableWith($make('2026-11-04', '2026-11-04')->setUser(new User())));
+        $this->assertFalse($first->isJoinableWith($make('2026-11-04', '2026-11-04')->setCustomer(new Customer('Other'))));
+        $otherColor = $make('2026-11-04', '2026-11-04');
+        $otherColor->setColor('#00ff00');
+        $this->assertFalse($first->isJoinableWith($otherColor));
+        $this->assertFalse($first->isJoinableWith($make('2026-11-04', '2026-11-04')->setTentative(true)), 'tentative and confirmed');
+    }
+
+    public function testTimeOffIsNeverTentative(): void
+    {
+        $activity = (new PlannedActivity())->setTentative(true)->setTimeOff(true);
+        $this->assertFalse($activity->isTentative());
+
+        // also when the flag is set after switching to time off, as a form may do
+        $activity->setTentative(true);
+        $this->assertFalse($activity->isTentative());
+
+        $activity->setTimeOff(false);
+        $this->assertFalse($activity->isTentative(), 'switching to time off cleared the flag');
+    }
+
+    public function testWeeksOfASevenDaySeriesAreNotJoinable(): void
+    {
+        $user = new User();
+        $customer = new Customer('ACME');
+        $make = static fn (string $begin, string $end): PlannedActivity => (new PlannedActivity())
+            ->setUser($user)
+            ->setCustomer($customer)
+            ->setRecurrenceGroup('weekly')
+            ->setBegin(new \DateTime($begin))
+            ->setEnd(new \DateTime($end));
+
+        // two instances of a Monday to Sunday series
+        $this->assertFalse($make('2026-11-02', '2026-11-08')->isJoinableWith($make('2026-11-09', '2026-11-15')));
+        // the two parts of one split instance
+        $this->assertTrue($make('2026-11-02', '2026-11-04')->isJoinableWith($make('2026-11-05', '2026-11-08')));
+        // without a series, any length joins
+        $this->assertTrue($make('2026-11-02', '2026-11-08')->setRecurrenceGroup(null)->isJoinableWith($make('2026-11-09', '2026-11-15')->setRecurrenceGroup(null)));
     }
 }

@@ -70,9 +70,41 @@
                 <source>planner.move_error</source>
                 <target>The planned activity could not be moved.</target>
             </trans-unit>
+            <trans-unit id="planner.day_off_question">
+                <source>planner.day_off_question</source>
+                <target>%name% doesn't usually work on this day. Plan work anyway?</target>
+            </trans-unit>
+            <trans-unit id="planner.holiday_question">
+                <source>planner.holiday_question</source>
+                <target>%holiday% is a public holiday for %name%. Plan work anyway?</target>
+            </trans-unit>
+            <trans-unit id="planner.days_off_question">
+                <source>planner.days_off_question</source>
+                <target>%name% doesn't usually work on these days. Plan work anyway?</target>
+            </trans-unit>
             <trans-unit id="planner.add_activity">
                 <source>planner.add_activity</source>
                 <target>Plan activity for this day</target>
+            </trans-unit>
+            <trans-unit id="planner.add_project">
+                <source>planner.add_project</source>
+                <target>Add project</target>
+            </trans-unit>
+            <trans-unit id="planner.add_another_project">
+                <source>planner.add_another_project</source>
+                <target>Add another project</target>
+            </trans-unit>
+            <trans-unit id="planner.split_here">
+                <source>planner.split_here</source>
+                <target>Split here</target>
+            </trans-unit>
+            <trans-unit id="planner.join_here">
+                <source>planner.join_here</source>
+                <target>Join</target>
+            </trans-unit>
+            <trans-unit id="planner.skip_days_off_help">
+                <source>planner.skip_days_off_help</source>
+                <target>Days the user does not work are skipped.</target>
             </trans-unit>
             <trans-unit id="planner.recurrent_weeks">
                 <source>planner.recurrent_weeks</source>
@@ -166,9 +198,201 @@
                 <source>planner.toggle_activities</source>
                 <target>Expand/collapse activities</target>
             </trans-unit>
+            <trans-unit id="planner.time_off">
+                <source>planner.time_off</source>
+                <target>Time off</target>
+            </trans-unit>
+            <trans-unit id="planner.time_off_help">
+                <source>planner.time_off_help</source>
+                <target>Not available for planning. Leave the hours empty for the whole day.</target>
+            </trans-unit>
+            <trans-unit id="planner.whole_day">
+                <source>planner.whole_day</source>
+                <target>Whole day</target>
+            </trans-unit>
             <trans-unit id="planner.suggestions">
                 <source>planner.suggestions</source>
                 <target>Frequently used</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.calendar">
+                <source>planner.holidays.calendar</source>
+                <target>Public holiday calendar</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.calendar_help">
+                <source>planner.holidays.calendar_help</source>
+                <target>Everyone follows this calendar unless their own preferences pick another. Public holidays count as days off in the planner.</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.observances">
+                <source>planner.holidays.observances</source>
+                <target>Also days off</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.observances_help">
+                <source>planner.holidays.observances_help</source>
+                <target>Days that are not public holidays but that your organisation has off, such as Christmas Eve. A ticked day applies to every calendar that has it.</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.none">
+                <source>planner.holidays.none</source>
+                <target>No public holidays</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.organisation_default">
+                <source>planner.holidays.organisation_default</source>
+                <target>Organisation default</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.preference_help">
+                <source>planner.holidays.preference_help</source>
+                <target>The public holidays this user has off in the planner, if they differ from the organisation's.</target>
+            </trans-unit>
+            <trans-unit id="planner_holiday_calendar">
+                <source>planner_holiday_calendar</source>
+                <target>Public holidays</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.button">
+                <source>planner.calendar.button</source>
+                <target>Calendar feed</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.title">
+                <source>planner.calendar.title</source>
+                <target>Calendar feed</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.name">
+                <source>planner.calendar.name</source>
+                <target>Planner: %name%</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.intro">
+                <source>planner.calendar.intro</source>
+                <target>Subscribe to your planned work in Google Calendar, Outlook or Apple Calendar, so it shows next to your meetings. Your calendar app refreshes it by itself, usually within a few hours.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.copy">
+                <source>planner.calendar.copy</source>
+                <target>Copy</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.copied">
+                <source>planner.calendar.copied</source>
+                <target>Copied</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.secret">
+                <source>planner.calendar.secret</source>
+                <target>Anyone with this address can see your planning. If you shared it by mistake, renew it: the old address stops working.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto">
+                <source>planner.calendar.howto</source>
+                <target>Adding it to your calendar</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto_google">
+                <source>planner.calendar.howto_google</source>
+                <target>Google Calendar: next to &quot;Other calendars&quot;, click + and choose &quot;From URL&quot;.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto_outlook">
+                <source>planner.calendar.howto_outlook</source>
+                <target>Outlook: choose &quot;Add calendar&quot;, then &quot;Subscribe from web&quot;.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto_apple">
+                <source>planner.calendar.howto_apple</source>
+                <target>Apple Calendar: choose File, then &quot;New Calendar Subscription&quot;.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.create">
+                <source>planner.calendar.create</source>
+                <target>Create calendar address</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.renew">
+                <source>planner.calendar.renew</source>
+                <target>Renew address</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.renew_confirm">
+                <source>planner.calendar.renew_confirm</source>
+                <target>The current address stops working, and calendars using it need the new one. Renew it?</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.remove">
+                <source>planner.calendar.remove</source>
+                <target>Switch off</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.remove_confirm">
+                <source>planner.calendar.remove_confirm</source>
+                <target>The current address stops working. Switch off the calendar feed?</target>
+            </trans-unit>
+            <trans-unit id="planner.tentative">
+                <source>planner.tentative</source>
+                <target>Tentative</target>
+            </trans-unit>
+            <trans-unit id="planner.tentative_help">
+                <source>planner.tentative_help</source>
+                <target>Not confirmed yet, such as a deal that isn't signed. Shown faded and counted apart from the confirmed capacity.</target>
+            </trans-unit>
+            <trans-unit id="planner.tentative_hours">
+                <source>planner.tentative_hours</source>
+                <target>+ %hours% hrs tentative</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_filter">
+                <source>planner.planning_filter</source>
+                <target>Planning</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_all">
+                <source>planner.planning_all</source>
+                <target>All</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_confirmed">
+                <source>planner.planning_confirmed</source>
+                <target>Confirmed only</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_tentative">
+                <source>planner.planning_tentative</source>
+                <target>Tentative only</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative">
+                <source>planner.confirm_tentative</source>
+                <target>Confirm all for this project</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_submit">
+                <source>planner.confirm_tentative_submit</source>
+                <target>Confirm</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_question">
+                <source>planner.confirm_tentative_question</source>
+                <target>Confirm all tentative planning for %project%?</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_count">
+                <source>planner.confirm_tentative_count</source>
+                <target>Planned activities: %count%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_users">
+                <source>planner.confirm_tentative_users</source>
+                <target>Number of people: %count%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_period">
+                <source>planner.confirm_tentative_period</source>
+                <target>Period: %begin% to %end%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_scope">
+                <source>planner.confirm_tentative_scope</source>
+                <target>Only planning that ends today or later is confirmed, past planning stays as it was.</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_skipped">
+                <source>planner.confirm_tentative_skipped</source>
+                <target>Tentative planned activities of people you can't edit stay tentative: %count%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_none">
+                <source>planner.confirm_tentative_none</source>
+                <target>%project% has no tentative planning from today onwards that you can confirm.</target>
+            </trans-unit>
+            <trans-unit id="planner.order_name">
+                <source>planner.order_name</source>
+                <target>Name</target>
+            </trans-unit>
+            <trans-unit id="planner.order_free_hours">
+                <source>planner.order_free_hours</source>
+                <target>Most free hours</target>
+            </trans-unit>
+            <trans-unit id="planner.free_hours">
+                <source>planner.free_hours</source>
+                <target>%hours%h free</target>
+            </trans-unit>
+            <trans-unit id="planner.over_hours">
+                <source>planner.over_hours</source>
+                <target>%hours%h over</target>
+            </trans-unit>
+            <trans-unit id="planner.tentative_hours_short">
+                <source>planner.tentative_hours_short</source>
+                <target>%hours%h tentative</target>
             </trans-unit>
         </body>
     </file>

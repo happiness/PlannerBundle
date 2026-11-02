@@ -22,11 +22,15 @@ use KimaiPlugin\PlannerBundle\Form\PlannedActivityEditForm;
 use KimaiPlugin\PlannerBundle\Form\Toolbar\PlannerToolbarForm;
 use KimaiPlugin\PlannerBundle\Planner\CommonProjectService;
 use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
+use KimaiPlugin\PlannerBundle\Planner\TentativeConfirmer;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
+use KimaiPlugin\PlannerBundle\Planner\WorkingDayRanges;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
+use KimaiPlugin\PlannerBundle\Validator\Constraints\NoOverlappingPlanning;
 use KimaiPlugin\PlannerBundle\Voter\PlannedActivityVoter;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
+use Symfony\Component\Form\FormError;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -104,7 +108,7 @@ final class WeeklyPlannerController extends AbstractController
     }
 
     #[Route(path: '/activity/create', name: 'planner_activity_create', methods: ['GET', 'POST'])]
-    public function createActivity(Request $request): Response
+    public function createActivity(Request $request, WorkingDayRanges $workingDays): Response
     {
         $currentUser = $this->getUser();
         $targetUserId = $request->query->getInt('user', 0);
@@ -144,7 +148,13 @@ final class WeeklyPlannerController extends AbstractController
             }
         }
 
-        $this->prefillCustomerAndProject($activity, $request);
+        // dragging in the time off row of a user creates time off, for the whole day unless hours are entered
+        if ($request->query->getBoolean('off')) {
+            $activity->setTimeOff(true);
+            $activity->setHoursPerDay(null);
+        } else {
+            $this->prefillCustomerAndProject($activity, $request);
+        }
 
         if (!$this->isGranted(PlannedActivityVoter::CREATE, $activity)) {
             throw $this->createAccessDeniedException();
@@ -161,24 +171,32 @@ final class WeeklyPlannerController extends AbstractController
             'user' => $currentUser,
             'include_user' => $canEditOther,
             'include_recurrence' => true,
+            'skip_days_off' => true,
         ]);
 
         $form->handleRequest($request);
 
+        $weeks = $form->isSubmitted() && $form->has('recurrentWeeks') ? $form->get('recurrentWeeks')->getData() : null;
+        if ($form->isSubmitted() && $form->isValid() && \is_int($weeks) && $this->repository->countRecurringOverlaps($activity, $weeks) > 0) {
+            $form->get('recurrentWeeks')->addError(new FormError($this->translateSeriesOverlap()));
+        }
+
         if ($form->isSubmitted() && $form->isValid()) {
             try {
-                $this->repository->savePlannedActivity($activity);
+                // the week the user planned in, also when its first days were days off
+                $selectedDate = $activity->getBegin() ? $activity->getBegin()->format('Y-m-d') : (new \DateTime('today'))->format('Y-m-d');
+
+                // a range over days the user does not work becomes one activity per run of working days
+                $activities = $this->repository->savePlannedActivityInRanges($activity, $workingDays->forActivity($activity));
 
                 if ($form->has('recurrentWeeks')) {
                     $recurrentWeeksData = $form->get('recurrentWeeks')->getData();
                     if (\is_int($recurrentWeeksData) && $recurrentWeeksData > 0) {
-                        $this->repository->createRecurringActivities($activity, $recurrentWeeksData);
+                        $this->repository->createRecurringActivitiesForAll($activities, $recurrentWeeksData);
                     }
                 }
 
                 $this->flashSuccess('action.update.success');
-
-                $selectedDate = $activity->getBegin() ? $activity->getBegin()->format('Y-m-d') : (new \DateTime('today'))->format('Y-m-d');
 
                 return $this->redirectToRoute('planner_week', ['date' => $selectedDate]);
             } catch (\Exception $ex) {
@@ -194,7 +212,7 @@ final class WeeklyPlannerController extends AbstractController
     }
 
     #[Route(path: '/activity/{id}/edit', name: 'planner_activity_edit', methods: ['GET', 'POST'])]
-    public function editActivity(PlannedActivity $activity, Request $request): Response
+    public function editActivity(PlannedActivity $activity, Request $request, WorkingDayRanges $workingDays): Response
     {
         if (!$this->isGranted(PlannedActivityVoter::EDIT, $activity)) {
             throw $this->createAccessDeniedException();
@@ -209,30 +227,41 @@ final class WeeklyPlannerController extends AbstractController
             $formActionParams['date'] = $dateParam;
         }
 
+        // the form changes the activity in place, keep the dates to move the rest of a recurring series alike
+        $previousBegin = $activity->getBegin() !== null ? clone $activity->getBegin() : null;
+        $previousEnd = $activity->getEnd() !== null ? clone $activity->getEnd() : null;
+
         $form = $this->createForm(PlannedActivityEditForm::class, $activity, [
             'action' => $this->generateUrl('planner_activity_edit', $formActionParams),
             'method' => 'POST',
             'user' => $currentUser,
             'include_user' => $canEditOther,
             'include_recurrence_mode' => $activity->isRecurring(),
+            // "all future" keeps the dates as entered, so only say it where every save splits
+            'skip_days_off' => !$activity->isRecurring(),
         ]);
 
         $form->handleRequest($request);
 
+        $future = $form->isSubmitted() && $form->has('edit_mode') && $activity->isRecurring() && $form->get('edit_mode')->getData() === 'future';
+        if ($future && $form->isValid() && $this->repository->countFutureRecurringOverlaps($activity, $previousBegin, $previousEnd) > 0) {
+            $form->addError(new FormError($this->translateSeriesOverlap()));
+        }
+
         if ($form->isSubmitted() && $form->isValid()) {
             try {
-                $this->repository->savePlannedActivity($activity);
+                $selectedDate = $activity->getBegin() ? $activity->getBegin()->format('Y-m-d') : (new \DateTime('today'))->format('Y-m-d');
 
-                if ($form->has('edit_mode') && $activity->isRecurring()) {
-                    $editMode = $form->get('edit_mode')->getData();
-                    if ($editMode === 'future') {
-                        $this->repository->updateFutureRecurringActivities($activity);
-                    }
+                if ($future) {
+                    // the following activities take over this one as it is, so its dates stay as entered
+                    $this->repository->savePlannedActivity($activity);
+                    $this->repository->updateFutureRecurringActivities($activity, $previousBegin, $previousEnd);
+                } else {
+                    // new dates over days the user does not work become one activity per run of working days
+                    $this->repository->savePlannedActivityInRanges($activity, $workingDays->forActivity($activity));
                 }
 
                 $this->flashSuccess('action.update.success');
-
-                $selectedDate = $activity->getBegin() ? $activity->getBegin()->format('Y-m-d') : (new \DateTime('today'))->format('Y-m-d');
 
                 return $this->redirectToRoute('planner_week', ['date' => $selectedDate]);
             } catch (\Exception $ex) {
@@ -251,9 +280,10 @@ final class WeeklyPlannerController extends AbstractController
     /**
      * Moves (drag and drop) or resizes an activity in the grid: new dates and, when dropped on another row,
      * a new user and customer/project. The hours per day stay as they are, so resizing repeats them on the added days.
+     * Days the user does not work are left out, so stretching Thursday to Monday gives Thursday to Friday and Monday.
      */
     #[Route(path: '/activity/{id}/move', name: 'planner_activity_move', methods: ['POST'])]
-    public function moveActivity(PlannedActivity $activity, Request $request, ValidatorInterface $validator): JsonResponse
+    public function moveActivity(PlannedActivity $activity, Request $request, ValidatorInterface $validator, WorkingDayRanges $workingDays): JsonResponse
     {
         if (!$this->isCsrfTokenValid(self::MOVE_TOKEN, $request->request->getString('_token'))) {
             return new JsonResponse([], Response::HTTP_FORBIDDEN);
@@ -282,8 +312,9 @@ final class WeeklyPlannerController extends AbstractController
             $activity->setUser($user);
         }
 
+        // time off has no customer or project, it only moves in time and between users
         $customerId = $request->request->getInt('customer');
-        if ($customerId > 0) {
+        if ($customerId > 0 && !$activity->isTimeOff()) {
             $customer = $this->repository->findCustomer($customerId);
             $projectId = $request->request->getInt('project');
             $project = $projectId > 0 ? $this->repository->findProject($projectId) : null;
@@ -308,9 +339,79 @@ final class WeeklyPlannerController extends AbstractController
         }
 
         try {
-            $this->repository->savePlannedActivity($activity);
+            // stretched or moved over days the user does not work: one activity per run of working days
+            $this->repository->savePlannedActivityInRanges($activity, $workingDays->forActivity($activity));
         } catch (\Exception $ex) {
             return new JsonResponse([], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        return new JsonResponse(['id' => $activity->getId()]);
+    }
+
+    /**
+     * Splits a multi-day activity into two at the given day, which becomes the first day of the second part.
+     * Called from the split marker between two days of an activity in the grid; joining undoes it.
+     */
+    #[Route(path: '/activity/{id}/split', name: 'planner_activity_split', methods: ['POST'])]
+    public function splitActivity(PlannedActivity $activity, Request $request): JsonResponse
+    {
+        if (!$this->isCsrfTokenValid(self::MOVE_TOKEN, $request->request->getString('_token'))) {
+            return new JsonResponse([], Response::HTTP_FORBIDDEN);
+        }
+
+        if (!$this->canEdit($activity)) {
+            throw $this->createAccessDeniedException();
+        }
+
+        // round trip, as createFromFormat() rolls an impossible date like 2026-02-30 over into the next month
+        $day = $request->request->getString('date');
+        $date = \DateTime::createFromFormat('!Y-m-d', $day);
+        if ($date === false || $date->format('Y-m-d') !== $day) {
+            return new JsonResponse([], Response::HTTP_BAD_REQUEST);
+        }
+
+        try {
+            $second = $this->repository->splitActivity($activity, $date);
+        } catch (\Exception) {
+            return new JsonResponse([], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        if ($second === null) {
+            return new JsonResponse([], Response::HTTP_BAD_REQUEST);
+        }
+
+        return new JsonResponse(['id' => $activity->getId(), 'split' => $second->getId()]);
+    }
+
+    /**
+     * Joins an activity with the one starting the day after it ends, when both are the same planning
+     * (the reverse of a split). Called from the join marker between the two in the grid.
+     */
+    #[Route(path: '/activity/{id}/join/{other}', name: 'planner_activity_join', requirements: ['other' => '\d+'], methods: ['POST'])]
+    public function joinActivity(PlannedActivity $activity, int $other, Request $request): JsonResponse
+    {
+        if (!$this->isCsrfTokenValid(self::MOVE_TOKEN, $request->request->getString('_token'))) {
+            return new JsonResponse([], Response::HTTP_FORBIDDEN);
+        }
+
+        $next = $this->repository->find($other);
+        if (!$next instanceof PlannedActivity) {
+            throw $this->createNotFoundException();
+        }
+
+        // the second part is deleted, so it needs the same permissions as the first
+        if (!$this->canEdit($activity) || !$this->isGranted(PlannedActivityVoter::DELETE, $next)) {
+            throw $this->createAccessDeniedException();
+        }
+
+        try {
+            $joined = $this->repository->joinActivities($activity, $next);
+        } catch (\Exception) {
+            return new JsonResponse([], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        if (!$joined) {
+            return new JsonResponse([], Response::HTTP_BAD_REQUEST);
         }
 
         return new JsonResponse(['id' => $activity->getId()]);
@@ -410,6 +511,64 @@ final class WeeklyPlannerController extends AbstractController
         }
     }
 
+    private function translateSeriesOverlap(): string
+    {
+        /** @var \Symfony\Contracts\Translation\TranslatorInterface $translator */
+        $translator = $this->container->get('translator');
+
+        return $translator->trans(NoOverlappingPlanning::SERIES_MESSAGE, [], 'validators');
+    }
+
+    /**
+     * Confirms the ongoing and future tentative work of a project for everybody the current user may edit, after asking.
+     */
+    #[Route(path: '/project/{id}/confirm-tentative', name: 'planner_confirm_tentative', requirements: ['id' => '\d+'], methods: ['GET', 'POST'])]
+    #[IsGranted('edit_planner')]
+    public function confirmTentative(Project $project, Request $request, TentativeConfirmer $confirmer): Response
+    {
+        if (!$this->isGranted('access', $project)) {
+            throw $this->createAccessDeniedException();
+        }
+
+        $date = $request->query->getString('date');
+        try {
+            $date = (new \DateTimeImmutable($date === '' ? 'today' : $date))->format('Y-m-d');
+        } catch (\Exception) {
+            $date = (new \DateTimeImmutable('today'))->format('Y-m-d');
+        }
+
+        $confirmation = $confirmer->prepare($project);
+
+        $form = $this->createFormBuilder(null, [
+            'csrf_token_id' => 'planner_confirm_tentative',
+            'attr' => [
+                'data-form-event' => 'kimai.plannerActivityUpdate',
+            ],
+        ])
+            ->setAction($this->generateUrl('planner_confirm_tentative', ['id' => $project->getId(), 'date' => $date]))
+            ->setMethod('POST')
+            ->getForm();
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            try {
+                $confirmer->confirm($confirmation);
+                $this->flashSuccess('action.update.success');
+            } catch (\Exception $ex) {
+                $this->flashUpdateException($ex);
+            }
+
+            return $this->redirectToRoute('planner_week', ['date' => $date]);
+        }
+
+        return $this->render('@Planner/confirm_tentative.html.twig', [
+            'form' => $form->createView(),
+            'confirmation' => $confirmation,
+            'date' => $date,
+        ]);
+    }
+
     /**
      * @phpstan-impure the voter looks at the activity, which is changed between two checks
      */
@@ -496,7 +655,10 @@ final class WeeklyPlannerController extends AbstractController
 
         $users = $this->userProvider->getVisibleUsers($currentUser, $query);
 
-        $plannerData = $this->plannerService->getPlannerData($users, $selectedDate, $weeks);
+        $plannerData = $this->plannerService->getPlannerData($users, $selectedDate, $weeks, $query->getPlanning());
+        if ($query->isOrderedByFreeHours()) {
+            $plannerData->sortByFreeHours();
+        }
 
         $page = new PageSetup('planner.title');
         $page->setHelp('planner.html');

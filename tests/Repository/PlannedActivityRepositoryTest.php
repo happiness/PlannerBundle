@@ -18,6 +18,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\Query;
 use Doctrine\ORM\QueryBuilder;
+use Doctrine\ORM\UnitOfWork;
 use Doctrine\Persistence\ManagerRegistry;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
@@ -117,6 +118,7 @@ class PlannedActivityRepositoryTest extends TestCase
         $activity->setHoursPerDay(6.0);
         $activity->setColor('#00ff00');
         $activity->setComment('Middle split comment');
+        $activity->setTentative(true);
         $activity->setRecurrenceGroup('rec-group-1');
         $activity->setBegin(new \DateTime('2026-09-14'));
         $activity->setEnd(new \DateTime('2026-09-16'));
@@ -144,8 +146,237 @@ class PlannedActivityRepositoryTest extends TestCase
         $this->assertSame('#00ff00', $split->getColor());
         $this->assertSame('Middle split comment', $split->getComment());
         $this->assertSame('rec-group-1', $split->getRecurrenceGroup());
+        $this->assertTrue($split->isTentative());
         $this->assertSame('2026-09-16', $split->getBegin()?->format('Y-m-d'));
         $this->assertSame('2026-09-16', $split->getEnd()?->format('Y-m-d'));
+    }
+
+    public function testSplitActivityCopiesEverythingAndSavesBothPartsAtOnce(): void
+    {
+        $user = new User();
+        $customer = new Customer('ACME');
+        $project = new Project();
+        $project->setCustomer($customer);
+        $activity = (new PlannedActivity())
+            ->setUser($user)
+            ->setCustomer($customer)
+            ->setProject($project)
+            ->setHoursPerDay(6.0)
+            ->setComment('Sprint')
+            ->setRecurrenceGroup('rec-group-1')
+            ->setBegin(new \DateTime('2026-11-02'))
+            ->setEnd(new \DateTime('2026-11-06'));
+        $activity->setColor('#00ff00');
+
+        $persisted = [];
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->exactly(2))->method('persist')->willReturnCallback(function ($entity) use (&$persisted) {
+            $persisted[] = $entity;
+        });
+        $em->expects($this->once())->method('flush');
+
+        $second = $this->createRepository($em)->splitActivity($activity, new \DateTimeImmutable('2026-11-04'));
+
+        $this->assertNotNull($second);
+        $this->assertSame([$activity, $second], $persisted);
+        $this->assertSame('2026-11-02', $activity->getBegin()?->format('Y-m-d'));
+        $this->assertSame('2026-11-03', $activity->getEnd()?->format('Y-m-d'));
+        $this->assertSame('2026-11-04', $second->getBegin()?->format('Y-m-d'));
+        $this->assertSame('2026-11-06', $second->getEnd()?->format('Y-m-d'));
+        $this->assertSame($user, $second->getUser());
+        $this->assertSame($customer, $second->getCustomer());
+        $this->assertSame($project, $second->getProject());
+        $this->assertSame(6.0, $second->getHoursPerDay());
+        $this->assertSame('#00ff00', $second->getColor());
+        $this->assertSame('Sprint', $second->getComment());
+        $this->assertSame('rec-group-1', $second->getRecurrenceGroup());
+    }
+
+    public function testSplitActivityOnTheLastDayLeavesAOneDaySecondPart(): void
+    {
+        $activity = (new PlannedActivity())->setBegin(new \DateTime('2026-11-02'))->setEnd(new \DateTime('2026-11-03'));
+
+        $second = $this->createRepository($this->createMock(EntityManagerInterface::class))->splitActivity($activity, new \DateTime('2026-11-03'));
+
+        $this->assertSame('2026-11-02', $activity->getEnd()?->format('Y-m-d'));
+        $this->assertSame('2026-11-03', $second?->getBegin()?->format('Y-m-d'));
+        $this->assertSame('2026-11-03', $second?->getEnd()?->format('Y-m-d'));
+    }
+
+    public function testSplitActivityOutsideItsInnerDaysChangesNothing(): void
+    {
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('persist');
+        $em->expects($this->never())->method('flush');
+        $repository = $this->createRepository($em);
+
+        $activity = (new PlannedActivity())->setBegin(new \DateTime('2026-11-02'))->setEnd(new \DateTime('2026-11-06'));
+        foreach (['2026-11-02', '2026-11-01', '2026-11-07'] as $day) {
+            $this->assertNull($repository->splitActivity($activity, new \DateTime($day)));
+        }
+        $this->assertSame('2026-11-06', $activity->getEnd()?->format('Y-m-d'));
+
+        $single = (new PlannedActivity())->setBegin(new \DateTime('2026-11-02'))->setEnd(new \DateTime('2026-11-02'));
+        $this->assertNull($repository->splitActivity($single, new \DateTime('2026-11-02')));
+    }
+
+    public function testJoinActivitiesExtendsTheFirstAndRemovesTheSecondAtOnce(): void
+    {
+        $first = (new PlannedActivity())->setHoursPerDay(4.0)->setBegin(new \DateTime('2026-11-02'))->setEnd(new \DateTime('2026-11-03'));
+        $second = (new PlannedActivity())->setHoursPerDay(4.0)->setBegin(new \DateTime('2026-11-04'))->setEnd(new \DateTime('2026-11-06'));
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->once())->method('persist')->with($first);
+        $em->expects($this->once())->method('remove')->with($second);
+        $em->expects($this->once())->method('flush');
+
+        $this->assertTrue($this->createRepository($em)->joinActivities($first, $second));
+        $this->assertSame('2026-11-02', $first->getBegin()?->format('Y-m-d'));
+        $this->assertSame('2026-11-06', $first->getEnd()?->format('Y-m-d'));
+    }
+
+    public function testJoinActivitiesRefusesWhatIsNotTheSamePlanning(): void
+    {
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('remove');
+        $em->expects($this->never())->method('flush');
+
+        $first = (new PlannedActivity())->setHoursPerDay(4.0)->setBegin(new \DateTime('2026-11-02'))->setEnd(new \DateTime('2026-11-03'));
+        $other = (new PlannedActivity())->setHoursPerDay(8.0)->setBegin(new \DateTime('2026-11-04'))->setEnd(new \DateTime('2026-11-06'));
+
+        $this->assertFalse($this->createRepository($em)->joinActivities($first, $other));
+        $this->assertSame('2026-11-03', $first->getEnd()?->format('Y-m-d'));
+    }
+
+    public function testRecurringOverlapsOfAnActivityLongerThanAWeekAreEveryWeek(): void
+    {
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('createQueryBuilder');
+        $repository = $this->createRepository($em);
+
+        $long = (new PlannedActivity())->setBegin(new \DateTime('2026-11-02'))->setEnd(new \DateTime('2026-11-10'));
+        $this->assertSame(3, $repository->countRecurringOverlaps($long, 3));
+        $this->assertSame(0, $repository->countRecurringOverlaps($long, 0));
+    }
+
+    public function testPlanningIsChangedWhenUserProjectOrDatesDiffer(): void
+    {
+        $user = new User();
+        $customer = new Customer('ACME');
+        $activity = (new PlannedActivity())->setUser($user)->setCustomer($customer)->setBegin(new \DateTime('2026-11-02'))->setEnd(new \DateTime('2026-11-03'));
+        (new \ReflectionProperty(PlannedActivity::class, 'id'))->setValue($activity, 5);
+
+        $original = ['user' => $user, 'customer' => $customer, 'project' => null, 'begin' => new \DateTime('2026-11-02'), 'end' => new \DateTime('2026-11-03')];
+        $uow = $this->createMock(UnitOfWork::class);
+        $uow->method('getOriginalEntityData')->willReturnCallback(static function () use (&$original): array {
+            return $original;
+        });
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('getUnitOfWork')->willReturn($uow);
+        $repository = $this->createRepository($em);
+
+        $this->assertFalse($repository->isPlanningChanged($activity));
+        $activity->setComment('only a comment');
+        $this->assertFalse($repository->isPlanningChanged($activity));
+
+        $activity->setEnd(new \DateTime('2026-11-04'));
+        $this->assertTrue($repository->isPlanningChanged($activity));
+        $activity->setEnd(new \DateTime('2026-11-03'));
+
+        $activity->setUser(new User());
+        $this->assertTrue($repository->isPlanningChanged($activity));
+
+        $this->assertTrue($repository->isPlanningChanged(new PlannedActivity()), 'new');
+        $original = [];
+        $this->assertTrue($repository->isPlanningChanged($activity), 'not loaded');
+    }
+
+    public function testSavePlannedActivityInRangesSavesOnePartPerRangeAtOnce(): void
+    {
+        $user = new User();
+        $activity = (new PlannedActivity())
+            ->setUser($user)
+            ->setHoursPerDay(6.0)
+            ->setComment('Launch')
+            ->setBegin(new \DateTime('2026-11-06'))
+            ->setEnd(new \DateTime('2026-11-10'));
+
+        $persisted = [];
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->exactly(2))->method('persist')->willReturnCallback(function ($entity) use (&$persisted) {
+            $persisted[] = $entity;
+        });
+        $em->expects($this->once())->method('flush');
+
+        $saved = $this->createRepository($em)->savePlannedActivityInRanges($activity, [
+            [new \DateTime('2026-11-06'), new \DateTime('2026-11-06')],
+            [new \DateTime('2026-11-09'), new \DateTime('2026-11-10')],
+        ]);
+
+        $this->assertSame($persisted, $saved);
+        $this->assertSame($activity, $saved[0]);
+        $this->assertSame('2026-11-06', $activity->getEnd()?->format('Y-m-d'));
+        $this->assertSame('2026-11-09', $saved[1]->getBegin()?->format('Y-m-d'));
+        $this->assertSame('2026-11-10', $saved[1]->getEnd()?->format('Y-m-d'));
+        $this->assertSame($user, $saved[1]->getUser());
+        $this->assertSame(6.0, $saved[1]->getHoursPerDay());
+        $this->assertSame('Launch', $saved[1]->getComment());
+        // the parts belong together, also without repeating weeks
+        $this->assertNotNull($activity->getRecurrenceGroup());
+        $this->assertSame($activity->getRecurrenceGroup(), $saved[1]->getRecurrenceGroup());
+    }
+
+    public function testSavePlannedActivityInOneTrimmedRangeIsNoSeries(): void
+    {
+        $activity = (new PlannedActivity())->setBegin(new \DateTime('2026-11-07'))->setEnd(new \DateTime('2026-11-10'));
+
+        $saved = $this->createRepository($this->createMock(EntityManagerInterface::class))->savePlannedActivityInRanges($activity, [
+            [new \DateTime('2026-11-09'), new \DateTime('2026-11-10')],
+        ]);
+
+        $this->assertSame([$activity], $saved);
+        $this->assertSame('2026-11-09', $activity->getBegin()?->format('Y-m-d'));
+        $this->assertNull($activity->getRecurrenceGroup());
+    }
+
+    public function testSavePlannedActivityInRangesWithoutRangesSavesItAsItIs(): void
+    {
+        $activity = (new PlannedActivity())->setBegin(new \DateTime('2026-11-02'))->setEnd(new \DateTime('2026-11-06'));
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->once())->method('persist')->with($activity);
+        $em->expects($this->once())->method('flush');
+
+        $this->assertSame([$activity], $this->createRepository($em)->savePlannedActivityInRanges($activity, []));
+        $this->assertSame('2026-11-06', $activity->getEnd()?->format('Y-m-d'));
+    }
+
+    public function testCreateRecurringActivitiesForAllRepeatsEveryPartInOneSeries(): void
+    {
+        $friday = (new PlannedActivity())->setBegin(new \DateTime('2026-11-06'))->setEnd(new \DateTime('2026-11-06'));
+        $monday = (new PlannedActivity())->setBegin(new \DateTime('2026-11-09'))->setEnd(new \DateTime('2026-11-10'));
+
+        $persisted = [];
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('persist')->willReturnCallback(function ($entity) use (&$persisted) {
+            $persisted[] = $entity;
+        });
+
+        $this->createRepository($em)->createRecurringActivitiesForAll([$friday, $monday], 2);
+
+        $this->assertNotNull($friday->getRecurrenceGroup());
+        $this->assertSame($friday->getRecurrenceGroup(), $monday->getRecurrenceGroup());
+        // both parts are saved with the series, then two weekly copies of each
+        $this->assertContains($friday, $persisted);
+        $this->assertContains($monday, $persisted);
+        $copies = array_values(array_filter($persisted, static fn (PlannedActivity $a): bool => $a !== $friday && $a !== $monday));
+        $this->assertSame(
+            ['2026-11-13..2026-11-13', '2026-11-20..2026-11-20', '2026-11-16..2026-11-17', '2026-11-23..2026-11-24'],
+            array_map(static fn (PlannedActivity $a): string => $a->getBegin()?->format('Y-m-d') . '..' . $a->getEnd()?->format('Y-m-d'), $copies)
+        );
+        foreach ($copies as $copy) {
+            $this->assertSame($friday->getRecurrenceGroup(), $copy->getRecurrenceGroup());
+        }
     }
 
     public function testRemoveDayWhenNullOrOutOfRange(): void
@@ -279,6 +510,7 @@ class PlannedActivityRepositoryTest extends TestCase
         $currentActivity->setHoursPerDay(7.5);
         $currentActivity->setColor('#123456');
         $currentActivity->setComment('Updated comment');
+        $currentActivity->setTentative(true);
         $currentActivity->setRecurrenceGroup('rec-group-1');
         $currentActivity->setBegin(new \DateTime('2026-09-14'));
 
@@ -326,6 +558,104 @@ class PlannedActivityRepositoryTest extends TestCase
         $this->assertSame(7.5, $futureActivity2->getHoursPerDay());
         $this->assertSame('#123456', $futureActivity2->getColor());
         $this->assertSame('Updated comment', $futureActivity2->getComment());
+        $this->assertTrue($futureActivity1->isTentative());
+        $this->assertTrue($futureActivity2->isTentative());
+    }
+
+    public function testUpdateFutureRecurringActivitiesKeepsDatesWithoutPreviousDates(): void
+    {
+        $current = $this->createRecurringActivity(1, '2026-10-26', '2026-10-30');
+        $future = $this->createRecurringActivity(2, '2026-11-05', '2026-11-05');
+
+        $repository = $this->createRepositoryReturningFuture([$future], $parameters);
+        $repository->updateFutureRecurringActivities($current);
+
+        $this->assertSame('2026-10-26', $parameters['begin']);
+        $this->assertSame('2026-11-05', $future->getBegin()?->format('Y-m-d'));
+        $this->assertSame('2026-11-05', $future->getEnd()?->format('Y-m-d'));
+    }
+
+    public function testUpdateFutureRecurringActivitiesShiftsDatesLikeTheEditedActivity(): void
+    {
+        // a Thursday stretched to Monday-Friday: begin moved 3 days back, end 1 day forward
+        $current = $this->createRecurringActivity(1, '2026-10-26', '2026-10-30');
+        $future1 = $this->createRecurringActivity(2, '2026-11-05', '2026-11-05');
+        $future2 = $this->createRecurringActivity(3, '2026-11-12', '2026-11-12');
+
+        $repository = $this->createRepositoryReturningFuture([$future1, $future2], $parameters);
+        $repository->updateFutureRecurringActivities($current, new \DateTime('2026-10-29'), new \DateTime('2026-10-29'));
+
+        $this->assertSame('2026-10-29', $parameters['begin']);
+        $this->assertSame('2026-11-02', $future1->getBegin()?->format('Y-m-d'));
+        $this->assertSame('2026-11-06', $future1->getEnd()?->format('Y-m-d'));
+        $this->assertSame('2026-11-09', $future2->getBegin()?->format('Y-m-d'));
+        $this->assertSame('2026-11-13', $future2->getEnd()?->format('Y-m-d'));
+    }
+
+    public function testUpdateFutureRecurringActivitiesSelectsFromThePreviousBeginWhenMovedLater(): void
+    {
+        $current = $this->createRecurringActivity(1, '2026-11-02', '2026-11-02');
+        $future = $this->createRecurringActivity(2, '2026-11-05', '2026-11-05');
+
+        $repository = $this->createRepositoryReturningFuture([$future], $parameters);
+        $repository->updateFutureRecurringActivities($current, new \DateTime('2026-10-29'), new \DateTime('2026-10-29'));
+
+        $this->assertSame('2026-10-29', $parameters['begin']);
+        $this->assertSame('2026-11-09', $future->getBegin()?->format('Y-m-d'));
+        $this->assertSame('2026-11-09', $future->getEnd()?->format('Y-m-d'));
+    }
+
+    public function testUpdateFutureRecurringActivitiesNeverEndsBeforeItBegins(): void
+    {
+        // the edited activity lost its first two days, a later single-day activity cannot shrink below one day
+        $current = $this->createRecurringActivity(1, '2026-10-28', '2026-10-30');
+        $future = $this->createRecurringActivity(2, '2026-11-02', '2026-11-02');
+
+        $repository = $this->createRepositoryReturningFuture([$future], $parameters);
+        $repository->updateFutureRecurringActivities($current, new \DateTime('2026-10-26'), new \DateTime('2026-10-30'));
+
+        $this->assertSame('2026-11-04', $future->getBegin()?->format('Y-m-d'));
+        $this->assertSame('2026-11-04', $future->getEnd()?->format('Y-m-d'));
+    }
+
+    private function createRecurringActivity(int $id, string $begin, string $end): PlannedActivity
+    {
+        $activity = new PlannedActivity();
+        (new \ReflectionProperty(PlannedActivity::class, 'id'))->setValue($activity, $id);
+        $activity->setRecurrenceGroup('rec-group-1');
+        $activity->setBegin(new \DateTime($begin));
+        $activity->setEnd(new \DateTime($end));
+
+        return $activity;
+    }
+
+    /**
+     * @param array<PlannedActivity> $future
+     * @param array<string, mixed>|null $parameters receives the query parameters
+     */
+    private function createRepositoryReturningFuture(array $future, ?array &$parameters): PlannedActivityRepository
+    {
+        $parameters = [];
+
+        $query = $this->createMock(Query::class);
+        $query->method('getResult')->willReturn($future);
+
+        $qb = $this->createMock(QueryBuilder::class);
+        $qb->method('select')->willReturnSelf();
+        $qb->method('from')->willReturnSelf();
+        $qb->method('where')->willReturnSelf();
+        $qb->method('andWhere')->willReturnSelf();
+        $qb->method('setParameter')->willReturnCallback(function (string $key, mixed $value) use ($qb, &$parameters) {
+            $parameters[$key] = $value;
+
+            return $qb;
+        });
+        $qb->method('getQuery')->willReturn($query);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('createQueryBuilder')->willReturn($qb);
+
+        return $this->createRepository($em);
     }
 
     public function testFindPlannedActivitiesForEmptyUsers(): void
@@ -398,6 +728,7 @@ class PlannedActivityRepositoryTest extends TestCase
         $activity->setHoursPerDay(4.5);
         $activity->setColor('#ff0000');
         $activity->setComment('Weekly meeting');
+        $activity->setTentative(true);
         $activity->setBegin(new \DateTime('2026-09-07'));
         $activity->setEnd(new \DateTime('2026-09-09'));
 
@@ -430,9 +761,30 @@ class PlannedActivityRepositoryTest extends TestCase
         $this->assertSame(4.5, $created[1]->getHoursPerDay());
         $this->assertSame('#ff0000', $created[1]->getColor());
         $this->assertSame('Weekly meeting', $created[1]->getComment());
+        $this->assertTrue($created[0]->isTentative());
+        $this->assertTrue($created[1]->isTentative());
         $this->assertSame($activity->getRecurrenceGroup(), $created[1]->getRecurrenceGroup());
         $this->assertSame('2026-09-21', $created[1]->getBegin()?->format('Y-m-d'));
         $this->assertSame('2026-09-23', $created[1]->getEnd()?->format('Y-m-d'));
+    }
+
+    public function testCreateRecurringActivitiesKeepsTimeOff(): void
+    {
+        $activity = (new PlannedActivity())
+            ->setUser(new User())
+            ->setTimeOff(true)
+            ->setHoursPerDay(null)
+            ->setBegin(new \DateTime('2026-11-06'))
+            ->setEnd(new \DateTime('2026-11-06'));
+
+        $repository = $this->createRepository($this->createMock(EntityManagerInterface::class));
+        $created = $repository->createRecurringActivities($activity, 1);
+
+        $this->assertCount(1, $created);
+        $this->assertTrue($created[0]->isTimeOff());
+        $this->assertNull($created[0]->getHoursPerDay());
+        $this->assertNull($created[0]->getCustomer());
+        $this->assertSame('2026-11-13', $created[0]->getBegin()?->format('Y-m-d'));
     }
 
     public function testFindByFilterWithoutUsersReturnsEmptyArray(): void
@@ -466,7 +818,7 @@ class PlannedActivityRepositoryTest extends TestCase
         $repository = $this->createRepository($em);
 
         $project = new Project();
-        $result = $repository->findByFilter([new User()], new \DateTime('2026-10-01'), new \DateTime('2026-10-31'), [new Customer('ACME')], [$project]);
+        $result = $repository->findByFilter([new User()], new \DateTime('2026-10-01'), new \DateTime('2026-10-31'), [new Customer('ACME')], [$project], true);
 
         $this->assertSame([$activity], $result);
         $this->assertSame([
@@ -474,7 +826,69 @@ class PlannedActivityRepositoryTest extends TestCase
             'p.begin <= :end',
             'p.customer IN (:customers)',
             'p.project IN (:projects)',
+            'p.tentative = :tentative',
         ], $conditions);
+    }
+
+    public function testFindTentativeForProject(): void
+    {
+        $activity = new PlannedActivity();
+        $project = new Project();
+
+        $query = $this->createMock(Query::class);
+        $query->method('getResult')->willReturn([$activity]);
+
+        $conditions = [];
+        $parameters = [];
+        $qb = $this->createMock(QueryBuilder::class);
+        foreach (['select', 'from', 'leftJoin', 'addSelect', 'orderBy', 'addOrderBy'] as $method) {
+            $qb->method($method)->willReturnSelf();
+        }
+        foreach (['where', 'andWhere'] as $method) {
+            $qb->method($method)->willReturnCallback(function (string $condition) use (&$conditions, $qb) {
+                $conditions[] = $condition;
+
+                return $qb;
+            });
+        }
+        $qb->method('setParameter')->willReturnCallback(function (string $name, mixed $value) use (&$parameters, $qb) {
+            $parameters[$name] = $value;
+
+            return $qb;
+        });
+        $qb->method('getQuery')->willReturn($query);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('createQueryBuilder')->willReturn($qb);
+        $repository = $this->createRepository($em);
+
+        $this->assertSame([$activity], $repository->findTentativeForProject($project, new \DateTimeImmutable('2026-11-02')));
+        $this->assertSame(['p.project = :project', 'p.tentative = :tentative', 'p.end >= :from'], $conditions);
+        $this->assertSame(['project' => $project, 'tentative' => true, 'from' => '2026-11-02'], $parameters);
+    }
+
+    public function testConfirmPlannedActivities(): void
+    {
+        $first = (new PlannedActivity())->setTentative(true);
+        $second = (new PlannedActivity())->setTentative(true);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->exactly(2))->method('persist');
+        $em->expects($this->once())->method('flush');
+
+        $repository = $this->createRepository($em);
+        $repository->confirmPlannedActivities([$first, $second]);
+
+        $this->assertFalse($first->isTentative());
+        $this->assertFalse($second->isTentative());
+    }
+
+    public function testConfirmPlannedActivitiesWithoutActivitiesDoesNotFlush(): void
+    {
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('flush');
+
+        $this->createRepository($em)->confirmPlannedActivities([]);
     }
 
     public function testFindCustomerAndProjectDelegateToEntityManager(): void

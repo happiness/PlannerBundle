@@ -19,6 +19,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use JMS\Serializer\Annotation as Serializer;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
+use KimaiPlugin\PlannerBundle\Validator\Constraints\NoOverlappingPlanning;
 use Symfony\Component\Validator\Constraints as Assert;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
@@ -30,6 +31,7 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 #[ORM\Index(columns: ['project_id'], name: 'IDX_PLANNED_ACTIVITY_PROJECT')]
 #[ORM\Entity(repositoryClass: PlannedActivityRepository::class)]
 #[ORM\ChangeTrackingPolicy('DEFERRED_EXPLICIT')]
+#[NoOverlappingPlanning]
 #[Serializer\ExclusionPolicy('all')]
 class PlannedActivity
 {
@@ -63,12 +65,11 @@ class PlannedActivity
     private ?\DateTime $end = null;
 
     /**
-     * Nullable in the database only because rows created before customers were introduced have none;
-     * the validation requires a customer whenever an activity is saved through the form or the API.
+     * Nullable in the database because rows created before customers were introduced have none and time off has none;
+     * the validation requires a customer for every other activity saved through the form or the API.
      */
     #[ORM\ManyToOne(targetEntity: Customer::class)]
     #[ORM\JoinColumn(name: 'customer_id', nullable: true, onDelete: 'CASCADE')]
-    #[Assert\NotNull]
     #[Serializer\Expose]
     #[Serializer\Groups(['Default'])]
     private ?Customer $customer = null;
@@ -86,13 +87,23 @@ class PlannedActivity
     #[Assert\Length(max: 255)]
     private ?string $title = null;
 
-    #[ORM\Column(name: 'hours_per_day', type: Types::FLOAT, nullable: false)]
-    #[Assert\NotNull]
+    /**
+     * Only time off may leave it empty, which means the whole working day of the user's contract.
+     */
+    #[ORM\Column(name: 'hours_per_day', type: Types::FLOAT, nullable: true)]
     #[Assert\Positive]
     #[Assert\LessThanOrEqual(24.0)]
     #[Serializer\Expose]
     #[Serializer\Groups(['Default'])]
-    private float $hoursPerDay = 8.0;
+    private ?float $hoursPerDay = 8.0;
+
+    /**
+     * The user is not available: no customer or project, and the hours are taken off the day's capacity instead of being planned.
+     */
+    #[ORM\Column(name: 'time_off', type: Types::BOOLEAN, nullable: false, options: ['default' => false])]
+    #[Serializer\Expose]
+    #[Serializer\Groups(['Default'])]
+    private bool $timeOff = false;
 
     #[ORM\Column(name: 'comment', type: Types::TEXT, nullable: true)]
     #[Serializer\Expose]
@@ -103,6 +114,14 @@ class PlannedActivity
     #[Serializer\Expose]
     #[Serializer\Groups(['Default'])]
     private ?string $recurrenceGroup = null;
+
+    /**
+     * Work that is not confirmed yet (e.g. a deal that is not signed), shown faded and counted apart from confirmed capacity.
+     */
+    #[ORM\Column(name: 'tentative', type: Types::BOOLEAN, nullable: false, options: ['default' => false])]
+    #[Serializer\Expose]
+    #[Serializer\Groups(['Default'])]
+    private bool $tentative = false;
 
     public function __construct()
     {
@@ -207,6 +226,28 @@ class PlannedActivity
     }
 
     #[Assert\Callback]
+    public function validateRequiredFields(ExecutionContextInterface $context): void
+    {
+        if ($this->timeOff) {
+            return;
+        }
+
+        if ($this->customer === null) {
+            $context->buildViolation('This value should not be null.')
+                ->atPath('customer')
+                ->setTranslationDomain('validators')
+                ->addViolation();
+        }
+
+        if ($this->hoursPerDay === null) {
+            $context->buildViolation('This value should not be null.')
+                ->atPath('hoursPerDay')
+                ->setTranslationDomain('validators')
+                ->addViolation();
+        }
+    }
+
+    #[Assert\Callback]
     public function validateProjectBelongsToCustomer(ExecutionContextInterface $context): void
     {
         if ($this->project === null || $this->customer === null) {
@@ -221,16 +262,43 @@ class PlannedActivity
         }
     }
 
-    public function getHoursPerDay(): float
+    public function getHoursPerDay(): ?float
     {
         return $this->hoursPerDay;
     }
 
-    public function setHoursPerDay(float $hoursPerDay): self
+    public function setHoursPerDay(?float $hoursPerDay): self
     {
         $this->hoursPerDay = $hoursPerDay;
 
         return $this;
+    }
+
+    public function isTimeOff(): bool
+    {
+        return $this->timeOff;
+    }
+
+    /**
+     * Time off belongs to no customer or project, switching it on drops them.
+     */
+    public function setTimeOff(bool $timeOff): self
+    {
+        $this->timeOff = $timeOff;
+
+        if ($timeOff) {
+            $this->customer = null;
+            $this->project = null;
+            $this->title = null;
+            $this->tentative = false;
+        }
+
+        return $this;
+    }
+
+    public function isWholeDay(): bool
+    {
+        return $this->timeOff && $this->hoursPerDay === null;
     }
 
     public function getComment(): ?string
@@ -267,6 +335,21 @@ class PlannedActivity
         return $this->recurrenceGroup !== null && $this->recurrenceGroup !== '';
     }
 
+    /**
+     * Time off is never tentative.
+     */
+    public function isTentative(): bool
+    {
+        return $this->tentative && !$this->timeOff;
+    }
+
+    public function setTentative(bool $tentative): self
+    {
+        $this->tentative = $tentative && !$this->timeOff;
+
+        return $this;
+    }
+
     public function coversDate(\DateTimeInterface $date): bool
     {
         if ($this->begin === null || $this->end === null) {
@@ -291,8 +374,40 @@ class PlannedActivity
         return (int) $interval->days + 1;
     }
 
+    /**
+     * Whether $next starts the day after this one ends and is the same planning in everything but its dates,
+     * so the two can be joined into one again (as after a split).
+     */
+    public function isJoinableWith(PlannedActivity $next): bool
+    {
+        if ($next === $this || $this->end === null || $next->getBegin() === null) {
+            return false;
+        }
+
+        if ((clone $this->end)->modify('+1 day')->format('Y-m-d') !== $next->getBegin()->format('Y-m-d')) {
+            return false;
+        }
+
+        // weekly instances of a seven-day series also sit side by side; parts of one instance span a week at most
+        if ($this->isRecurring() && $this->begin !== null && $next->getEnd() !== null
+            && $this->begin->diff($next->getEnd())->days >= 7) {
+            return false;
+        }
+
+        return $this->user === $next->getUser()
+            && $this->customer === $next->getCustomer()
+            && $this->project === $next->getProject()
+            && $this->title === $next->getTitle()
+            && $this->hoursPerDay === $next->getHoursPerDay()
+            && $this->getColor() === $next->getColor()
+            && ($this->comment ?? '') === ($next->getComment() ?? '')
+            && $this->recurrenceGroup === $next->getRecurrenceGroup()
+            && $this->isTentative() === $next->isTentative()
+            && $this->timeOff === $next->isTimeOff();
+    }
+
     public function getTotalHours(): float
     {
-        return $this->getDaysCount() * $this->hoursPerDay;
+        return $this->getDaysCount() * ($this->hoursPerDay ?? 0.0);
     }
 }
