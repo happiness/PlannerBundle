@@ -45,11 +45,18 @@ var/plugins/PlannerBundle/
 ├── .php-cs-fixer.dist.php             # Plugin-specific code style rules
 ├── API/
 │   └── PlannedActivityController.php # REST API (GET/POST/PATCH/DELETE /api/planner/activities)
+├── Calendar/
+│   ├── CalendarFeedBuilder.php        # iCalendar (RFC 5545) output: all-day events, escaping, line folding
+│   └── CalendarFeedTokens.php         # Create, renew, remove and look up feed tokens (Entity/CalendarFeedToken)
 ├── Controller/
+│   ├── CalendarFeedSettingsController.php # /{_locale}/planner/calendar: show, renew, switch off the feed address
 │   └── WeeklyPlannerController.php    # Weekly planner routes, week switching, modal CRUD actions
 ├── DependencyInjection/
 │   └── PlannerExtension.php          # Container configuration (prepends roles, sets, views)
+├── Feed/
+│   └── CalendarFeedController.php     # Public GET /planner-calendar/{token}.ics (no login, token is the credential)
 ├── Entity/
+│   ├── CalendarFeedToken.php          # One calendar feed token per user (own table, kept out of audited preferences)
 │   └── PlannedActivity.php           # Planned time block entity (user, customer, project, date range, daily hours, comments, color)
 ├── EventSubscriber/
 │   ├── MenuSubscriber.php            # Injects "Planner" item into main navigation
@@ -61,7 +68,8 @@ var/plugins/PlannerBundle/
 │   ├── doctrine_migrations.yaml       # Plugin migration configuration
 │   ├── Version20260909000000.php      # Initial planner schema (kimai2_planned_activities table)
 │   ├── Version20260914000000.php      # Schema updates (recurring activities support)
-│   └── Version20261019000000.php      # customer_id/project_id columns, title becomes nullable
+│   ├── Version20261019000000.php      # customer_id/project_id columns, title becomes nullable
+│   └── Version20261102000000.php      # kimai2_planner_calendar_tokens (calendar feed tokens)
 ├── Planner/
 │   ├── PlannerUserProvider.php        # Resolves which users' plans the current user may see (web + API)
 │   ├── WeeklyPlannerService.php       # Domain service aggregating week data, user rows, capacity & actuals
@@ -129,7 +137,13 @@ var/plugins/PlannerBundle/
 8. **Move and Resize**:
    - Activities with the edit permission carry `data-planner-move-url`/`-begin`/`-end`; a left/right handle (`data-planner-handle`) is rendered only where the activity really begins/ends. The JS maps the pointer to a day through the `th[data-planner-day]` headers (merged cells do not map to one day) and to a row through `tr.planner-row-details`.
    - `POST /planner/activity/{id}/move` (CSRF token `planner_move`) takes `begin`, `end` and optionally `user`, `customer`, `project`. The voter is checked before and after the changes, so planning cannot be moved to someone the user may not plan for. Hours per day are never changed. Only the single activity is moved, also when it is recurring.
-9. **Isolated Database Migrations**:
+9. **Calendar Feed**:
+   - `Feed/` is imported in `routes.yaml` without the `/{_locale}` prefix, so the feed needs no login; the 64-hex token is the only credential. Anything else added to `Feed/` is public too. A plain controller class there needs `#[AsController]`, or Symfony cannot call it (only `AbstractController` subclasses are registered automatically).
+   - Kimai's `access_control` entry `^/{_locale}/` is a literal regex and matches no real path, so routes under `/{_locale}/` are *not* protected by the firewall either. Every controller in `Controller/` must carry its own `#[IsGranted]`; `CalendarFeedSettingsController` does (`view_planner`).
+   - Tokens live in their own table (`Entity\CalendarFeedToken`, `kimai2_planner_calendar_tokens`, migration `Version20261102000000`), never in a user preference: audit plugins version every preference value (renewed tokens would stay readable in the audit log) and users can write any existing preference through `PATCH /api/users/{id}/preferences`. Stored in plain text so the settings page can show the URL again.
+   - The feed answers 404 for an unknown token, a disabled user and a user whose roles lack `view_planner` (`RolePermissionManager::hasRolePermission()`; there is no security token on this request, so voters cannot be used).
+   - Events are all-day (`DTEND` is the exclusive day after `end`), `TRANSP:TRANSPARENT`, UID `planner-activity-{id}@{host}`. Labels use the feed owner's language (`User::getLanguage()`), not the request's. A feed with no planning has no events, which Google and Outlook accept.
+10. **Isolated Database Migrations**:
    - Always run and test migrations using the bundle's dedicated configuration file:
      `bin/console doctrine:migrations:migrate --configuration=var/plugins/PlannerBundle/Migrations/doctrine_migrations.yaml --no-interaction`
 

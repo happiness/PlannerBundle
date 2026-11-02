@@ -170,6 +170,70 @@
                 <source>planner.suggestions</source>
                 <target>Ofta använda</target>
             </trans-unit>
+            <trans-unit id="planner.calendar.button">
+                <source>planner.calendar.button</source>
+                <target>Kalenderflöde</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.title">
+                <source>planner.calendar.title</source>
+                <target>Kalenderflöde</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.name">
+                <source>planner.calendar.name</source>
+                <target>Planering: %name%</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.intro">
+                <source>planner.calendar.intro</source>
+                <target>Prenumerera på ditt planerade arbete i Google Kalender, Outlook eller Apple Kalender, så syns det bredvid dina möten. Kalenderappen uppdaterar det själv, oftast inom några timmar.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.copy">
+                <source>planner.calendar.copy</source>
+                <target>Kopiera</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.copied">
+                <source>planner.calendar.copied</source>
+                <target>Kopierad</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.secret">
+                <source>planner.calendar.secret</source>
+                <target>Alla som har den här adressen kan se din planering. Om du har delat den av misstag, förnya den: den gamla adressen slutar då fungera.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto">
+                <source>planner.calendar.howto</source>
+                <target>Lägg till den i din kalender</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto_google">
+                <source>planner.calendar.howto_google</source>
+                <target>Google Kalender: klicka på + bredvid &quot;Andra kalendrar&quot; och välj &quot;Från webbadress&quot;.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto_outlook">
+                <source>planner.calendar.howto_outlook</source>
+                <target>Outlook: välj &quot;Lägg till kalender&quot; och sedan &quot;Prenumerera från webben&quot;.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto_apple">
+                <source>planner.calendar.howto_apple</source>
+                <target>Apple Kalender: välj Arkiv och sedan &quot;Ny kalenderprenumeration&quot;.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.create">
+                <source>planner.calendar.create</source>
+                <target>Skapa kalenderadress</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.renew">
+                <source>planner.calendar.renew</source>
+                <target>Förnya adressen</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.renew_confirm">
+                <source>planner.calendar.renew_confirm</source>
+                <target>Den nuvarande adressen slutar fungera och kalendrar som använder den behöver den nya. Förnya den?</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.remove">
+                <source>planner.calendar.remove</source>
+                <target>Stäng av</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.remove_confirm">
+                <source>planner.calendar.remove_confirm</source>
+                <target>Den nuvarande adressen slutar fungera. Stänga av kalenderflödet?</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>
