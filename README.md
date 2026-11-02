@@ -14,7 +14,8 @@
 - **Lightweight Scheduling**: Plan time blocks for a customer (and optionally a project) with daily hours, date ranges, comments, and color badges.
 - **Time Off**: Mark a user as not available with the "Time off" switch in the planning dialog, or by dragging in the user's "Time off" row. Time off has no customer or project and is not counted as planned work: its hours are taken off the day's capacity, so 4 hours off on an 8 hour day leaves 4 hours to plan. Leave the hours empty to take the whole day off, whatever the user's contract expects for that day. Why someone is away stays with the absence they record in Kimai.
 - **Drag to Plan**: Drag across empty day cells of a row to create a planning spanning several days. A transparent preview block is shown while dragging and stays visible while the dialog is open.
-- **Move and Resize**: Drag a planned activity to another day or row, or drag its left/right handle to extend or shorten it.
+- **Move and Resize**: Drag a planned activity to another day or row, or drag its left/right handle to extend or shorten it. A user cannot have the same project planned twice on one day: a move, resize, new planning or API call that would overlap is refused.
+- **Split and Join**: Hover the border between two days of a planning and click the scissors to split it into two. Two side-by-side parts that are the same planning show a link icon on the gap between them; a click joins them again.
 - **Shortcuts**: Frequently used projects (with their customer) are offered as shortcuts when creating a planning, unless the dialog was opened from a project's row and already has it selected.
 - **Multiple Weeks**: Show 1, 2, 4 (default) or 8 weeks at once; capacity is summarized per week.
 - **REST API**: Create, read, update and delete planned activities via `/api/planner/activities` (see the Kimai API docs under the "Planner" tag).
