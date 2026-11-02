@@ -17,6 +17,7 @@
 - **Working Days Only**: A planning whose dates cross days the user does not work (no hours in their working time contract) is saved as one planning per run of working days: Friday to Tuesday becomes Friday, and Monday to Tuesday. This applies when creating, editing, moving and stretching in the grid; a planning on days off only is kept as entered, and so are "all future" edits of a series and the API.
 - **Move and Resize**: Drag a planned activity to another day or row, or drag its left/right handle to extend or shorten it. A user cannot have the same project planned twice on one day: a move, resize, new planning or API call that would overlap is refused.
 - **Split and Join**: Hover the border between two days of a planning and click the scissors to split it into two. Two side-by-side parts that are the same planning show a link icon on the gap between them; a click joins them again.
+- **Days off Confirmation**: Planning on a day the user does not work by their contract asks for confirmation first.
 - **Shortcuts**: Frequently used projects (with their customer) are offered as shortcuts when creating a planning, unless the dialog was opened from a project's row and already has it selected.
 - **Multiple Weeks**: Show 1, 2, 4 (default) or 8 weeks at once; capacity is summarized per week.
 - **REST API**: Create, read, update and delete planned activities via `/api/planner/activities` (see the Kimai API docs under the "Planner" tag).
@@ -146,6 +147,7 @@ What changed:
 - **Multi-week grid**: The planner shows 1, 2, 4 (default) or 8 weeks, with capacity summarized per week. Activities of the same customer/project are grouped in sub-rows per user, and consecutive days are merged into one block.
 - **Always an empty row per user**, so new plannings can be dragged out even when a user has no activities.
 - **Drag to plan**: Dragging over empty days opens the create dialog with the whole date range, showing a transparent preview of the planning.
+- **Confirm days off**: Clicking or dragging over a day the user's work contract has no hours for asks "<name> doesn't usually work on this day. Plan work anyway?" before the create dialog opens. Dragging only asks when every selected day is off, since the days off of a longer range are skipped anyway; time-off rows never ask. Users without any working day in the displayed period (no work contract) are never asked.
 - **Move and resize**: Drag a planned activity to another day or row (other user, customer/project). Drag the handle on its left or right edge to extend or shorten it. Whole days only, the hours per day stay the same. Requires the edit permission for the activity.
 - **Shortcuts** for frequently used customers and projects when creating a planning; they no longer depend on HappinessBundle.
 - **Recurring activities**: Edit or delete only one instance or all upcoming activities of a series.
