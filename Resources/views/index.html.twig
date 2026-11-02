@@ -6,6 +6,15 @@
 {% block main %}
     <div class="page-header d-print-none">
         <div class="container-fluid">
+            {# a row of its own, the navigation row below is already full #}
+            <div class="row mb-2">
+                <div class="col-auto ms-auto">
+                    <a href="{{ path('planner_calendar') }}" class="btn" title="{{ 'planner.calendar.intro'|trans }}">
+                        {{ icon('calendar', true) }}
+                        {{ 'planner.calendar.button'|trans }}
+                    </a>
+                </div>
+            </div>
             <div class="row align-items-center">
                 <div class="col">
                     <div class="btn-group week-picker-btn-group" role="group" aria-label="{{ 'planner.title'|trans }}">
@@ -38,10 +47,6 @@
                         {{ icon('fas fa-plus-minus', true) }}
                         {{ 'planner.toggle_all'|trans }}
                     </button>
-                    <a href="{{ path('planner_calendar') }}" class="btn" title="{{ 'planner.calendar.intro'|trans }}">
-                        {{ icon('calendar', true) }}
-                        {{ 'planner.calendar.button'|trans }}
-                    </a>
                 </div>
 
                 <div class="col-auto ms-auto d-print-none d-flex gap-2 align-items-center">
