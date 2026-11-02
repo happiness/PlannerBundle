@@ -170,6 +170,38 @@
                 <source>planner.suggestions</source>
                 <target>Frequently used</target>
             </trans-unit>
+            <trans-unit id="planner.holidays.calendar">
+                <source>planner.holidays.calendar</source>
+                <target>Public holiday calendar</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.calendar_help">
+                <source>planner.holidays.calendar_help</source>
+                <target>Everyone follows this calendar unless their own preferences pick another. Public holidays count as days off in the planner.</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.observances">
+                <source>planner.holidays.observances</source>
+                <target>Also days off</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.observances_help">
+                <source>planner.holidays.observances_help</source>
+                <target>Days that are not public holidays but that your organisation has off, such as Christmas Eve. A ticked day applies to every calendar that has it.</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.none">
+                <source>planner.holidays.none</source>
+                <target>No public holidays</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.organisation_default">
+                <source>planner.holidays.organisation_default</source>
+                <target>Organisation default</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.preference_help">
+                <source>planner.holidays.preference_help</source>
+                <target>The public holidays this user has off in the planner, if they differ from the organisation's.</target>
+            </trans-unit>
+            <trans-unit id="planner_holiday_calendar">
+                <source>planner_holiday_calendar</source>
+                <target>Public holidays</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>
