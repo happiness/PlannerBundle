@@ -22,6 +22,7 @@
 - **Shortcuts**: Frequently used projects (with their customer) are offered as shortcuts when creating a planning, unless the dialog was opened from a project's row and already has it selected.
 - **Multiple Weeks**: Show 1, 2, 4 (default) or 8 weeks at once; capacity is summarized per week.
 - **Calendar Feed**: Subscribe to your own planning in Google Calendar, Outlook or Apple Calendar through a private address (see [Calendar feed](#calendar-feed)).
+- **Tentative Planning**: Mark planning that isn't confirmed yet, such as work for a deal that isn't signed. Tentative blocks are faded with a dashed border, and their hours are shown on top of the confirmed capacity ("+ 8 hrs tentative") without changing its colour. A "Planning" filter shows all, confirmed only or tentative only (the capacity always counts everything; "tentative only" also hides users without tentative work). "Confirm all for this project" (on the project row or in the dialog) confirms the ongoing and future tentative planning of a project for everyone you may edit, after showing how many plans, people and which period it changes.
 - **REST API**: Create, read, update and delete planned activities via `/api/planner/activities` (see the Kimai API docs under the "Planner" tag).
 - **Quick Modal Editing**: Create, update, or delete planned blocks seamlessly via modal dialogs.
 - **Date Navigation**: Fast week switcher controls (`Previous Week`, `Today`, `Next Week`, and date picker jump).
@@ -127,12 +128,13 @@ All endpoints require an API token and the `view_planner` permission; write oper
 
 | Method | Path | Description |
 | :--- | :--- | :--- |
-| `GET` | `/api/planner/activities` | List activities. Filters: `user`, `customers[]`, `projects[]`, `begin`, `end` (`Y-m-d`) |
+| `GET` | `/api/planner/activities` | List activities. Filters: `user`, `customers[]`, `projects[]`, `begin`, `end` (`Y-m-d`), `tentative` (`1` tentative only, `0` confirmed only) |
 | `GET` | `/api/planner/activities/{id}` | Fetch one activity |
-| `POST` | `/api/planner/activities` | Create. Body: `customer` (required unless `timeOff`), `project`, `user` (defaults to you), `begin`, `end`, `hoursPerDay` (`null` or left out when switching to time off: the whole day), `timeOff` (time off never keeps a customer or project), `color`, `comment`, `recurrentWeeks` |
+| `POST` | `/api/planner/activities` | Create. Body: `customer` (required unless `timeOff`), `project`, `user` (defaults to you), `begin`, `end`, `hoursPerDay` (`null` or left out when switching to time off: the whole day), `timeOff` (time off never keeps a customer or project), `color`, `tentative` (never for time off), `comment`, `recurrentWeeks` |
 | `PATCH` | `/api/planner/activities/{id}` | Update any subset of fields; `edit_mode: "future"` also updates later activities of a recurring series, moving their dates by as many days as this one moved |
 | `DELETE` | `/api/planner/activities/{id}` | Delete; `?mode=future` also deletes later activities of a recurring series |
 | `GET` | `/api/planner/holidays` | Public holidays users have off. Required: `begin`, `end` (`Y-m-d`, at most 366 days). Optional: `users[]` (default: everyone you may see). Returns `user`, `date`, `name`, `calendar`, `calendarName`, `type` per day |
+| `POST` | `/api/planner/activities/confirm-tentative` | Confirm the tentative activities of a project ending today or later. Body: `project` (required). Returns the IDs of the `confirmed` activities and of those `skipped` because you may not edit them |
 
 ## Public holidays
 
@@ -164,6 +166,10 @@ Everyone with the `view_planner` permission can subscribe to their own planned w
 - The address carries a random 64-character token and needs no login, which is how calendar apps can fetch it. Renewing the address on the same page makes the old one stop working; "Switch off" removes it. The feed also stops for users who are deactivated or lose `view_planner`.
 
 ## Upgrading
+
+### Tentative planning
+
+The migration `Version20261102120000` adds the column `tentative` (default false) to `kimai2_planned_activities`, so all existing planning stays confirmed. Run it after updating (see [Installation](#installation)).
 
 ### From 1.x to 2.0.0
 

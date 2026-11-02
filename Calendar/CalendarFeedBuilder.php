@@ -64,6 +64,10 @@ class CalendarFeedBuilder
             $hoursPerDay = $activity->getHoursPerDay();
             $hours = $hoursPerDay === null ? $this->translator->trans('planner.whole_day', [], 'messages', $locale) : self::formatHours($hoursPerDay);
             $title = $activity->isTimeOff() ? $this->translator->trans('planner.time_off', [], 'messages', $locale) : ($activity->getName() ?? '');
+            // most calendar apps ignore STATUS in subscribed calendars, so the title says it too
+            if ($activity->isTentative()) {
+                $title = $this->translator->trans('planner.tentative', [], 'messages', $locale) . ': ' . $title;
+            }
             $description = [];
             if ($activity->getCustomer() !== null) {
                 $description[] = $this->translator->trans('customer', [], 'messages', $locale) . ': ' . $activity->getCustomer()->getName();
@@ -88,6 +92,9 @@ class CalendarFeedBuilder
             $lines[] = 'SUMMARY:' . self::escape(\sprintf('%s (%s)', $title, $hoursPerDay === null ? $hours : $hours . 'h'));
             $lines[] = 'DESCRIPTION:' . self::escape(implode("\n", $description));
             $lines[] = 'URL:' . $url;
+            if ($activity->isTentative()) {
+                $lines[] = 'STATUS:TENTATIVE';
+            }
             $lines[] = 'TRANSP:TRANSPARENT';
             $lines[] = 'END:VEVENT';
         }

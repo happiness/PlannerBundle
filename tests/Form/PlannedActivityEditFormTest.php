@@ -42,6 +42,7 @@ class PlannedActivityEditFormTest extends TypeTestCase
         $this->assertTrue($form->has('end'));
         $this->assertTrue($form->has('hoursPerDay'));
         $this->assertTrue($form->has('color'));
+        $this->assertTrue($form->has('tentative'));
         $this->assertTrue($form->has('comment'));
     }
 

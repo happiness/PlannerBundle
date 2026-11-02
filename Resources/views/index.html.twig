@@ -188,6 +188,12 @@
                                                             {{ week.totalPlannedHours }}/{{ week.totalCapacityHours }} hrs ({{ week.totalActualHours }} hrs)
                                                         </div>
                                                     </div>
+                                                    {# tentative work on top of the confirmed planning, it does not change the colour #}
+                                                    {% if week.totalTentativeHours > 0 %}
+                                                        <div class="planner-summary-tentative" style="flex-basis: {{ min(week.tentativePercentage, 100) }}%;" title="{{ 'planner.tentative_hours'|trans({'%hours%': week.totalTentativeHours}) }}">
+                                                            <span class="text-truncate">{{ 'planner.tentative_hours'|trans({'%hours%': week.totalTentativeHours}) }}</span>
+                                                        </div>
+                                                    {% endif %}
                                                 </div>
                                             </td>
                                         {% endfor %}
@@ -221,10 +227,21 @@
                                             {% if day.timeOffHours > 0 %}
                                                 {% set dayHours = dayHours ~ ', ' ~ 'planner.time_off'|trans ~ ': ' ~ day.timeOffHours ~ ' hrs' %}
                                             {% endif %}
+                                            {# tentative work is a dashed band on top of the confirmed fill, it never changes the colour;
+                                               on a full day it overlaps the top of the fill, so overbooking if it is confirmed stays visible #}
+                                            {% set dayTentative = 0 %}
+                                            {% if day.tentativeHours > 0 %}
+                                                {% set dayHours = dayHours ~ ', ' ~ 'planner.tentative_hours'|trans({'%hours%': day.tentativeHours}) %}
+                                                {% if day.capacityHours > 0 %}
+                                                    {% set dayTentative = min(max((day.tentativeHours / day.capacityHours * 100)|round, 15), 100) %}
+                                                    {% set dayTentativeBottom = min(dayFill, 100 - dayTentative) %}
+                                                {% endif %}
+                                            {% endif %}
                                             {% if day.holiday %}
                                                 {% set dayHours = day.holiday.name ~ ' (' ~ day.holiday.calendarName ~ ')' ~ (day.plannedHours > 0 ? ', ' ~ dayHours : '') %}
                                             {% endif %}
-                                            <td class="planner-day-summary text-center border-top-0 {{ dayClass }}{% if day.holiday %} planner-holiday{% endif %}{% if loop.index0 % 7 == 0 %} border-start{% endif %}{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %}" style="--planner-day-fill: {{ dayFill }}%;" title="{{ dayHours }}"{% if day.holiday %} data-toggle="tooltip"{% endif %}>
+                                            <td class="planner-day-summary text-center border-top-0 {{ dayClass }}{% if day.holiday %} planner-holiday{% endif %}{% if loop.index0 % 7 == 0 %} border-start{% endif %}{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %}" style="--planner-day-fill: {{ dayFill }}%;{% if dayTentative > 0 %} --planner-day-tentative: {{ dayTentative }}%; --planner-day-tentative-bottom: {{ dayTentativeBottom }}%;{% endif %}" title="{{ dayHours }}"{% if day.holiday %} data-toggle="tooltip"{% endif %}>
+                                                {% if dayTentative > 0 %}<span class="planner-day-tentative"></span>{% endif %}
                                                 {% if day.holiday %}
                                                     {# the name is cut off to fit the column, the tooltip has it in full #}
                                                     <div class="planner-holiday-name text-truncate">{{ day.holiday.name }}</div>
@@ -236,6 +253,8 @@
                                                     <div class="planner-day-pct">{{ day.plannedPercentage }}%</div>
                                                 {% elseif day.plannedHours > 0 %}
                                                     <div class="planner-day-pct">{{ day.plannedHours }}h</div>
+                                                {% elseif day.tentativeHours > 0 %}
+                                                    <div class="planner-day-pct planner-tentative-hours">+{{ day.tentativeHours }}h</div>
                                                 {% else %}
                                                     <div class="planner-day-pct">&ndash;</div>
                                                 {% endif %}
@@ -251,7 +270,13 @@
                                                     <div class="text-truncate">
                                                         <span class="fw-bold small">{{ groupName }}</span>{% if group.projectName %}<span class="text-muted small"> / {{ group.projectName }}</span>{% endif %}
                                                     </div>
-                                                    <span class="text-muted small ms-2 flex-shrink-0">{{ group.getPlannedHours(row.days) }}h</span>
+                                                    <span class="d-flex align-items-center flex-shrink-0 ms-2">
+                                                        {% set groupTentative = group.getTentativeHours(row.days) %}
+                                                        <span class="text-muted small">{{ group.getPlannedHours(row.days) }}h{% if groupTentative > 0 %} <span class="planner-tentative-hours" title="{{ 'planner.tentative_hours'|trans({'%hours%': groupTentative}) }}">+{{ groupTentative }}h</span>{% endif %}</span>
+                                                        {% if group.project and group.hasTentative and is_granted('edit_planner') %}
+                                                            <a href="{{ path('planner_confirm_tentative', {'id': group.project.id, 'date': currentWeek|date('Y-m-d')}) }}" class="btn btn-sm btn-icon btn-ghost-success modal-ajax-form ms-1 p-0" title="{{ 'planner.confirm_tentative'|trans }}">{{ icon('success') }}</a>
+                                                        {% endif %}
+                                                    </span>
                                                 </div>
                                             </td>
                                             {% for segment in group.getSegments(row.days) %}
@@ -280,10 +305,10 @@
                                                         {% endif %}
                                                         {% set activityHours = activity.wholeDay ? 'planner.whole_day'|trans : activity.hoursPerDay ~ 'h' %}
                                                         <a href="{{ path('planner_activity_edit', {'id': activity.id, 'date': date|date('Y-m-d')}) }}"
-                                                           class="planner-activity position-relative z-2 d-flex justify-content-between align-items-center px-2 py-1 rounded text-decoration-none modal-ajax-form shadow-sm{% if not loop.first %} mt-1{% endif %}{% if canMove %} planner-movable{% endif %}{% if activity.timeOff %} planner-activity-off{% endif %}"
+                                                           class="planner-activity position-relative z-2 d-flex justify-content-between align-items-center px-2 py-1 rounded text-decoration-none modal-ajax-form shadow-sm{% if not loop.first %} mt-1{% endif %}{% if canMove %} planner-movable{% endif %}{% if activity.timeOff %} planner-activity-off{% endif %}{% if activity.tentative %} planner-tentative{% endif %}"
                                                            {% if not activity.timeOff %}style="background-color: {{ activity.colorSafe }}; color: {{ activity.colorSafe|font_contrast }};"{% endif %}
                                                            {% if canMove %}data-planner-move-url="{{ path('planner_activity_move', {'id': activity.id}) }}" data-planner-begin="{{ activity.begin|date('Y-m-d') }}" data-planner-end="{{ activity.end|date('Y-m-d') }}"{% if activity.daysCount > 1 %} data-planner-split-url="{{ path('planner_activity_split', {'id': activity.id}) }}"{% endif %}{% if joinable is not null %} data-planner-join-url="{{ path('planner_activity_join', {'id': activity.id, 'other': joinable.id}) }}" data-planner-join-day="{{ joinable.begin|date('Y-m-d') }}"{% endif %}{% endif %}
-                                                           title="{{ activity.timeOff ? 'planner.time_off'|trans : activity.name }} ({{ activityHours }}){% if activity.hasComment %}: {{ activity.comment|u.truncate(1024, '...') }}{% endif %}">
+                                                           title="{% if activity.tentative %}{{ 'planner.tentative'|trans }}: {% endif %}{{ activity.timeOff ? 'planner.time_off'|trans : activity.name }} ({{ activityHours }}){% if activity.hasComment %}: {{ activity.comment|u.truncate(1024, '...') }}{% endif %}">
                                                             {% if canMove and activity.begin|date('Y-m-d') == date|date('Y-m-d') %}<span class="planner-handle planner-handle-start" data-planner-handle="start"></span>{% endif %}
                                                             <span class="text-truncate small">{% if activity.hasComment %}{{ icon('comment') }} {% endif %}{{ activityHours }}</span>
                                                             {% if canMove and activity.end|date('Y-m-d') == segmentEnd|date('Y-m-d') %}<span class="planner-handle planner-handle-end" data-planner-handle="end"></span>{% endif %}
@@ -337,6 +362,9 @@
                                     <tr class="bg-light fw-bold">
                                         <td class="text-right p-1" colspan="2">
                                             <div>{{ plannerData.totalPlannedHours }}h / {{ plannerData.totalCapacityHours }}h</div>
+                                            {% if plannerData.totalTentativeHours > 0 %}
+                                                <div class="small planner-tentative-hours fw-normal">{{ 'planner.tentative_hours'|trans({'%hours%': plannerData.totalTentativeHours}) }}</div>
+                                            {% endif %}
                                             {% if plannerData.totalActualHours > 0 %}
                                                 <div class="small text-muted fw-normal">{{ 'planner.actual_hours'|trans }}: {{ plannerData.totalActualHours }}h</div>
                                             {% endif %}
@@ -344,8 +372,12 @@
                                         {% for day in plannerData.dateHeaders %}
                                             {% set dayTotalPlanned = plannerData.getTotalPlannedHoursForDay(day) %}
                                             {% set dayTotalActual = plannerData.getTotalActualHoursForDay(day) %}
+                                            {% set dayTotalTentative = plannerData.getTotalTentativeHoursForDay(day) %}
                                             <td class="align-top text-center{% if day is today %} today{% endif %} p-1">
                                                 <div>{{ dayTotalPlanned }}h</div>
+                                                {% if dayTotalTentative > 0 %}
+                                                    <div class="small planner-tentative-hours fw-normal" title="{{ 'planner.tentative_hours'|trans({'%hours%': dayTotalTentative}) }}">+{{ dayTotalTentative }}h</div>
+                                                {% endif %}
                                                 {% if dayTotalActual > 0 %}
                                                     <div class="small text-muted fw-normal">{{ dayTotalActual }}h</div>
                                                 {% endif %}
@@ -415,6 +447,31 @@
         }
         .planner-activity.planner-movable {
             cursor: grab;
+        }
+        /* not confirmed yet: faded with a dashed border, the tooltip says so in words */
+        .planner-activity.planner-tentative {
+            opacity: 0.55;
+            border: 1px dashed currentColor;
+            box-shadow: none !important;
+        }
+        .planner-tentative-hours {
+            font-style: italic;
+            opacity: 0.75;
+        }
+        /* an empty placeholder next to the badge: as wide as the share of capacity the tentative work would take */
+        .planner-summary-tentative {
+            display: flex;
+            align-items: center;
+            flex-shrink: 1;
+            min-width: 5.5rem;
+            max-width: calc(100% - 140px);
+            padding: 0 8px;
+            border: 2px dashed rgba(255, 255, 255, 0.8);
+            border-left: 0;
+            background-color: rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+            font-size: 0.75rem;
+            white-space: nowrap;
         }
         .planner-handle {
             position: absolute;
@@ -538,16 +595,37 @@
         .planner-day-pct {
             font-weight: 600;
         }
+        td.planner-day-summary {
+            position: relative;
+        }
+        /* an empty placeholder right on top of the planned fill, in the fill's own colour */
+        .planner-day-tentative {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: var(--planner-day-tentative-bottom, 0%);
+            height: var(--planner-day-tentative, 0%);
+            border: 1px dashed var(--planner-day-line, #94a3b8);
+            border-bottom: 0;
+            pointer-events: none;
+        }
+        /* the figures stay above the placeholder */
+        td.planner-day-summary > div {
+            position: relative;
+        }
         td.planner-day-success {
             --planner-day-color: rgba(95, 166, 117, 0.35);
+            --planner-day-line: rgba(95, 166, 117, 0.9);
             color: #2f6b42;
         }
         td.planner-day-warning {
             --planner-day-color: rgba(240, 173, 78, 0.4);
+            --planner-day-line: rgba(240, 173, 78, 0.95);
             color: #8a5a12;
         }
         td.planner-day-danger {
             --planner-day-color: rgba(219, 92, 92, 0.4);
+            --planner-day-line: rgba(219, 92, 92, 0.9);
             color: #a32626;
         }
         td.planner-day-muted {

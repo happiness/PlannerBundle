@@ -79,13 +79,26 @@ final class WeeklyPlannerDay
     }
 
     /**
-     * Planned work only, time off is not planned but reduces the capacity.
+     * Confirmed planned work only: time off is not planned but reduces the capacity, tentative work is counted apart
+     * in getTentativeHours().
      */
     public function getPlannedHours(): float
     {
         $total = 0.0;
         foreach ($this->activities as $activity) {
-            if (!$activity->isTimeOff()) {
+            if (!$activity->isTimeOff() && !$activity->isTentative()) {
+                $total += $this->getHoursOf($activity);
+            }
+        }
+
+        return $total;
+    }
+
+    public function getTentativeHours(): float
+    {
+        $total = 0.0;
+        foreach ($this->activities as $activity) {
+            if (!$activity->isTimeOff() && $activity->isTentative()) {
                 $total += $this->getHoursOf($activity);
             }
         }

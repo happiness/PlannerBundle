@@ -27,6 +27,10 @@ class PlannedActivityTest extends TestCase
 
         $this->assertNull($activity->getId());
 
+        $this->assertFalse($activity->isTentative());
+        $this->assertSame($activity, $activity->setTentative(true));
+        $this->assertTrue($activity->isTentative());
+
         $user = new User();
         $this->assertSame($activity, $activity->setUser($user));
         $this->assertSame($user, $activity->getUser());
@@ -239,6 +243,20 @@ class PlannedActivityTest extends TestCase
         $otherColor = $make('2026-11-04', '2026-11-04');
         $otherColor->setColor('#00ff00');
         $this->assertFalse($first->isJoinableWith($otherColor));
+        $this->assertFalse($first->isJoinableWith($make('2026-11-04', '2026-11-04')->setTentative(true)), 'tentative and confirmed');
+    }
+
+    public function testTimeOffIsNeverTentative(): void
+    {
+        $activity = (new PlannedActivity())->setTentative(true)->setTimeOff(true);
+        $this->assertFalse($activity->isTentative());
+
+        // also when the flag is set after switching to time off, as a form may do
+        $activity->setTentative(true);
+        $this->assertFalse($activity->isTentative());
+
+        $activity->setTimeOff(false);
+        $this->assertFalse($activity->isTentative(), 'switching to time off cleared the flag');
     }
 
     public function testWeeksOfASevenDaySeriesAreNotJoinable(): void

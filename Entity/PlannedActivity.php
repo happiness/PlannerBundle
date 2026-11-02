@@ -115,6 +115,14 @@ class PlannedActivity
     #[Serializer\Groups(['Default'])]
     private ?string $recurrenceGroup = null;
 
+    /**
+     * Work that is not confirmed yet (e.g. a deal that is not signed), shown faded and counted apart from confirmed capacity.
+     */
+    #[ORM\Column(name: 'tentative', type: Types::BOOLEAN, nullable: false, options: ['default' => false])]
+    #[Serializer\Expose]
+    #[Serializer\Groups(['Default'])]
+    private bool $tentative = false;
+
     public function __construct()
     {
         $this->begin = new \DateTime('today');
@@ -282,6 +290,7 @@ class PlannedActivity
             $this->customer = null;
             $this->project = null;
             $this->title = null;
+            $this->tentative = false;
         }
 
         return $this;
@@ -324,6 +333,21 @@ class PlannedActivity
     public function isRecurring(): bool
     {
         return $this->recurrenceGroup !== null && $this->recurrenceGroup !== '';
+    }
+
+    /**
+     * Time off is never tentative.
+     */
+    public function isTentative(): bool
+    {
+        return $this->tentative && !$this->timeOff;
+    }
+
+    public function setTentative(bool $tentative): self
+    {
+        $this->tentative = $tentative && !$this->timeOff;
+
+        return $this;
     }
 
     public function coversDate(\DateTimeInterface $date): bool
@@ -378,6 +402,7 @@ class PlannedActivity
             && $this->getColor() === $next->getColor()
             && ($this->comment ?? '') === ($next->getComment() ?? '')
             && $this->recurrenceGroup === $next->getRecurrenceGroup()
+            && $this->isTentative() === $next->isTentative()
             && $this->timeOff === $next->isTimeOff();
     }
 

@@ -143,6 +143,16 @@ final class WeeklyPlannerUserRow
         return $total;
     }
 
+    public function getTotalTentativeHours(): float
+    {
+        $total = 0.0;
+        foreach ($this->days as $day) {
+            $total += $day->getTentativeHours();
+        }
+
+        return $total;
+    }
+
     public function getTotalActualHours(): float
     {
         $total = 0.0;

@@ -78,9 +78,12 @@ var/plugins/PlannerBundle/
 │   ├── Version20260909000000.php      # Initial planner schema (kimai2_planned_activities table)
 │   ├── Version20260914000000.php      # Schema updates (recurring activities support)
 │   ├── Version20261019000000.php      # customer_id/project_id columns, title becomes nullable
-│   └── Version20261102000000.php      # kimai2_planner_calendar_tokens (calendar feed tokens)
+│   ├── Version20261102000000.php      # kimai2_planner_calendar_tokens (calendar feed tokens)
+│   └── Version20261102120000.php      # tentative flag
 ├── Planner/
 │   ├── PlannerUserProvider.php        # Resolves which users' plans the current user may see (web + API)
+│   ├── TentativeConfirmer.php         # "Confirm all for this project": ongoing/future tentative plans the user may edit (web + API)
+│   ├── TentativeConfirmation.php      # What a confirmation changes: activities, skipped ones, people and period
 │   ├── WeeklyPlannerService.php       # Domain service aggregating week data, user rows, capacity & actuals
 │   ├── WeeklyPlannerData.php          # Value object representing complete week grid
 │   ├── WeeklyPlannerUserRow.php       # Per-user row containing daily breakdowns & contract summary
@@ -99,6 +102,7 @@ var/plugins/PlannerBundle/
 │   └── views/
 │       ├── index.html.twig            # Main weekly planner matrix view & toolbar
 │       ├── form.html.twig             # Modal form template for planned activities
+│       ├── confirm_tentative.html.twig # Modal question before confirming a project's tentative planning
 │       └── delete.html.twig           # Modal deletion confirmation template
 ├── tests/                             # Comprehensive PHPUnit test suite mirroring src/
 │   ├── Controller/

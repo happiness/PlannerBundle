@@ -162,4 +162,20 @@ class WeeklyPlannerGroupTest extends TestCase
         $this->assertSame($second, $group->getJoinableAfter($first));
         $this->assertNull($group->getJoinableAfter($second));
     }
+
+    public function testTentativeHoursAreCountedApart(): void
+    {
+        $confirmed = $this->createActivity('2026-10-19', '2026-10-20', 4.0);
+        $tentative = $this->createActivity('2026-10-21', '2026-10-21', 2.0)->setTentative(true);
+        $group = WeeklyPlannerGroup::createFor($confirmed);
+        $group->addActivity($confirmed);
+
+        $this->assertFalse($group->hasTentative());
+
+        $group->addActivity($tentative);
+
+        $this->assertTrue($group->hasTentative());
+        $this->assertSame(8.0, $group->getPlannedHours($this->createWeek()));
+        $this->assertSame(2.0, $group->getTentativeHours($this->createWeek()));
+    }
 }

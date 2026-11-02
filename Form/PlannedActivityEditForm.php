@@ -109,6 +109,13 @@ class PlannedActivityEditForm extends AbstractType
                 'label' => 'label.color',
                 'required' => false,
                 'empty_data' => null,
+            ])
+            ->add('tentative', YesNoType::class, [
+                'label' => 'planner.tentative',
+                'help' => 'planner.tentative_help',
+                'documentation' => [
+                    'description' => 'If true, the work is not confirmed yet and counts apart from the confirmed capacity (default: false)',
+                ],
             ]);
 
         if ($includeRecurrence) {

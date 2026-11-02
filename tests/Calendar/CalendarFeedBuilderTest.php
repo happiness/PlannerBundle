@@ -32,6 +32,7 @@ class CalendarFeedBuilderTest extends TestCase
             'planner.hours_per_day' => 'Hours per day',
             'planner.time_off' => 'Time off',
             'planner.whole_day' => 'Whole day',
+            'planner.tentative' => 'Tentative',
             default => $id,
         });
 
@@ -139,6 +140,20 @@ class CalendarFeedBuilderTest extends TestCase
         }
         $this->assertSame($line, str_replace("\r\n ", '', $folded));
         $this->assertSame('SHORT:line', CalendarFeedBuilder::fold('SHORT:line'));
+    }
+
+    public function testTentativeWorkIsMarkedAsTentative(): void
+    {
+        $customer = new Customer('Acme');
+        $tentative = $this->createActivity(7, '2026-11-09', '2026-11-09')->setCustomer($customer)->setTentative(true);
+        $confirmed = $this->createActivity(8, '2026-11-10', '2026-11-10')->setCustomer($customer);
+
+        $lines = $this->lines($this->createBuilder()->build($this->createUser(), [$tentative, $confirmed]));
+
+        $this->assertContains('SUMMARY:Tentative: Acme (6h)', $lines);
+        $this->assertContains('SUMMARY:Acme (6h)', $lines);
+        $this->assertSame(1, \count(array_keys($lines, 'STATUS:TENTATIVE', true)));
+        $this->assertLessThan(array_search('UID:planner-activity-8@kimai.example.com', $lines, true), array_search('STATUS:TENTATIVE', $lines, true));
     }
 
     public function testTimeOff(): void
