@@ -82,7 +82,7 @@ final class WeeklyPlannerUserRow
     }
 
     /**
-     * Activities grouped by customer/project, ordered by customer and project name.
+     * Activities grouped by customer/project, ordered by customer and project name, with time off first.
      *
      * @return array<WeeklyPlannerGroup>
      */
@@ -95,7 +95,7 @@ final class WeeklyPlannerUserRow
             $groups[$key]->addActivity($activity);
         }
 
-        uasort($groups, static fn (WeeklyPlannerGroup $a, WeeklyPlannerGroup $b): int => [$a->getCustomerName(), $a->getProjectName() ?? ''] <=> [$b->getCustomerName(), $b->getProjectName() ?? '']);
+        uasort($groups, static fn (WeeklyPlannerGroup $a, WeeklyPlannerGroup $b): int => [!$a->isTimeOff(), $a->getCustomerName(), $a->getProjectName() ?? ''] <=> [!$b->isTimeOff(), $b->getCustomerName(), $b->getProjectName() ?? '']);
 
         return array_values($groups);
     }
@@ -110,14 +110,27 @@ final class WeeklyPlannerUserRow
         return $total;
     }
 
+    /**
+     * Contract hours minus time off.
+     */
+    public function getTotalCapacityHours(): float
+    {
+        $total = 0.0;
+        foreach ($this->days as $day) {
+            $total += $day->getCapacityHours();
+        }
+
+        return $total;
+    }
+
     public function getPlannedPercentage(): int
     {
-        $expected = $this->getTotalExpectedHours();
-        if ($expected <= 0.0) {
+        $capacity = $this->getTotalCapacityHours();
+        if ($capacity <= 0.0) {
             return 0;
         }
 
-        return (int) round(($this->getTotalPlannedHours() / $expected) * 100);
+        return (int) round(($this->getTotalPlannedHours() / $capacity) * 100);
     }
 
     public function getTotalPlannedHours(): float
@@ -142,16 +155,16 @@ final class WeeklyPlannerUserRow
 
     public function isOverAllocated(): bool
     {
-        return $this->getTotalPlannedHours() > $this->getTotalExpectedHours();
+        return $this->getTotalPlannedHours() > $this->getTotalCapacityHours();
     }
 
     public function isUnderAllocated(): bool
     {
-        return $this->getTotalPlannedHours() < $this->getTotalExpectedHours();
+        return $this->getTotalPlannedHours() < $this->getTotalCapacityHours();
     }
 
     public function isBalanced(): bool
     {
-        return abs($this->getTotalPlannedHours() - $this->getTotalExpectedHours()) < 0.001;
+        return abs($this->getTotalPlannedHours() - $this->getTotalCapacityHours()) < 0.001;
     }
 }

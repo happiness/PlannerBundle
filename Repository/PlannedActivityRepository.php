@@ -101,6 +101,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $splitActivity->setProject($activity->getProject());
         $splitActivity->setTitle($activity->getTitle());
         $splitActivity->setHoursPerDay($activity->getHoursPerDay());
+        $splitActivity->setTimeOff($activity->isTimeOff());
         $splitActivity->setColor($activity->getColor());
         $splitActivity->setComment($activity->getComment());
         $splitActivity->setRecurrenceGroup($activity->getRecurrenceGroup());
@@ -185,6 +186,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
             $future->setProject($activity->getProject());
             $future->setTitle($activity->getTitle());
             $future->setHoursPerDay($activity->getHoursPerDay());
+            $future->setTimeOff($activity->isTimeOff());
             $future->setColor($activity->getColor());
             $future->setComment($activity->getComment());
             $entityManager->persist($future);
@@ -243,6 +245,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
             $recurring->setProject($activity->getProject());
             $recurring->setTitle($activity->getTitle());
             $recurring->setHoursPerDay($activity->getHoursPerDay());
+            $recurring->setTimeOff($activity->isTimeOff());
             $recurring->setColor($activity->getColor());
             $recurring->setComment($activity->getComment());
             $recurring->setRecurrenceGroup($activity->getRecurrenceGroup());

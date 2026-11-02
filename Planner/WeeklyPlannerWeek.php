@@ -45,6 +45,14 @@ final class WeeklyPlannerWeek
         return array_sum(array_map(static fn (WeeklyPlannerDay $day): float => $day->getExpectedHours(), $this->days));
     }
 
+    /**
+     * Contract hours minus time off.
+     */
+    public function getTotalCapacityHours(): float
+    {
+        return array_sum(array_map(static fn (WeeklyPlannerDay $day): float => $day->getCapacityHours(), $this->days));
+    }
+
     public function getTotalPlannedHours(): float
     {
         return array_sum(array_map(static fn (WeeklyPlannerDay $day): float => $day->getPlannedHours(), $this->days));
@@ -57,16 +65,21 @@ final class WeeklyPlannerWeek
 
     public function getPlannedPercentage(): int
     {
-        $expected = $this->getTotalExpectedHours();
-        if ($expected <= 0.0) {
+        $capacity = $this->getTotalCapacityHours();
+        if ($capacity <= 0.0) {
             return 0;
         }
 
-        return (int) round(($this->getTotalPlannedHours() / $expected) * 100);
+        return (int) round(($this->getTotalPlannedHours() / $capacity) * 100);
     }
 
     public function isOverAllocated(): bool
     {
-        return $this->getTotalPlannedHours() > $this->getTotalExpectedHours();
+        return $this->getTotalPlannedHours() > $this->getTotalCapacityHours();
+    }
+
+    public function isBalanced(): bool
+    {
+        return abs($this->getTotalPlannedHours() - $this->getTotalCapacityHours()) < 0.001;
     }
 }

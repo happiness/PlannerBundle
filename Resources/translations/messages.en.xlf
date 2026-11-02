@@ -166,6 +166,18 @@
                 <source>planner.toggle_activities</source>
                 <target>Expand/collapse activities</target>
             </trans-unit>
+            <trans-unit id="planner.time_off">
+                <source>planner.time_off</source>
+                <target>Time off</target>
+            </trans-unit>
+            <trans-unit id="planner.time_off_help">
+                <source>planner.time_off_help</source>
+                <target>Not available for planning. Leave the hours empty for the whole day.</target>
+            </trans-unit>
+            <trans-unit id="planner.whole_day">
+                <source>planner.whole_day</source>
+                <target>Whole day</target>
+            </trans-unit>
             <trans-unit id="planner.suggestions">
                 <source>planner.suggestions</source>
                 <target>Frequently used</target>

@@ -40,7 +40,21 @@ class WeeklyPlannerWeekTest extends TestCase
         $this->assertSame(7.0, $week->getTotalActualHours());
         $this->assertSame(75, $week->getPlannedPercentage());
         $this->assertFalse($week->isOverAllocated());
+        $this->assertFalse($week->isBalanced());
         $this->assertSame('2026-10-19', $week->getStart()?->format('Y-m-d'));
+    }
+
+    public function testBalancedWhenPlannedMatchesCapacity(): void
+    {
+        $full = new WeeklyPlannerWeek([
+            $this->createDay('2026-10-19', 8.0, 0.0, 8.0),
+            $this->createDay('2026-10-20', 8.0, 0.0, 8.0),
+        ]);
+        $this->assertTrue($full->isBalanced());
+        $this->assertFalse($full->isOverAllocated());
+
+        $over = new WeeklyPlannerWeek([$this->createDay('2026-10-19', 8.0, 0.0, 10.0)]);
+        $this->assertFalse($over->isBalanced());
     }
 
     public function testOverAllocationAndNoCapacity(): void
@@ -54,5 +68,23 @@ class WeeklyPlannerWeekTest extends TestCase
         $empty = new WeeklyPlannerWeek([]);
         $this->assertNull($empty->getStart());
         $this->assertSame(0.0, $empty->getTotalPlannedHours());
+    }
+
+    public function testTimeOffIsTakenOffTheCapacity(): void
+    {
+        $monday = $this->createDay('2026-11-02', 8.0, 0.0, 4.0);
+        $monday->addActivity((new PlannedActivity())->setTimeOff(true)->setHoursPerDay(4.0));
+        $tuesday = $this->createDay('2026-11-03', 8.0, 0.0, 0.0);
+        $tuesday->addActivity((new PlannedActivity())->setTimeOff(true)->setHoursPerDay(null));
+        $wednesday = $this->createDay('2026-11-04', 8.0, 0.0, 8.0);
+
+        $week = new WeeklyPlannerWeek([$monday, $tuesday, $wednesday]);
+
+        $this->assertSame(24.0, $week->getTotalExpectedHours());
+        $this->assertSame(12.0, $week->getTotalCapacityHours());
+        $this->assertSame(12.0, $week->getTotalPlannedHours());
+        $this->assertSame(100, $week->getPlannedPercentage());
+        $this->assertTrue($week->isBalanced());
+        $this->assertFalse($week->isOverAllocated());
     }
 }
