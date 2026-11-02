@@ -40,6 +40,10 @@ final class PlannerToolbarForm extends AbstractType
                 'planner.planning_tentative' => PlannerQuery::PLANNING_TENTATIVE,
             ],
         ]);
+        $this->addOrderBy($builder, [
+            'planner.order_name' => PlannerQuery::ORDER_BY_NAME,
+            'planner.order_free_hours' => PlannerQuery::ORDER_BY_FREE_HOURS,
+        ]);
         $this->addHiddenPagination($builder);
     }
 

@@ -374,6 +374,26 @@
                 <source>planner.confirm_tentative_none</source>
                 <target>%project% har ingen preliminär planering från i dag och framåt som du kan bekräfta.</target>
             </trans-unit>
+            <trans-unit id="planner.order_name">
+                <source>planner.order_name</source>
+                <target>Namn</target>
+            </trans-unit>
+            <trans-unit id="planner.order_free_hours">
+                <source>planner.order_free_hours</source>
+                <target>Flest lediga timmar</target>
+            </trans-unit>
+            <trans-unit id="planner.free_hours">
+                <source>planner.free_hours</source>
+                <target>%hours% tim lediga</target>
+            </trans-unit>
+            <trans-unit id="planner.over_hours">
+                <source>planner.over_hours</source>
+                <target>%hours% tim över</target>
+            </trans-unit>
+            <trans-unit id="planner.tentative_hours_short">
+                <source>planner.tentative_hours_short</source>
+                <target>%hours% tim preliminärt</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>

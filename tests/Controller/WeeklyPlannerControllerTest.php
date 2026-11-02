@@ -1428,6 +1428,87 @@ class WeeklyPlannerControllerTest extends TestCase
     }
 
     /**
+     * @return array<string, array{string, array<int>}>
+     */
+    public static function orderScenarios(): array
+    {
+        return [
+            'by name keeps the order of the users' => [PlannerQuery::ORDER_BY_NAME, [1, 2, 3]],
+            'by free hours puts the most free hours first' => [PlannerQuery::ORDER_BY_FREE_HOURS, [3, 1, 2]],
+        ];
+    }
+
+    /**
+     * @param array<int> $expectedOrder
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('orderScenarios')]
+    public function testRowsAreOrderedAsTheSearchAsks(string $orderBy, array $expectedOrder): void
+    {
+        $user = new User();
+        $ref = new \ReflectionProperty(User::class, 'id');
+        $ref->setValue($user, 1);
+
+        // a week to come, since days that have passed have no free hours
+        $monday = new \DateTimeImmutable('monday next week');
+        $data = new WeeklyPlannerData($monday, $monday->modify('+6 days'));
+        // user => [expected, planned] on Monday: 2 free, overbooked by 2, 8 free
+        foreach ([1 => [8.0, 6.0], 2 => [8.0, 10.0], 3 => [8.0, 0.0]] as $id => [$expected, $planned]) {
+            $rowUser = new User();
+            $ref->setValue($rowUser, $id);
+            $row = new \KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerUserRow($rowUser);
+            $day = new \KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerDay($monday, $expected);
+            $day->addActivity((new PlannedActivity())->setHoursPerDay($planned));
+            $row->addDay($day);
+            $data->addRow($row);
+        }
+
+        $plannerService = $this->createMock(WeeklyPlannerService::class);
+        $plannerService->method('getPlannerData')->willReturn($data);
+
+        $controller = new WeeklyPlannerController(
+            $this->createMock(PlannedActivityRepository::class),
+            $plannerService,
+            $this->createMock(UserRepository::class),
+            $this->createMock(PlannerUserProvider::class)
+        );
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturn(false);
+        $tokenStorage = $this->createMock(TokenStorageInterface::class);
+        $tokenStorage->method('getToken')->willReturn(new UsernamePasswordToken($user, 'main', $user->getRoles()));
+
+        $twig = $this->createMock(Environment::class);
+        $twig->expects($this->once())
+            ->method('render')
+            ->with('@Planner/index.html.twig', $this->callback(function (array $context) use ($expectedOrder): bool {
+                $this->assertSame($expectedOrder, array_keys($context['plannerData']->getRows()));
+
+                return true;
+            }))
+            ->willReturn('<html></html>');
+
+        $query = new PlannerQuery();
+        $query->setOrderBy($orderBy);
+        $formServices = $this->createFormServices($query);
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnMap([
+            ['security.authorization_checker', true],
+            ['security.token_storage', true],
+            ...$this->formServiceMap('has', $formServices),
+            ['twig', true],
+        ]);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['security.token_storage', $tokenStorage],
+            ...$this->formServiceMap('get', $formServices),
+            ['twig', $twig],
+        ]);
+        $controller->setContainer($container);
+
+        $controller->index();
+    }
+
+    /**
      * @return array{form.factory: FormFactoryInterface, bookmark: BookmarkRepository}
      */
     private function createFormServices(?PlannerQuery $query = null): array

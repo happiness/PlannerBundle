@@ -25,13 +25,17 @@ final class PlannerQuery extends BaseQuery
     public const PLANNING_TENTATIVE = 'tentative';
     public const PLANNING_CHOICES = [self::PLANNING_ALL, self::PLANNING_CONFIRMED, self::PLANNING_TENTATIVE];
 
+    public const ORDER_BY_NAME = 'username';
+    public const ORDER_BY_FREE_HOURS = 'free';
+    public const ORDER_BY_CHOICES = [self::ORDER_BY_NAME, self::ORDER_BY_FREE_HOURS];
+
     private string $planning = self::PLANNING_ALL;
 
     public function __construct()
     {
         $this->setDefaults([
             'order' => self::ORDER_ASC,
-            'orderBy' => 'username',
+            'orderBy' => self::ORDER_BY_NAME,
             'teams' => [],
             'users' => [],
             'planning' => self::PLANNING_ALL,
@@ -51,6 +55,19 @@ final class PlannerQuery extends BaseQuery
         $this->planning = \in_array($planning, self::PLANNING_CHOICES, true) ? $planning : self::PLANNING_ALL;
 
         return $this;
+    }
+
+    /**
+     * Users are listed by name, or with the most free hours of the shown weeks first.
+     */
+    public function setOrderBy(?string $orderBy): self
+    {
+        return parent::setOrderBy(\in_array($orderBy, self::ORDER_BY_CHOICES, true) ? $orderBy : self::ORDER_BY_NAME);
+    }
+
+    public function isOrderedByFreeHours(): bool
+    {
+        return $this->getOrderBy() === self::ORDER_BY_FREE_HOURS;
     }
 
     /**

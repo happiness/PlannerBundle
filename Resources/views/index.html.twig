@@ -163,7 +163,17 @@
                                         <td class="w-avatar align-middle p-1 planner-user-cell">{{ widgets.user_avatar(row.user, false, 'avatar-sm') }}</td>
                                         <td class="text-nowrap align-middle p-1 planner-user-cell">
                                             <div class="d-flex justify-content-between align-items-center">
-                                                <div>{{ row.user.displayName }}</div>
+                                                <div>
+                                                    <div>{{ row.user.displayName }}</div>
+                                                    {# explains the order while sorting by free hours #}
+                                                    {% if query.orderedByFreeHours %}
+                                                        {% set freeHours = row.freeHours %}
+                                                        <div class="small {{ freeHours < 0 ? 'text-danger' : 'text-muted' }} planner-free-hours">
+                                                            {{- (freeHours < 0 ? 'planner.over_hours' : 'planner.free_hours')|trans({'%hours%': freeHours|abs}) -}}
+                                                            {%- if row.totalTentativeHours > 0 %} ({{ 'planner.tentative_hours_short'|trans({'%hours%': row.totalTentativeHours}) }}){% endif -%}
+                                                        </div>
+                                                    {% endif %}
+                                                </div>
                                                 <button type="button" class="btn btn-sm btn-icon btn-ghost-secondary planner-user-toggle m-2 p-0" aria-expanded="false" title="{{ 'planner.toggle_activities'|trans }}">
                                                     <span class="toggle-icon d-inline-block">{{ icon('right') }}</span>
                                                 </button>

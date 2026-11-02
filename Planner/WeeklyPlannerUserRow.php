@@ -163,6 +163,24 @@ final class WeeklyPlannerUserRow
         return $total;
     }
 
+    /**
+     * Capacity (contract hours minus time off and holidays) left after the confirmed planning from today on, negative
+     * when overbooked; tentative work does not count. Days that have passed are not free any more, so they don't count.
+     */
+    public function getFreeHours(?\DateTimeInterface $today = null): float
+    {
+        $from = ($today ?? new \DateTimeImmutable('today'))->format('Y-m-d');
+
+        $total = 0.0;
+        foreach ($this->days as $date => $day) {
+            if ($date >= $from) {
+                $total += $day->getCapacityHours() - $day->getPlannedHours();
+            }
+        }
+
+        return round($total, 2);
+    }
+
     public function isOverAllocated(): bool
     {
         return $this->getTotalPlannedHours() > $this->getTotalCapacityHours();
