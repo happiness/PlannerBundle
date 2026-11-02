@@ -16,6 +16,8 @@ use App\WorkingTime\Calculator\WorkingTimeCalculator;
 use App\WorkingTime\Mode\WorkingTimeMode;
 use App\WorkingTime\WorkingTimeService;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Holiday\HolidayProviderInterface;
+use KimaiPlugin\PlannerBundle\Holiday\PublicHoliday;
 use KimaiPlugin\PlannerBundle\Planner\WorkingDayRanges;
 use PHPUnit\Framework\TestCase;
 
@@ -23,9 +25,10 @@ class WorkingDayRangesTest extends TestCase
 {
     /**
      * @param array<int> $workingWeekdays ISO weekdays (1 = Monday) with contract hours
+     * @param array<string> $holidays public holidays as Y-m-d
      * @return array<string> each range as 'Y-m-d..Y-m-d'
      */
-    private function ranges(string $begin, string $end, array $workingWeekdays = [1, 2, 3, 4, 5]): array
+    private function ranges(string $begin, string $end, array $workingWeekdays = [1, 2, 3, 4, 5], array $holidays = []): array
     {
         $calculator = $this->createStub(WorkingTimeCalculator::class);
         $calculator->method('getWorkHoursForDay')->willReturnCallback(
@@ -36,17 +39,29 @@ class WorkingDayRangesTest extends TestCase
         $service = $this->createStub(WorkingTimeService::class);
         $service->method('getContractMode')->willReturn($mode);
 
+        $holidayProvider = $this->createStub(HolidayProviderInterface::class);
+        $holidayProvider->method('getHolidays')->willReturn(array_fill_keys($holidays, new PublicHoliday(new \DateTimeImmutable(), 'Holiday', 'SE', 'Sweden', 'official')));
+
         $activity = (new PlannedActivity())->setUser(new User())->setBegin(new \DateTime($begin))->setEnd(new \DateTime($end));
 
         return array_map(
             static fn (array $range): string => $range[0]->format('Y-m-d') . '..' . $range[1]->format('Y-m-d'),
-            (new WorkingDayRanges($service))->forActivity($activity)
+            (new WorkingDayRanges($service, $holidayProvider))->forActivity($activity)
         );
     }
 
     public function testFridayToTuesdaySkipsTheWeekend(): void
     {
         $this->assertSame(['2026-11-06..2026-11-06', '2026-11-09..2026-11-10'], $this->ranges('2026-11-06', '2026-11-10'));
+    }
+
+    public function testPublicHolidaysAreSkipped(): void
+    {
+        // Christmas Eve to Boxing Day off, a week from Monday 21 December
+        $this->assertSame(
+            ['2026-12-21..2026-12-23'],
+            $this->ranges('2026-12-21', '2026-12-25', holidays: ['2026-12-24', '2026-12-25', '2026-12-26'])
+        );
     }
 
     public function testLeadingAndTrailingDaysOffAreDropped(): void

@@ -44,7 +44,8 @@ var/plugins/PlannerBundle/
 ├── phpstan.neon                       # Plugin-specific PHPStan configuration
 ├── .php-cs-fixer.dist.php             # Plugin-specific code style rules
 ├── API/
-│   └── PlannedActivityController.php # REST API (GET/POST/PATCH/DELETE /api/planner/activities)
+│   ├── PlannedActivityController.php # REST API (GET/POST/PATCH/DELETE /api/planner/activities)
+│   └── PublicHolidayController.php   # REST API (GET /api/planner/holidays)
 ├── Controller/
 │   └── WeeklyPlannerController.php    # Weekly planner routes, week switching, modal CRUD actions
 ├── DependencyInjection/
@@ -52,11 +53,19 @@ var/plugins/PlannerBundle/
 ├── Entity/
 │   └── PlannedActivity.php           # Planned time block entity (user, customer, project, date range, daily hours, comments, color)
 ├── EventSubscriber/
+│   ├── HolidayPreferenceSubscriber.php # Per-user holiday calendar preference (contract permission)
+│   ├── HolidaySettingsSubscriber.php # System settings: default holiday calendar, observance days off
 │   ├── MenuSubscriber.php            # Injects "Planner" item into main navigation
 │   └── PermissionSubscriber.php      # Registers planner permissions
 ├── Form/
 │   ├── PlannedActivityEditForm.php    # Modal form for creating/editing planned activities
-│   └── PlannedActivityApiForm.php     # API variant: ISO dates, no CSRF
+│   ├── PlannedActivityApiForm.php     # API variant: ISO dates, no CSRF
+│   └── Type/                          # HolidayCalendarType (+Preference), HolidayObservancesType (settings and preference fields)
+├── Holiday/
+│   ├── HolidayProviderInterface.php   # Which public holidays a user has off; decorate it to replace the source
+│   ├── YasumiHolidayProvider.php      # Default provider: user preference, else system setting; Yasumi from Kimai core
+│   ├── HolidayCalendars.php           # Calendar list and names, observance days, setting/preference keys
+│   └── PublicHoliday.php              # One holiday: date, name, calendar, type
 ├── Migrations/
 │   ├── doctrine_migrations.yaml       # Plugin migration configuration
 │   ├── Version20260909000000.php      # Initial planner schema (kimai2_planned_activities table)
@@ -134,7 +143,14 @@ var/plugins/PlannerBundle/
    - `POST /planner/activity/{id}/move` (CSRF token `planner_move`) takes `begin`, `end` and optionally `user`, `customer`, `project`. The voter is checked before and after the changes, so planning cannot be moved to someone the user may not plan for. Hours per day are never changed. Only the single activity is moved, also when it is recurring.
    - `NoOverlappingPlanning` (class constraint on `PlannedActivity`, validator queries `PlannedActivityRepository::countOverlapping()`) refuses a second activity for the same user and customer/project on any shared day. It runs wherever the entity is validated: the dialog, the API and the move action (which returns the message with a 422), and only when user, customer, project or dates changed (`isPlanningChanged()`, from the unit of work's original data), so rows that overlapped before the check existed can still get a new comment or hours. Legacy activities without a customer are not checked. Copies are saved without validation, so the controllers check them first: `countRecurringOverlaps()` before creating repeated weeks (an activity of more than seven days always overlaps its own copies) and `countFutureRecurringOverlaps()` before an "all future" edit; both report `NoOverlappingPlanning::SERIES_MESSAGE` and save nothing. A split never overlaps. `isJoinableWith()` refuses two instances of a seven-day weekly series, which also sit side by side.
    - Split and join (same token): `POST /planner/activity/{id}/split` with `date` (the first day of the second part) copies everything but the dates into a new activity, same recurrence group included, and saves both in one flush. `POST /planner/activity/{id}/join/{other}` merges `other` back when `PlannedActivity::isJoinableWith()` holds (it starts the day after, and user, customer, project, title, hours, colour, comment and recurrence group are equal); it needs edit on the first and delete on the second. Bars carry `data-planner-split-url` (more than one day) and `data-planner-join-url`/`-day` (from `WeeklyPlannerGroup::getJoinableAfter()`, on the segment where the activity ends). The JS shows a fixed-position marker (scissors or link) when the pointer is within a few pixels of such a border; split and join undo each other, so neither asks for confirmation.
-9. **Isolated Database Migrations**:
+9. **Public Holidays**:
+   - `WeeklyPlannerService` asks the optional `HolidayProviderInterface` for each user's holidays in the range; a holiday sets that day's expected hours to 0 and is attached to the `WeeklyPlannerDay` (`getHoliday()`), so capacity, `isWorkingDay()` and everything built on them treat it as a day off.
+   - Calendars are Yasumi's ISO 3166 codes (`SE`, `GB-ENG`). The user preference `planner_holiday_calendar` (empty: organisation default, `none`: no holidays) beats the system setting `planner.holiday_calendar`. Types `official` and `bank` are days off; `observance` days only when their Yasumi key is in `planner.holiday_observances` (comma separated, system settings hold one value). Do not use core's `public_holiday_group` preference: it belongs to Kimai's paid work contract plugin.
+   - The preference is only enabled for those granted `contract` on the user. Core renders a disabled preference as a `HiddenType` with the same options, so a preference must not pass options only its own form type knows: that is why `HolidayCalendarPreferenceType` exists instead of an option on `HolidayCalendarType`.
+   - Names come in the current request language, preferring the calendar's country variant (`en_GB` for an English reader of `GB-ENG`, so "Boxing Day"). Where Yasumi has no translation it would return the key, so `HolidayCalendars::getHolidayName()` falls back to any translation it has.
+   - The template marks holiday cells with `planner-holiday` (striped tint) on every row of that user; the day summary cell shows the name truncated, with name and calendar in the tooltip.
+   - `WorkingDayRanges` asks the same provider, so planning across a holiday is split around it. Holiday cells carry `data-planner-holiday` (the name) next to `data-planner-non-working`, and clicking one asks `planner.holiday_question` instead of the generic day-off question.
+10. **Isolated Database Migrations**:
    - Always run and test migrations using the bundle's dedicated configuration file:
      `bin/console doctrine:migrations:migrate --configuration=var/plugins/PlannerBundle/Migrations/doctrine_migrations.yaml --no-interaction`
 

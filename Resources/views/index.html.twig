@@ -109,7 +109,7 @@
             <section class="content">
                 <div class="card mt-2 mb-3">
                     <div class="card-body p-0">
-                        <table class="table table-hover dataTable" data-planner-move-token="{{ csrf_token('planner_move') }}" data-planner-move-error="{{ 'planner.move_error'|trans }}" data-planner-split-title="{{ 'planner.split_here'|trans }}" data-planner-join-title="{{ 'planner.join_here'|trans }}"{% if canCreate %} data-planner-create-url="{{ path('planner_activity_create') }}" data-planner-day-off-question="{{ 'planner.day_off_question'|trans }}" data-planner-days-off-question="{{ 'planner.days_off_question'|trans }}"{% endif %}>
+                        <table class="table table-hover dataTable" data-planner-move-token="{{ csrf_token('planner_move') }}" data-planner-move-error="{{ 'planner.move_error'|trans }}" data-planner-split-title="{{ 'planner.split_here'|trans }}" data-planner-join-title="{{ 'planner.join_here'|trans }}"{% if canCreate %} data-planner-create-url="{{ path('planner_activity_create') }}" data-planner-day-off-question="{{ 'planner.day_off_question'|trans }}" data-planner-days-off-question="{{ 'planner.days_off_question'|trans }}" data-planner-holiday-question="{{ 'planner.holiday_question'|trans }}"{% endif %}>
                             <colgroup>
                                 <col span="2">
                                 {% for day in plannerData.dateHeaders %}
@@ -183,6 +183,10 @@
                                             </td>
                                         {% endfor %}
                                     </tr>
+                                    {% set holidays = {} %}
+                                    {% for day in row.days|filter(day => day.holiday) %}
+                                        {% set holidays = holidays|merge({(day.date|date('Y-m-d')): day.holiday}) %}
+                                    {% endfor %}
                                     {# planned against contract hours minus time off per day, aligned with the day columns and always visible #}
                                     <tr class="planner-row-days">
                                         <td colspan="2" class="p-0 border-top-0"></td>
@@ -208,8 +212,15 @@
                                             {% if day.timeOffHours > 0 %}
                                                 {% set dayHours = dayHours ~ ', ' ~ 'planner.time_off'|trans ~ ': ' ~ day.timeOffHours ~ ' hrs' %}
                                             {% endif %}
-                                            <td class="planner-day-summary text-center border-top-0 {{ dayClass }}{% if loop.index0 % 7 == 0 %} border-start{% endif %}{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %}" style="--planner-day-fill: {{ dayFill }}%;" title="{{ dayHours }}">
-                                                {% if dayClass == 'planner-day-off' %}
+                                            {% if day.holiday %}
+                                                {% set dayHours = day.holiday.name ~ ' (' ~ day.holiday.calendarName ~ ')' ~ (day.plannedHours > 0 ? ', ' ~ dayHours : '') %}
+                                            {% endif %}
+                                            <td class="planner-day-summary text-center border-top-0 {{ dayClass }}{% if day.holiday %} planner-holiday{% endif %}{% if loop.index0 % 7 == 0 %} border-start{% endif %}{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %}" style="--planner-day-fill: {{ dayFill }}%;" title="{{ dayHours }}"{% if day.holiday %} data-toggle="tooltip"{% endif %}>
+                                                {% if day.holiday %}
+                                                    {# the name is cut off to fit the column, the tooltip has it in full #}
+                                                    <div class="planner-holiday-name text-truncate">{{ day.holiday.name }}</div>
+                                                    {% if day.plannedHours > 0 %}<div class="planner-day-pct">{{ day.plannedHours }}h</div>{% endif %}
+                                                {% elseif dayClass == 'planner-day-off' %}
                                                     <div class="planner-day-pct">{{ compact ? '–' : 'planner.time_off'|trans }}</div>
                                                 {% elseif day.capacityHours > 0 %}
                                                     {% if not compact %}<div class="planner-day-hours">{{ day.plannedHours }}/{{ day.capacityHours }}h</div>{% endif %}
@@ -236,7 +247,7 @@
                                             </td>
                                             {% for segment in group.getSegments(row.days) %}
                                                 {% set date = segment.date %}
-                                                <td colspan="{{ segment.span }}" class="position-relative align-middle border-1 day{% if date is weekend %} weekend{% endif %}{% if date is today %} today{% endif %} p-1 {{ segment.activities is not empty ? 'has-activities' : 'no-activities' }}"{% if canCreate and segment.activities is empty %} data-planner-date="{{ date|date('Y-m-d') }}"{% if confirmDaysOff and row.getDay(date) is not null and not row.getDay(date).workingDay %} data-planner-non-working{% endif %}{% endif %}>
+                                                <td colspan="{{ segment.span }}" class="position-relative align-middle border-1 day{% if segment.span == 1 and holidays[date|date('Y-m-d')] is defined %} planner-holiday{% endif %}{% if date is weekend %} weekend{% endif %}{% if date is today %} today{% endif %} p-1 {{ segment.activities is not empty ? 'has-activities' : 'no-activities' }}"{% if canCreate and segment.activities is empty %} data-planner-date="{{ date|date('Y-m-d') }}"{% if confirmDaysOff and row.getDay(date) is not null and not row.getDay(date).workingDay %} data-planner-non-working{% if holidays[date|date('Y-m-d')] is defined %} data-planner-holiday="{{ holidays[date|date('Y-m-d')].name }}"{% endif %}{% endif %}{% endif %}>
                                                     {% if canCreate and segment.activities is empty %}
                                                         {# like dragging, a click in a customer/project row pre-selects them #}
                                                         {% set createParams = {'user': row.user.id, 'date': date|date('Y-m-d')}|merge(group.timeOff ? {'off': 1} : {}) %}
@@ -288,7 +299,7 @@
                                             {% endif %}
                                         </td>
                                         {% for day in row.days %}
-                                            <td class="position-relative border-1 day{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %} p-1 no-activities"{% if canCreate %} data-planner-date="{{ day.date|date('Y-m-d') }}"{% if confirmDaysOff and not day.workingDay %} data-planner-non-working{% endif %}{% endif %}>
+                                            <td class="position-relative border-1 day{% if day.holiday %} planner-holiday{% endif %}{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %} p-1 no-activities"{% if canCreate %} data-planner-date="{{ day.date|date('Y-m-d') }}"{% if confirmDaysOff and not day.workingDay %} data-planner-non-working{% if day.holiday %} data-planner-holiday="{{ day.holiday.name }}"{% endif %}{% endif %}{% endif %}>
                                                 {% if canCreate %}
                                                     <a href="{{ path('planner_activity_create', {'user': row.user.id, 'date': day.date|date('Y-m-d')}) }}"
                                                        class="stretched-link cursor-crosshair modal-ajax-form"
@@ -550,6 +561,21 @@
         [data-bs-theme="dark"] td.planner-day-off {
             color: #cbd5e1;
         }
+        /* public holidays: a striped tint across the user's rows, unlike plain days off */
+        td.planner-holiday {
+            background-image: repeating-linear-gradient(135deg, rgba(var(--tblr-purple-rgb, 174, 62, 201), 0.12) 0 4px, transparent 4px 10px);
+        }
+        td.planner-day-summary.planner-holiday {
+            color: var(--tblr-purple, #ae3ec9);
+            max-width: 0;
+        }
+        td.planner-day-summary.planner-day-danger.planner-holiday {
+            background-image: linear-gradient(to top, var(--planner-day-color) var(--planner-day-fill, 0%), transparent var(--planner-day-fill, 0%)), repeating-linear-gradient(135deg, rgba(var(--tblr-purple-rgb, 174, 62, 201), 0.12) 0 4px, transparent 4px 10px);
+        }
+        .planner-holiday-name {
+            font-weight: 600;
+            padding: 0 2px;
+        }
         .planner-user-cell {
             cursor: pointer;
             user-select: none;
@@ -732,8 +758,9 @@
                 }
                 const summary = table.querySelector('tr.planner-row-summary[data-user-id="' + row.dataset.userId + '"]');
                 const name = summary ? summary.dataset.plannerUserName : '';
-                const question = cells.length > 1 ? table.dataset.plannerDaysOffQuestion : table.dataset.plannerDayOffQuestion;
-                const message = question.replace('%name%', function () { return name; });
+                const holiday = cells.length === 1 ? cells[0].dataset.plannerHoliday : undefined;
+                const question = holiday !== undefined ? table.dataset.plannerHolidayQuestion : (cells.length > 1 ? table.dataset.plannerDaysOffQuestion : table.dataset.plannerDayOffQuestion);
+                const message = question.replace(/%name%|%holiday%/g, function (placeholder) { return placeholder === '%name%' ? name : holiday; });
                 if (!window.kimai) {
                     if (window.confirm(message)) {
                         proceed();

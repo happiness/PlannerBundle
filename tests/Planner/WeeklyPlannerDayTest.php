@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace KimaiPlugin\PlannerBundle\Tests\Planner;
 
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Holiday\PublicHoliday;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerDay;
 use PHPUnit\Framework\TestCase;
 
@@ -119,5 +120,18 @@ class WeeklyPlannerDayTest extends TestCase
 
         $this->assertSame(0.0, $weekend->getTimeOffHours());
         $this->assertFalse($weekend->isDayOff());
+    }
+
+    public function testHoliday(): void
+    {
+        $day = new WeeklyPlannerDay(new \DateTimeImmutable('2026-09-07'), 8.0);
+        $this->assertFalse($day->isHoliday());
+        $this->assertNull($day->getHoliday());
+
+        $holiday = new PublicHoliday(new \DateTimeImmutable('2026-12-25'), 'Christmas Day', 'SE', 'Sweden', 'official');
+        $day = new WeeklyPlannerDay(new \DateTimeImmutable('2026-12-25'), 0.0, 0.0, $holiday);
+        $this->assertTrue($day->isHoliday());
+        $this->assertSame($holiday, $day->getHoliday());
+        $this->assertFalse($day->isWorkingDay());
     }
 }

@@ -13,6 +13,7 @@ namespace KimaiPlugin\PlannerBundle\Planner;
 
 use App\WorkingTime\WorkingTimeService;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Holiday\HolidayProviderInterface;
 
 /**
  * Splits the date range of a planned activity into the runs of days its user works, according to their working time
@@ -22,8 +23,10 @@ use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
  */
 class WorkingDayRanges
 {
-    public function __construct(private readonly WorkingTimeService $workingTimeService)
-    {
+    public function __construct(
+        private readonly WorkingTimeService $workingTimeService,
+        private readonly ?HolidayProviderInterface $holidayProvider = null
+    ) {
     }
 
     /**
@@ -41,6 +44,7 @@ class WorkingDayRanges
         }
 
         $calculator = $this->workingTimeService->getContractMode($user)->getCalculator($user);
+        $holidays = $this->holidayProvider?->getHolidays($user, $begin, $end) ?? [];
 
         $ranges = [];
         $runBegin = null;
@@ -48,7 +52,8 @@ class WorkingDayRanges
         $hasDayOff = false;
         $last = $end->format('Y-m-d');
         for ($day = new \DateTimeImmutable($begin->format('Y-m-d')); $day->format('Y-m-d') <= $last; $day = $day->modify('+1 day')) {
-            if ($calculator->getWorkHoursForDay($day) > 0) {
+            // a public holiday is a day off like a day without contract hours
+            if (!\array_key_exists($day->format('Y-m-d'), $holidays) && $calculator->getWorkHoursForDay($day) > 0) {
                 $runBegin ??= $day;
                 $runEnd = $day;
 
