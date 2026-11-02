@@ -246,6 +246,70 @@
                 <source>planner_holiday_calendar</source>
                 <target>Public holidays</target>
             </trans-unit>
+            <trans-unit id="planner.calendar.button">
+                <source>planner.calendar.button</source>
+                <target>Calendar feed</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.title">
+                <source>planner.calendar.title</source>
+                <target>Calendar feed</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.name">
+                <source>planner.calendar.name</source>
+                <target>Planner: %name%</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.intro">
+                <source>planner.calendar.intro</source>
+                <target>Subscribe to your planned work in Google Calendar, Outlook or Apple Calendar, so it shows next to your meetings. Your calendar app refreshes it by itself, usually within a few hours.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.copy">
+                <source>planner.calendar.copy</source>
+                <target>Copy</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.copied">
+                <source>planner.calendar.copied</source>
+                <target>Copied</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.secret">
+                <source>planner.calendar.secret</source>
+                <target>Anyone with this address can see your planning. If you shared it by mistake, renew it: the old address stops working.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto">
+                <source>planner.calendar.howto</source>
+                <target>Adding it to your calendar</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto_google">
+                <source>planner.calendar.howto_google</source>
+                <target>Google Calendar: next to &quot;Other calendars&quot;, click + and choose &quot;From URL&quot;.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto_outlook">
+                <source>planner.calendar.howto_outlook</source>
+                <target>Outlook: choose &quot;Add calendar&quot;, then &quot;Subscribe from web&quot;.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto_apple">
+                <source>planner.calendar.howto_apple</source>
+                <target>Apple Calendar: choose File, then &quot;New Calendar Subscription&quot;.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.create">
+                <source>planner.calendar.create</source>
+                <target>Create calendar address</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.renew">
+                <source>planner.calendar.renew</source>
+                <target>Renew address</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.renew_confirm">
+                <source>planner.calendar.renew_confirm</source>
+                <target>The current address stops working, and calendars using it need the new one. Renew it?</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.remove">
+                <source>planner.calendar.remove</source>
+                <target>Switch off</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.remove_confirm">
+                <source>planner.calendar.remove_confirm</source>
+                <target>The current address stops working. Switch off the calendar feed?</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>
