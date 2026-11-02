@@ -69,4 +69,9 @@ final class WeeklyPlannerWeek
     {
         return $this->getTotalPlannedHours() > $this->getTotalExpectedHours();
     }
+
+    public function isBalanced(): bool
+    {
+        return abs($this->getTotalPlannedHours() - $this->getTotalExpectedHours()) < 0.001;
+    }
 }

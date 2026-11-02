@@ -17,6 +17,7 @@ use App\Repository\Query\TimesheetStatisticQuery;
 use App\Timesheet\TimesheetStatisticService;
 use App\WorkingTime\WorkingTimeService;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Holiday\HolidayProviderInterface;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 
 /**
@@ -27,7 +28,8 @@ class WeeklyPlannerService
     public function __construct(
         private readonly PlannedActivityRepository $activityRepository,
         private readonly WorkingTimeService $workingTimeService,
-        private readonly TimesheetStatisticService $statisticService
+        private readonly TimesheetStatisticService $statisticService,
+        private readonly ?HolidayProviderInterface $holidayProvider = null
     ) {
     }
 
@@ -76,10 +78,13 @@ class WeeklyPlannerService
         foreach ($users as $user) {
             $userRow = new WeeklyPlannerUserRow($user);
             $calculator = $this->workingTimeService->getContractMode($user)->getCalculator($user);
+            $holidays = $this->holidayProvider?->getHolidays($user, $start, $end) ?? [];
 
             $cur = $start;
             while ($cur <= $end) {
-                $expectedSeconds = $calculator->getWorkHoursForDay($cur);
+                // a public holiday is a day without contract hours
+                $holiday = $holidays[$cur->format('Y-m-d')] ?? null;
+                $expectedSeconds = $holiday === null ? $calculator->getWorkHoursForDay($cur) : 0;
                 $expectedHours = round($expectedSeconds / 3600.0, 2);
 
                 $userId = $user->getId();
@@ -91,7 +96,7 @@ class WeeklyPlannerService
                     }
                 }
 
-                $day = new WeeklyPlannerDay($cur, $expectedHours, $actualHours);
+                $day = new WeeklyPlannerDay($cur, $expectedHours, $actualHours, $holiday);
 
                 if ($userId !== null && isset($userActivities[$userId])) {
                     foreach ($userActivities[$userId] as $activity) {

@@ -10,6 +10,7 @@
 - **Capacity & Workload Balancing**:
   - Automatically calculates expected capacity from each user's working time contracts.
   - Highlights over-allocated, under-allocated, and balanced days with clear visual badges.
+- **Public Holidays**: Each user's public holidays count as days off, named in their day cell (see [Public holidays](#public-holidays)).
 - **Actual vs Planned Hours**: Directly compares planned allocations against actual recorded timesheet hours.
 - **Lightweight Scheduling**: Plan time blocks for a customer (and optionally a project) with daily hours, date ranges, comments, and color badges.
 - **Drag to Plan**: Drag across empty day cells of a row to create a planning spanning several days. A transparent preview block is shown while dragging and stays visible while the dialog is open.
@@ -126,6 +127,25 @@ All endpoints require an API token and the `view_planner` permission; write oper
 | `POST` | `/api/planner/activities` | Create. Body: `customer` (required), `project`, `user` (defaults to you), `begin`, `end`, `hoursPerDay`, `color`, `comment`, `recurrentWeeks` |
 | `PATCH` | `/api/planner/activities/{id}` | Update any subset of fields; `edit_mode: "future"` also updates later activities of a recurring series |
 | `DELETE` | `/api/planner/activities/{id}` | Delete; `?mode=future` also deletes later activities of a recurring series |
+| `GET` | `/api/planner/holidays` | Public holidays users have off. Required: `begin`, `end` (`Y-m-d`, at most 366 days). Optional: `users[]` (default: everyone you may see). Returns `user`, `date`, `name`, `calendar`, `calendarName`, `type` per day |
+
+## Public holidays
+
+Public holidays are days off in the planner, just like days without contract hours: they have no capacity, and the cell under the user's week shows the holiday's name (the tooltip adds which calendar it comes from).
+
+- **Organisation default**: pick a calendar under *System > Settings > Weekly Planner*. Nobody has public holidays until one is chosen, so installing or updating the plugin changes nothing.
+- **Per user**: a user's preferences can pick another calendar, or "No public holidays", for teams spread over several countries. Only those who may edit the user's work contract (`contract` permission) can change it.
+- **Which days**: official and bank holidays are always days off. Some days are not public holidays but most organisations have them off anyway, such as Christmas Eve, Midsummer Eve and New Year's Eve in Sweden. Tick those under *Also days off* in the same settings; a ticked day applies to every calendar that has it.
+
+The holidays come from [Yasumi](https://github.com/azuyalabs/yasumi), which ships with Kimai core, so no network access or extra package is needed. It covers about 50 countries and many of their regions.
+
+To take holidays from somewhere else, decorate `KimaiPlugin\PlannerBundle\Holiday\HolidayProviderInterface` in your own plugin:
+
+```yaml
+services:
+    App\MyHolidays:
+        decorates: KimaiPlugin\PlannerBundle\Holiday\HolidayProviderInterface
+```
 
 ## Upgrading
 

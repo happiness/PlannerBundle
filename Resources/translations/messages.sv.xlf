@@ -170,6 +170,38 @@
                 <source>planner.suggestions</source>
                 <target>Ofta använda</target>
             </trans-unit>
+            <trans-unit id="planner.holidays.calendar">
+                <source>planner.holidays.calendar</source>
+                <target>Kalender för helgdagar</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.calendar_help">
+                <source>planner.holidays.calendar_help</source>
+                <target>Alla följer den här kalendern om inte deras egna inställningar väljer en annan. Helgdagar räknas som lediga dagar i planeringen.</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.observances">
+                <source>planner.holidays.observances</source>
+                <target>Också lediga dagar</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.observances_help">
+                <source>planner.holidays.observances_help</source>
+                <target>Dagar som inte är helgdagar men som organisationen har ledigt, till exempel julafton. En vald dag gäller i alla kalendrar som har den.</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.none">
+                <source>planner.holidays.none</source>
+                <target>Inga helgdagar</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.organisation_default">
+                <source>planner.holidays.organisation_default</source>
+                <target>Organisationens standard</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.preference_help">
+                <source>planner.holidays.preference_help</source>
+                <target>Helgdagarna som den här användaren är ledig i planeringen, om de skiljer sig från organisationens.</target>
+            </trans-unit>
+            <trans-unit id="planner_holiday_calendar">
+                <source>planner_holiday_calendar</source>
+                <target>Helgdagar</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>
