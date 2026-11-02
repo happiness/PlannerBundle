@@ -20,14 +20,31 @@ final class PlannerQuery extends BaseQuery
 {
     use UsersTrait;
 
+    public const ORDER_BY_NAME = 'username';
+    public const ORDER_BY_FREE_HOURS = 'free';
+    public const ORDER_BY_CHOICES = [self::ORDER_BY_NAME, self::ORDER_BY_FREE_HOURS];
+
     public function __construct()
     {
         $this->setDefaults([
             'order' => self::ORDER_ASC,
-            'orderBy' => 'username',
+            'orderBy' => self::ORDER_BY_NAME,
             'teams' => [],
             'users' => [],
         ]);
+    }
+
+    /**
+     * Users are listed by name, or with the most free hours of the shown weeks first.
+     */
+    public function setOrderBy(?string $orderBy): self
+    {
+        return parent::setOrderBy(\in_array($orderBy, self::ORDER_BY_CHOICES, true) ? $orderBy : self::ORDER_BY_NAME);
+    }
+
+    public function isOrderedByFreeHours(): bool
+    {
+        return $this->getOrderBy() === self::ORDER_BY_FREE_HOURS;
     }
 
     /**
