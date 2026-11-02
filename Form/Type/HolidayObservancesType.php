@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace KimaiPlugin\PlannerBundle\Form\Type;
 
+use App\Configuration\SystemConfiguration;
 use KimaiPlugin\PlannerBundle\Holiday\HolidayCalendars;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\CallbackTransformer;
@@ -27,6 +28,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 final class HolidayObservancesType extends AbstractType
 {
     public function __construct(
+        private readonly SystemConfiguration $configuration,
         private readonly HolidayCalendars $calendars,
         private readonly TranslatorInterface $translator
     ) {
@@ -54,11 +56,19 @@ final class HolidayObservancesType extends AbstractType
     }
 
     /**
+     * The choices are this year's and next year's observances. Stored keys outside them (a day
+     * Yasumi only has in some years) are kept as choices, else saving the section would drop them.
+     *
      * @return array<string, string>
      */
     private function getObservances(): array
     {
-        return $this->calendars->getObservances($this->translator->getLocale());
+        $observances = $this->calendars->getObservances($this->translator->getLocale());
+        foreach (HolidayCalendars::parseObservances($this->configuration->find(HolidayCalendars::SETTING_OBSERVANCES)) as $key) {
+            $observances[$key] ??= $key;
+        }
+
+        return $observances;
     }
 
     public function getParent(): string

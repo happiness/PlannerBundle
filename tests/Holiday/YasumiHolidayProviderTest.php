@@ -142,4 +142,13 @@ class YasumiHolidayProviderTest extends TestCase
         $this->assertSame('juldagen', $holidays['2026-12-25']->getName());
         $this->assertSame('Storbritannien › England', $holidays['2026-12-25']->getCalendarName());
     }
+
+    public function testCalendarCodesIgnoreCaseAndSpaces(): void
+    {
+        $provider = $this->createProvider([HolidayCalendars::SETTING_CALENDAR => ' se']);
+
+        $this->assertSame('SE', $provider->getCalendar($this->createUser()));
+        $this->assertSame('GB-ENG', $provider->getCalendar($this->createUser('gb-eng')));
+        $this->assertNull($provider->getCalendar($this->createUser('NONE')));
+    }
 }

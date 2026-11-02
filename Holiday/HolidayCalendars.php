@@ -161,7 +161,8 @@ class HolidayCalendars
 
     /**
      * Prefers the calendar's country variant of the language, so English readers of a
-     * UK calendar get "Boxing Day" rather than "Second Christmas Day".
+     * UK calendar get "Boxing Day" rather than "Second Christmas Day", and an Austrian
+     * reader of a German calendar gets the German name.
      */
     private function getYasumiLocale(string $code, string $locale): string
     {
@@ -169,11 +170,10 @@ class HolidayCalendars
         $language = strtolower(explode('_', str_replace('-', '_', $locale))[0]);
         $country = strtoupper(explode('-', $code)[0]);
 
-        $candidates = [];
+        $candidates = [$language . '_' . $country];
         if (str_contains($locale, '_')) {
             $candidates[] = $locale;
         }
-        $candidates[] = $language . '_' . $country;
         $candidates[] = $language;
 
         foreach ($candidates as $candidate) {

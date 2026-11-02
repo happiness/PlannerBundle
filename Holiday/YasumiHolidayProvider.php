@@ -42,20 +42,30 @@ final class YasumiHolidayProvider implements HolidayProviderInterface
      */
     public function getCalendar(User $user): ?string
     {
-        $preference = $user->getPreferenceValue(HolidayCalendars::PREFERENCE);
-        if ($preference === HolidayCalendars::NONE) {
+        // the API stores any string as a preference, so "se" or " gb-eng" must still work
+        $preference = $this->normalise($user->getPreferenceValue(HolidayCalendars::PREFERENCE));
+        if ($preference === strtoupper(HolidayCalendars::NONE)) {
             return null;
         }
-        if (\is_string($preference) && $preference !== '' && $this->calendars->hasCalendar($preference)) {
+        if ($preference !== null && $this->calendars->hasCalendar($preference)) {
             return $preference;
         }
 
-        $default = $this->configuration->find(HolidayCalendars::SETTING_CALENDAR);
-        if (\is_string($default) && $default !== '' && $this->calendars->hasCalendar($default)) {
+        $default = $this->normalise($this->configuration->find(HolidayCalendars::SETTING_CALENDAR));
+        if ($default !== null && $this->calendars->hasCalendar($default)) {
             return $default;
         }
 
         return null;
+    }
+
+    private function normalise(mixed $code): ?string
+    {
+        if (!\is_string($code) || trim($code) === '') {
+            return null;
+        }
+
+        return strtoupper(trim($code));
     }
 
     public function getHolidays(User $user, \DateTimeInterface $begin, \DateTimeInterface $end): array

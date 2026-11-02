@@ -77,4 +77,15 @@ class HolidayCalendarsTest extends TestCase
         $this->assertSame('Sveriges nationaldag', $names['nationalDay']);
         $this->assertSame('Christmas Day', $names['christmasDay']);
     }
+
+    public function testTheCalendarsCountryVariantWinsOverTheReadersRegion(): void
+    {
+        $names = [];
+        foreach ((new HolidayCalendars())->createProvider('DE', 2026, 'de_AT') ?? [] as $holiday) {
+            $names[$holiday->getKey()] = HolidayCalendars::getHolidayName($holiday);
+        }
+
+        // Austrian German calls it "Christtag"
+        $this->assertSame('1. Weihnachtsfeiertag', $names['christmasDay']);
+    }
 }
