@@ -50,6 +50,24 @@ final class WeeklyPlannerWeek
         return array_sum(array_map(static fn (WeeklyPlannerDay $day): float => $day->getPlannedHours(), $this->days));
     }
 
+    public function getTotalTentativeHours(): float
+    {
+        return array_sum(array_map(static fn (WeeklyPlannerDay $day): float => $day->getTentativeHours(), $this->days));
+    }
+
+    /**
+     * Share of the expected hours the tentative work would add on top of the confirmed planning.
+     */
+    public function getTentativePercentage(): int
+    {
+        $expected = $this->getTotalExpectedHours();
+        if ($expected <= 0.0) {
+            return 0;
+        }
+
+        return (int) round(($this->getTotalTentativeHours() / $expected) * 100);
+    }
+
     public function getTotalActualHours(): float
     {
         return array_sum(array_map(static fn (WeeklyPlannerDay $day): float => $day->getActualHours(), $this->days));

@@ -95,16 +95,45 @@ final class WeeklyPlannerGroup
     }
 
     /**
-     * Planned hours of this group within the given days only.
+     * Confirmed planned hours of this group within the given days only.
      *
      * @param array<WeeklyPlannerDay> $days
      */
     public function getPlannedHours(array $days): float
     {
+        return $this->sumHours($days, false);
+    }
+
+    /**
+     * Tentative hours of this group within the given days only.
+     *
+     * @param array<WeeklyPlannerDay> $days
+     */
+    public function getTentativeHours(array $days): float
+    {
+        return $this->sumHours($days, true);
+    }
+
+    public function hasTentative(): bool
+    {
+        foreach ($this->activities as $activity) {
+            if ($activity->isTentative()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<WeeklyPlannerDay> $days
+     */
+    private function sumHours(array $days, bool $tentative): float
+    {
         $total = 0.0;
         foreach ($days as $day) {
             foreach ($this->activities as $activity) {
-                if ($activity->coversDate($day->getDate())) {
+                if ($activity->isTentative() === $tentative && $activity->coversDate($day->getDate())) {
                     $total += $activity->getHoursPerDay();
                 }
             }

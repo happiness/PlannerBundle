@@ -20,6 +20,13 @@ final class PlannerQuery extends BaseQuery
 {
     use UsersTrait;
 
+    public const PLANNING_ALL = 'all';
+    public const PLANNING_CONFIRMED = 'confirmed';
+    public const PLANNING_TENTATIVE = 'tentative';
+    public const PLANNING_CHOICES = [self::PLANNING_ALL, self::PLANNING_CONFIRMED, self::PLANNING_TENTATIVE];
+
+    private string $planning = self::PLANNING_ALL;
+
     public function __construct()
     {
         $this->setDefaults([
@@ -27,7 +34,23 @@ final class PlannerQuery extends BaseQuery
             'orderBy' => 'username',
             'teams' => [],
             'users' => [],
+            'planning' => self::PLANNING_ALL,
         ]);
+    }
+
+    /**
+     * Which planned activities are shown: all, confirmed only or tentative only. The capacity figures always count all.
+     */
+    public function getPlanning(): string
+    {
+        return $this->planning;
+    }
+
+    public function setPlanning(?string $planning): self
+    {
+        $this->planning = \in_array($planning, self::PLANNING_CHOICES, true) ? $planning : self::PLANNING_ALL;
+
+        return $this;
     }
 
     /**
@@ -66,6 +89,7 @@ final class PlannerQuery extends BaseQuery
 
         if ($query instanceof PlannerQuery) {
             $this->setUsers($query->getUsers());
+            $this->setPlanning($query->getPlanning());
         }
     }
 }

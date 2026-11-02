@@ -18,6 +18,7 @@ use App\Timesheet\TimesheetStatisticService;
 use App\WorkingTime\WorkingTimeService;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
+use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
 
 /**
  * @final not final for mocking in tests
@@ -37,8 +38,10 @@ class WeeklyPlannerService
     /**
      * @param array<User> $users
      * @param int $weeks number of calendar weeks to show, starting with the week of $selectedDate
+     * @param string $planning one of the PlannerQuery::PLANNING_* filters: decides which activities are shown, the
+     *                         capacity figures always count all of them; "tentative" also leaves out users without any
      */
-    public function getPlannerData(array $users, \DateTimeInterface $selectedDate, int $weeks = 1): WeeklyPlannerData
+    public function getPlannerData(array $users, \DateTimeInterface $selectedDate, int $weeks = 1, string $planning = PlannerQuery::PLANNING_ALL): WeeklyPlannerData
     {
         $weeks = max(self::MIN_WEEKS, min(self::MAX_WEEKS, $weeks));
 
@@ -97,7 +100,9 @@ class WeeklyPlannerService
                     foreach ($userActivities[$userId] as $activity) {
                         if ($activity->coversDate($cur)) {
                             $day->addActivity($activity);
-                            $userRow->addUniqueActivity($activity);
+                            if ($this->isShown($activity, $planning)) {
+                                $userRow->addUniqueActivity($activity);
+                            }
                         }
                     }
                 }
@@ -106,9 +111,22 @@ class WeeklyPlannerService
                 $cur = $cur->modify('+1 day');
             }
 
+            if ($planning === PlannerQuery::PLANNING_TENTATIVE && $userRow->getUniqueActivities() === []) {
+                continue;
+            }
+
             $plannerData->addRow($userRow);
         }
 
         return $plannerData;
+    }
+
+    private function isShown(PlannedActivity $activity, string $planning): bool
+    {
+        return match ($planning) {
+            PlannerQuery::PLANNING_CONFIRMED => !$activity->isTentative(),
+            PlannerQuery::PLANNING_TENTATIVE => $activity->isTentative(),
+            default => true,
+        };
     }
 }

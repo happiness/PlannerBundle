@@ -17,6 +17,21 @@ use PHPUnit\Framework\TestCase;
 
 class WeeklyPlannerDayTest extends TestCase
 {
+    public function testTentativeHoursAreCountedApart(): void
+    {
+        $day = new WeeklyPlannerDay(new \DateTimeImmutable('2026-11-02'), 8.0);
+        $day->addActivity((new PlannedActivity())->setHoursPerDay(6.0));
+        $day->addActivity((new PlannedActivity())->setHoursPerDay(4.0)->setTentative(true));
+
+        $this->assertSame(6.0, $day->getPlannedHours());
+        $this->assertSame(4.0, $day->getTentativeHours());
+        $this->assertSame(75, $day->getPlannedPercentage());
+        // tentative work never makes a day overbooked, only confirmed work does
+        $this->assertFalse($day->isOverAllocated());
+        $this->assertTrue($day->isUnderAllocated());
+        $this->assertCount(2, $day->getActivities());
+    }
+
     public function testGettersAndAllocationStatus(): void
     {
         $date = new \DateTimeImmutable('2026-09-08');

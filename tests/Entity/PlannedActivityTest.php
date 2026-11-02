@@ -27,6 +27,10 @@ class PlannedActivityTest extends TestCase
 
         $this->assertNull($activity->getId());
 
+        $this->assertFalse($activity->isTentative());
+        $this->assertSame($activity, $activity->setTentative(true));
+        $this->assertTrue($activity->isTentative());
+
         $user = new User();
         $this->assertSame($activity, $activity->setUser($user));
         $this->assertSame($user, $activity->getUser());

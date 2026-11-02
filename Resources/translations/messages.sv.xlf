@@ -170,6 +170,70 @@
                 <source>planner.suggestions</source>
                 <target>Ofta använda</target>
             </trans-unit>
+            <trans-unit id="planner.tentative">
+                <source>planner.tentative</source>
+                <target>Preliminär</target>
+            </trans-unit>
+            <trans-unit id="planner.tentative_help">
+                <source>planner.tentative_help</source>
+                <target>Inte bekräftat ännu, till exempel en affär som inte är påskriven. Visas tonat och räknas separat från den bekräftade kapaciteten.</target>
+            </trans-unit>
+            <trans-unit id="planner.tentative_hours">
+                <source>planner.tentative_hours</source>
+                <target>+ %hours% tim preliminärt</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_filter">
+                <source>planner.planning_filter</source>
+                <target>Planering</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_all">
+                <source>planner.planning_all</source>
+                <target>Alla</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_confirmed">
+                <source>planner.planning_confirmed</source>
+                <target>Endast bekräftad</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_tentative">
+                <source>planner.planning_tentative</source>
+                <target>Endast preliminär</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative">
+                <source>planner.confirm_tentative</source>
+                <target>Bekräfta allt för projektet</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_submit">
+                <source>planner.confirm_tentative_submit</source>
+                <target>Bekräfta</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_question">
+                <source>planner.confirm_tentative_question</source>
+                <target>Bekräfta all preliminär planering för %project%?</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_count">
+                <source>planner.confirm_tentative_count</source>
+                <target>Planerade aktiviteter: %count%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_users">
+                <source>planner.confirm_tentative_users</source>
+                <target>Antal personer: %count%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_period">
+                <source>planner.confirm_tentative_period</source>
+                <target>Period: %begin% till %end%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_scope">
+                <source>planner.confirm_tentative_scope</source>
+                <target>Bara planering som slutar i dag eller senare bekräftas, tidigare planering lämnas som den är.</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_skipped">
+                <source>planner.confirm_tentative_skipped</source>
+                <target>Preliminära aktiviteter för personer du inte kan redigera förblir preliminära: %count%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_none">
+                <source>planner.confirm_tentative_none</source>
+                <target>%project% har ingen preliminär planering från i dag och framåt som du kan bekräfta.</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>
