@@ -74,6 +74,14 @@
                 <source>planner.add_activity</source>
                 <target>Plan activity for this day</target>
             </trans-unit>
+            <trans-unit id="planner.add_project">
+                <source>planner.add_project</source>
+                <target>Add project</target>
+            </trans-unit>
+            <trans-unit id="planner.add_another_project">
+                <source>planner.add_another_project</source>
+                <target>Add another project</target>
+            </trans-unit>
             <trans-unit id="planner.recurrent_weeks">
                 <source>planner.recurrent_weeks</source>
                 <target>Recurring weeks</target>

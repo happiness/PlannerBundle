@@ -74,6 +74,14 @@
                 <source>planner.add_activity</source>
                 <target>Planera aktivitet för denna dag</target>
             </trans-unit>
+            <trans-unit id="planner.add_project">
+                <source>planner.add_project</source>
+                <target>Lägg till projekt</target>
+            </trans-unit>
+            <trans-unit id="planner.add_another_project">
+                <source>planner.add_another_project</source>
+                <target>Lägg till ett projekt till</target>
+            </trans-unit>
             <trans-unit id="planner.recurrent_weeks">
                 <source>planner.recurrent_weeks</source>
                 <target>Återkommande veckor</target>
