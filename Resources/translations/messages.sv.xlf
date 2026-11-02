@@ -90,6 +90,10 @@
                 <source>planner.join_here</source>
                 <target>Slå ihop</target>
             </trans-unit>
+            <trans-unit id="planner.skip_days_off_help">
+                <source>planner.skip_days_off_help</source>
+                <target>Dagar som användaren inte arbetar hoppas över.</target>
+            </trans-unit>
             <trans-unit id="planner.recurrent_weeks">
                 <source>planner.recurrent_weeks</source>
                 <target>Återkommande veckor</target>
