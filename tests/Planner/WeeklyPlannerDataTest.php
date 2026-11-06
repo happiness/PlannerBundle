@@ -54,4 +54,31 @@ class WeeklyPlannerDataTest extends TestCase
         $this->assertSame(4.0, $data->getTotalPlannedHours());
         $this->assertSame(6.0, $data->getTotalActualHours());
     }
+
+    public function testSortByFreeHoursKeepsTheOrderOfEqualRows(): void
+    {
+        $date = new \DateTimeImmutable('2026-09-07');
+        $data = new WeeklyPlannerData($date, $date);
+        $ref = new \ReflectionProperty(User::class, 'id');
+
+        // user => planned hours of an 8 hour day: 4 free, 4 free, overbooked by 1, 8 free
+        foreach ([1 => 4.0, 2 => 4.0, 3 => 9.0, 4 => 0.0] as $id => $planned) {
+            $user = new User();
+            $ref->setValue($user, $id);
+            $row = new WeeklyPlannerUserRow($user);
+            $day = new WeeklyPlannerDay($date, 8.0);
+            if ($planned > 0.0) {
+                $day->addActivity((new PlannedActivity())->setHoursPerDay($planned));
+            }
+            $row->addDay($day);
+            $data->addRow($row);
+        }
+
+        $data->sortByFreeHours($date);
+        $this->assertSame([4, 1, 2, 3], array_keys($data->getRows()));
+
+        // once the day has passed nobody has free hours, so the order stays as it is
+        $data->sortByFreeHours($date->modify('+1 day'));
+        $this->assertSame([4, 1, 2, 3], array_keys($data->getRows()));
+    }
 }
