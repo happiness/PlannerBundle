@@ -95,19 +95,82 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $activity->setEnd(new \DateTime($firstEnd->format('Y-m-d')));
         $this->savePlannedActivity($activity);
 
-        $splitActivity = new PlannedActivity();
-        $splitActivity->setUser($activity->getUser());
-        $splitActivity->setCustomer($activity->getCustomer());
-        $splitActivity->setProject($activity->getProject());
-        $splitActivity->setTitle($activity->getTitle());
-        $splitActivity->setHoursPerDay($activity->getHoursPerDay());
-        $splitActivity->setColor($activity->getColor());
-        $splitActivity->setComment($activity->getComment());
-        $splitActivity->setRecurrenceGroup($activity->getRecurrenceGroup());
+        $splitActivity = $this->createCopy($activity);
         $splitActivity->setBegin(new \DateTime($secondBegin->format('Y-m-d')));
         $splitActivity->setEnd(new \DateTime($originalEnd->format('Y-m-d')));
 
         $this->savePlannedActivity($splitActivity);
+    }
+
+    /**
+     * Saves the activity over the given date ranges: the activity itself takes the first range, a copy each of
+     * the others (see WorkingDayRanges). All are written in one flush. Without ranges the activity is saved as it is.
+     *
+     * Several parts share one recurrence group, so they can be edited or deleted together ("this and all following")
+     * like the planning they came from, also when a mistyped end date produced many of them.
+     *
+     * @param array<array{0: \DateTime, 1: \DateTime}> $ranges
+     * @return non-empty-array<PlannedActivity> the saved activities, the given one first
+     */
+    public function savePlannedActivityInRanges(PlannedActivity $activity, array $ranges): array
+    {
+        if (\count($ranges) > 1 && !$activity->isRecurring()) {
+            $activity->setRecurrenceGroup(bin2hex(random_bytes(16)));
+        }
+
+        $activities = [$activity];
+        foreach (array_values($ranges) as $i => [$begin, $end]) {
+            $part = $i === 0 ? $activity : $this->createCopy($activity);
+            $part->setBegin($begin);
+            $part->setEnd($end);
+            if ($i > 0) {
+                $activities[] = $part;
+            }
+        }
+
+        $entityManager = $this->getEntityManager();
+        foreach ($activities as $part) {
+            $entityManager->persist($part);
+        }
+        $entityManager->flush();
+
+        return $activities;
+    }
+
+    /**
+     * Repeats several activities for the following weeks as one recurring series.
+     *
+     * @param array<PlannedActivity> $activities
+     */
+    public function createRecurringActivitiesForAll(array $activities, int $weeks): void
+    {
+        $group = null;
+        foreach ($activities as $activity) {
+            if ($group !== null) {
+                $activity->setRecurrenceGroup($group);
+                $this->savePlannedActivity($activity);
+            }
+            $this->createRecurringActivities($activity, $weeks);
+            $group ??= $activity->getRecurrenceGroup();
+        }
+    }
+
+    /**
+     * Everything but the dates, which the caller sets.
+     */
+    private function createCopy(PlannedActivity $activity): PlannedActivity
+    {
+        $copy = new PlannedActivity();
+        $copy->setUser($activity->getUser());
+        $copy->setCustomer($activity->getCustomer());
+        $copy->setProject($activity->getProject());
+        $copy->setTitle($activity->getTitle());
+        $copy->setHoursPerDay($activity->getHoursPerDay());
+        $copy->setColor($activity->getColor());
+        $copy->setComment($activity->getComment());
+        $copy->setRecurrenceGroup($activity->getRecurrenceGroup());
+
+        return $copy;
     }
 
     public function deleteRecurringActivities(string $recurrenceGroup): void

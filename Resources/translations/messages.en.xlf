@@ -74,6 +74,10 @@
                 <source>planner.add_activity</source>
                 <target>Plan activity for this day</target>
             </trans-unit>
+            <trans-unit id="planner.skip_days_off_help">
+                <source>planner.skip_days_off_help</source>
+                <target>Days the user does not work are skipped.</target>
+            </trans-unit>
             <trans-unit id="planner.recurrent_weeks">
                 <source>planner.recurrent_weeks</source>
                 <target>Recurring weeks</target>
