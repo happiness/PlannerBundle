@@ -109,7 +109,7 @@
             <section class="content">
                 <div class="card mt-2 mb-3">
                     <div class="card-body p-0">
-                        <table class="table table-hover dataTable" data-planner-move-token="{{ csrf_token('planner_move') }}" data-planner-move-error="{{ 'planner.move_error'|trans }}"{% if canCreate %} data-planner-create-url="{{ path('planner_activity_create') }}"{% endif %}>
+                        <table class="table table-hover dataTable" data-planner-move-token="{{ csrf_token('planner_move') }}" data-planner-move-error="{{ 'planner.move_error'|trans }}"{% if canCreate %} data-planner-create-url="{{ path('planner_activity_create') }}" data-planner-day-off-question="{{ 'planner.day_off_question'|trans }}" data-planner-days-off-question="{{ 'planner.days_off_question'|trans }}"{% endif %}>
                             <colgroup>
                                 <col span="2">
                                 {% for day in plannerData.dateHeaders %}
@@ -148,7 +148,9 @@
                             </thead>
                             <tbody>
                                 {% for row in plannerData.rows %}
-                                    <tr class="planner-row planner-row-summary is-collapsed" data-user-id="{{ row.user.id }}">
+                                    {# without a work contract every day counts as a day off, so nothing is worth confirming #}
+                                    {% set confirmDaysOff = row.days|filter(day => day.workingDay) is not empty %}
+                                    <tr class="planner-row planner-row-summary is-collapsed" data-user-id="{{ row.user.id }}" data-planner-user-name="{{ row.user.displayName }}">
                                         <td class="w-avatar align-middle p-1 planner-user-cell">{{ widgets.user_avatar(row.user, false, 'avatar-sm') }}</td>
                                         <td class="text-nowrap align-middle p-1 planner-user-cell">
                                             <div class="d-flex justify-content-between align-items-center">
@@ -185,7 +187,7 @@
                                             </td>
                                             {% for segment in group.getSegments(row.days) %}
                                                 {% set date = segment.date %}
-                                                <td colspan="{{ segment.span }}" class="position-relative align-middle border-1 day{% if date is weekend %} weekend{% endif %}{% if date is today %} today{% endif %} p-1 {{ segment.activities is not empty ? 'has-activities' : 'no-activities' }}"{% if canCreate and segment.activities is empty %} data-planner-date="{{ date|date('Y-m-d') }}"{% endif %}>
+                                                <td colspan="{{ segment.span }}" class="position-relative align-middle border-1 day{% if date is weekend %} weekend{% endif %}{% if date is today %} today{% endif %} p-1 {{ segment.activities is not empty ? 'has-activities' : 'no-activities' }}"{% if canCreate and segment.activities is empty %} data-planner-date="{{ date|date('Y-m-d') }}"{% if confirmDaysOff and row.getDay(date) is not null and not row.getDay(date).workingDay %} data-planner-non-working{% endif %}{% endif %}>
                                                     {% if canCreate and segment.activities is empty %}
                                                         {% set createParams = {'user': row.user.id, 'date': date|date('Y-m-d')} %}
                                                         {% if group.customer %}{% set createParams = createParams|merge({'customer': group.customer.id}) %}{% endif %}
@@ -215,7 +217,7 @@
                                     <tr class="planner-row planner-row-details is-collapsed" data-user-id="{{ row.user.id }}">
                                         <td colspan="2" class="planner-group-cell p-1 border-top-0"></td>
                                         {% for day in row.days %}
-                                            <td class="position-relative border-1 day{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %} p-1 no-activities"{% if canCreate %} data-planner-date="{{ day.date|date('Y-m-d') }}"{% endif %}>
+                                            <td class="position-relative border-1 day{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %} p-1 no-activities"{% if canCreate %} data-planner-date="{{ day.date|date('Y-m-d') }}"{% if confirmDaysOff and not day.workingDay %} data-planner-non-working{% endif %}{% endif %}>
                                                 {% if canCreate %}
                                                     <a href="{{ path('planner_activity_create', {'user': row.user.id, 'date': day.date|date('Y-m-d')}) }}"
                                                        class="stretched-link cursor-crosshair modal-ajax-form"
@@ -559,11 +561,48 @@
         /*
          * Drag over empty day cells of one row to create a planned activity spanning several days.
          * A plain click (no drag) keeps opening the single-day dialog via the cell's link.
+         * Planning a day the user does not work by contract has to be confirmed first.
          */
         (function () {
             const CELL = 'td.day[data-planner-date]';
             let drag = null;
             let suppressClick = false;
+            let confirmedClick = false;
+            let keepPreview = false;
+
+            function escapeHtml(text) {
+                const el = document.createElement('span');
+                el.textContent = text;
+                return el.innerHTML;
+            }
+
+            function confirmDaysOff(row, cells, proceed, cancel) {
+                const table = row.closest('table[data-planner-create-url]');
+                if (!table || !cells.some(function (cell) { return cell.hasAttribute('data-planner-non-working'); })) {
+                    proceed();
+                    return;
+                }
+                const summary = table.querySelector('tr.planner-row-summary[data-user-id="' + row.dataset.userId + '"]');
+                const name = summary ? summary.dataset.plannerUserName : '';
+                const question = cells.length > 1 ? table.dataset.plannerDaysOffQuestion : table.dataset.plannerDayOffQuestion;
+                const message = question.replace('%name%', function () { return name; });
+                if (!window.kimai) {
+                    if (window.confirm(message)) {
+                        proceed();
+                    } else {
+                        cancel();
+                    }
+                    return;
+                }
+                window.kimai.getPlugin('alert').question(escapeHtml(message), function (confirmed) {
+                    keepPreview = confirmed;
+                    if (confirmed) {
+                        proceed();
+                    } else {
+                        cancel();
+                    }
+                });
+            }
 
             function cellsOf(row) {
                 return Array.from(row.querySelectorAll(CELL));
@@ -677,9 +716,15 @@
                 if (finished.start === finished.current) {
                     return;
                 }
-                openCreateDialog(finished);
-                // keep the preview visible while the dialog is open
+                // keep the preview visible while the dialogs are open
                 paint(finished);
+                const bounds = range(finished);
+                const cells = cellsOf(finished.row).filter(function (cell) {
+                    return cell.dataset.plannerDate >= bounds[0] && cell.dataset.plannerDate <= bounds[1];
+                });
+                confirmDaysOff(finished.row, cells, function () {
+                    openCreateDialog(finished);
+                }, reset);
                 // the click event following mouseup must not open the single-day dialog as well
                 suppressClick = true;
                 setTimeout(function () { suppressClick = false; }, 0);
@@ -692,7 +737,30 @@
                 }
             }, true);
 
+            // a single click on a day off asks before the cell's link opens the dialog
+            document.addEventListener('click', function (e) {
+                if (e.defaultPrevented || confirmedClick) {
+                    return;
+                }
+                const link = e.target.closest('td.day[data-planner-non-working] > a.modal-ajax-form');
+                if (!link) {
+                    return;
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                confirmDaysOff(link.closest('tr'), [link.parentElement], function () {
+                    confirmedClick = true;
+                    link.click();
+                    confirmedClick = false;
+                }, function () {});
+            }, true);
+
             document.addEventListener('hidden.bs.modal', function () {
+                // the confirmation closing must not remove the preview of the dialog it opens
+                if (keepPreview) {
+                    keepPreview = false;
+                    return;
+                }
                 if (drag === null) {
                     reset();
                 }

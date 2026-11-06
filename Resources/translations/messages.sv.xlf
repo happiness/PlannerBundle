@@ -70,6 +70,14 @@
                 <source>planner.move_error</source>
                 <target>Den planerade aktiviteten kunde inte flyttas.</target>
             </trans-unit>
+            <trans-unit id="planner.day_off_question">
+                <source>planner.day_off_question</source>
+                <target>%name% brukar inte arbeta den här dagen. Planera arbete ändå?</target>
+            </trans-unit>
+            <trans-unit id="planner.days_off_question">
+                <source>planner.days_off_question</source>
+                <target>%name% brukar inte arbeta vissa av de här dagarna. Planera arbete ändå?</target>
+            </trans-unit>
             <trans-unit id="planner.add_activity">
                 <source>planner.add_activity</source>
                 <target>Planera aktivitet för denna dag</target>
