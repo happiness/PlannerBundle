@@ -55,11 +55,28 @@ final class WeeklyPlannerDay
         return $this->activities;
     }
 
+    /**
+     * Confirmed planning only, tentative work is counted apart in getTentativeHours().
+     */
     public function getPlannedHours(): float
     {
         $total = 0.0;
         foreach ($this->activities as $activity) {
-            $total += $activity->getHoursPerDay();
+            if (!$activity->isTentative()) {
+                $total += $activity->getHoursPerDay();
+            }
+        }
+
+        return $total;
+    }
+
+    public function getTentativeHours(): float
+    {
+        $total = 0.0;
+        foreach ($this->activities as $activity) {
+            if ($activity->isTentative()) {
+                $total += $activity->getHoursPerDay();
+            }
         }
 
         return $total;

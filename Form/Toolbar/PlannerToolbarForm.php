@@ -14,6 +14,7 @@ namespace KimaiPlugin\PlannerBundle\Form\Toolbar;
 use App\Form\Toolbar\ToolbarFormTrait;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
@@ -28,6 +29,17 @@ final class PlannerToolbarForm extends AbstractType
     {
         $this->addUsersChoice($builder);
         $this->addTeamsChoice($builder);
+        $builder->add('planning', ChoiceType::class, [
+            'label' => 'planner.planning_filter',
+            'required' => false,
+            'placeholder' => false,
+            'search' => false,
+            'choices' => [
+                'planner.planning_all' => PlannerQuery::PLANNING_ALL,
+                'planner.planning_confirmed' => PlannerQuery::PLANNING_CONFIRMED,
+                'planner.planning_tentative' => PlannerQuery::PLANNING_TENTATIVE,
+            ],
+        ]);
         $this->addHiddenPagination($builder);
     }
 

@@ -170,6 +170,70 @@
                 <source>planner.suggestions</source>
                 <target>Frequently used</target>
             </trans-unit>
+            <trans-unit id="planner.tentative">
+                <source>planner.tentative</source>
+                <target>Tentative</target>
+            </trans-unit>
+            <trans-unit id="planner.tentative_help">
+                <source>planner.tentative_help</source>
+                <target>Not confirmed yet, such as a deal that isn't signed. Shown faded and counted apart from the confirmed capacity.</target>
+            </trans-unit>
+            <trans-unit id="planner.tentative_hours">
+                <source>planner.tentative_hours</source>
+                <target>+ %hours% hrs tentative</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_filter">
+                <source>planner.planning_filter</source>
+                <target>Planning</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_all">
+                <source>planner.planning_all</source>
+                <target>All</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_confirmed">
+                <source>planner.planning_confirmed</source>
+                <target>Confirmed only</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_tentative">
+                <source>planner.planning_tentative</source>
+                <target>Tentative only</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative">
+                <source>planner.confirm_tentative</source>
+                <target>Confirm all for this project</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_submit">
+                <source>planner.confirm_tentative_submit</source>
+                <target>Confirm</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_question">
+                <source>planner.confirm_tentative_question</source>
+                <target>Confirm all tentative planning for %project%?</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_count">
+                <source>planner.confirm_tentative_count</source>
+                <target>Planned activities: %count%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_users">
+                <source>planner.confirm_tentative_users</source>
+                <target>Number of people: %count%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_period">
+                <source>planner.confirm_tentative_period</source>
+                <target>Period: %begin% to %end%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_scope">
+                <source>planner.confirm_tentative_scope</source>
+                <target>Only planning that ends today or later is confirmed, past planning stays as it was.</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_skipped">
+                <source>planner.confirm_tentative_skipped</source>
+                <target>Tentative planned activities of people you can't edit stay tentative: %count%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_none">
+                <source>planner.confirm_tentative_none</source>
+                <target>%project% has no tentative planning from today onwards that you can confirm.</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>

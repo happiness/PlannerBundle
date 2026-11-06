@@ -17,6 +17,7 @@ use App\Form\Type\ColorPickerType;
 use App\Form\Type\CustomerType;
 use App\Form\Type\DatePickerType;
 use App\Form\Type\UserType;
+use App\Form\Type\YesNoType;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
@@ -96,6 +97,13 @@ class PlannedActivityEditForm extends AbstractType
                 'label' => 'label.color',
                 'required' => false,
                 'empty_data' => null,
+            ])
+            ->add('tentative', YesNoType::class, [
+                'label' => 'planner.tentative',
+                'help' => 'planner.tentative_help',
+                'documentation' => [
+                    'description' => 'If true, the work is not confirmed yet and counts apart from the confirmed capacity (default: false)',
+                ],
             ]);
 
         if ($includeRecurrence) {
