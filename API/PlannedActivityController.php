@@ -23,9 +23,11 @@ use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Form\PlannedActivityApiForm;
 use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
+use KimaiPlugin\PlannerBundle\Validator\Constraints\NoOverlappingPlanning;
 use KimaiPlugin\PlannerBundle\Voter\PlannedActivityVoter;
 use Nelmio\ApiDocBundle\Attribute\Model;
 use OpenApi\Attributes as OA;
+use Symfony\Component\Form\FormError;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -143,15 +145,20 @@ final class PlannedActivityController extends BaseApiController
 
         $form->submit($request->request->all(), false);
 
+        // before validating, which looks up the user's planning
+        $this->assertAccess(PlannedActivityVoter::CREATE, $activity);
+
+        $weeks = $form->get('recurrentWeeks')->getData();
+        if ($form->isValid() && \is_int($weeks) && $this->repository->countRecurringOverlaps($activity, $weeks) > 0) {
+            $form->get('recurrentWeeks')->addError(new FormError(NoOverlappingPlanning::SERIES_MESSAGE));
+        }
+
         if (!$form->isValid()) {
             return $this->handleForm($form);
         }
 
-        $this->assertAccess(PlannedActivityVoter::CREATE, $activity);
-
         $this->repository->savePlannedActivity($activity);
 
-        $weeks = $form->get('recurrentWeeks')->getData();
         if (\is_int($weeks) && $weeks > 0) {
             $this->repository->createRecurringActivities($activity, $weeks);
         }
@@ -191,13 +198,18 @@ final class PlannedActivityController extends BaseApiController
 
         $form->submit($data, false);
 
-        if (!$form->isValid()) {
-            return $this->handleForm($form);
-        }
-
-        // moving an activity to another user requires permission for both the old and the new owner
+        // moving an activity to another user requires permission for both the old and the new owner,
+        // checked before validating, which looks up the user's planning
         if ($activity->getUser() !== $previousUser) {
             $this->assertAccess(PlannedActivityVoter::EDIT, $activity);
+        }
+
+        if ($editMode === 'future' && $activity->isRecurring() && $form->isValid() && $this->repository->countFutureRecurringOverlaps($activity) > 0) {
+            $form->addError(new FormError(NoOverlappingPlanning::SERIES_MESSAGE));
+        }
+
+        if (!$form->isValid()) {
+            return $this->handleForm($form);
         }
 
         $this->repository->savePlannedActivity($activity);

@@ -118,4 +118,20 @@ class WeeklyPlannerGroupTest extends TestCase
 
         $this->assertSame(6.0, $group->getPlannedHours($this->createWeek()));
     }
+
+    public function testJoinableAfterFindsTheNextPartOfTheSamePlanning(): void
+    {
+        $customer = new Customer('ACME');
+        $first = $this->createActivity('2026-10-19', '2026-10-20')->setCustomer($customer);
+        $second = $this->createActivity('2026-10-21', '2026-10-22')->setCustomer($customer);
+        $other = $this->createActivity('2026-10-21', '2026-10-21', 2.0)->setCustomer($customer);
+
+        $group = WeeklyPlannerGroup::createFor($first);
+        foreach ([$first, $other, $second] as $activity) {
+            $group->addActivity($activity);
+        }
+
+        $this->assertSame($second, $group->getJoinableAfter($first));
+        $this->assertNull($group->getJoinableAfter($second));
+    }
 }

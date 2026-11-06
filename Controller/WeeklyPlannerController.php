@@ -25,8 +25,10 @@ use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
+use KimaiPlugin\PlannerBundle\Validator\Constraints\NoOverlappingPlanning;
 use KimaiPlugin\PlannerBundle\Voter\PlannedActivityVoter;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
+use Symfony\Component\Form\FormError;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -165,6 +167,11 @@ final class WeeklyPlannerController extends AbstractController
 
         $form->handleRequest($request);
 
+        $weeks = $form->isSubmitted() && $form->has('recurrentWeeks') ? $form->get('recurrentWeeks')->getData() : null;
+        if ($form->isSubmitted() && $form->isValid() && \is_int($weeks) && $this->repository->countRecurringOverlaps($activity, $weeks) > 0) {
+            $form->get('recurrentWeeks')->addError(new FormError($this->translateSeriesOverlap()));
+        }
+
         if ($form->isSubmitted() && $form->isValid()) {
             try {
                 $this->repository->savePlannedActivity($activity);
@@ -218,6 +225,11 @@ final class WeeklyPlannerController extends AbstractController
         ]);
 
         $form->handleRequest($request);
+
+        $future = $form->isSubmitted() && $form->has('edit_mode') && $activity->isRecurring() && $form->get('edit_mode')->getData() === 'future';
+        if ($future && $form->isValid() && $this->repository->countFutureRecurringOverlaps($activity) > 0) {
+            $form->addError(new FormError($this->translateSeriesOverlap()));
+        }
 
         if ($form->isSubmitted() && $form->isValid()) {
             try {
@@ -316,6 +328,75 @@ final class WeeklyPlannerController extends AbstractController
         return new JsonResponse(['id' => $activity->getId()]);
     }
 
+    /**
+     * Splits a multi-day activity into two at the given day, which becomes the first day of the second part.
+     * Called from the split marker between two days of an activity in the grid; joining undoes it.
+     */
+    #[Route(path: '/activity/{id}/split', name: 'planner_activity_split', methods: ['POST'])]
+    public function splitActivity(PlannedActivity $activity, Request $request): JsonResponse
+    {
+        if (!$this->isCsrfTokenValid(self::MOVE_TOKEN, $request->request->getString('_token'))) {
+            return new JsonResponse([], Response::HTTP_FORBIDDEN);
+        }
+
+        if (!$this->canEdit($activity)) {
+            throw $this->createAccessDeniedException();
+        }
+
+        // round trip, as createFromFormat() rolls an impossible date like 2026-02-30 over into the next month
+        $day = $request->request->getString('date');
+        $date = \DateTime::createFromFormat('!Y-m-d', $day);
+        if ($date === false || $date->format('Y-m-d') !== $day) {
+            return new JsonResponse([], Response::HTTP_BAD_REQUEST);
+        }
+
+        try {
+            $second = $this->repository->splitActivity($activity, $date);
+        } catch (\Exception) {
+            return new JsonResponse([], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        if ($second === null) {
+            return new JsonResponse([], Response::HTTP_BAD_REQUEST);
+        }
+
+        return new JsonResponse(['id' => $activity->getId(), 'split' => $second->getId()]);
+    }
+
+    /**
+     * Joins an activity with the one starting the day after it ends, when both are the same planning
+     * (the reverse of a split). Called from the join marker between the two in the grid.
+     */
+    #[Route(path: '/activity/{id}/join/{other}', name: 'planner_activity_join', requirements: ['other' => '\d+'], methods: ['POST'])]
+    public function joinActivity(PlannedActivity $activity, int $other, Request $request): JsonResponse
+    {
+        if (!$this->isCsrfTokenValid(self::MOVE_TOKEN, $request->request->getString('_token'))) {
+            return new JsonResponse([], Response::HTTP_FORBIDDEN);
+        }
+
+        $next = $this->repository->find($other);
+        if (!$next instanceof PlannedActivity) {
+            throw $this->createNotFoundException();
+        }
+
+        // the second part is deleted, so it needs the same permissions as the first
+        if (!$this->canEdit($activity) || !$this->isGranted(PlannedActivityVoter::DELETE, $next)) {
+            throw $this->createAccessDeniedException();
+        }
+
+        try {
+            $joined = $this->repository->joinActivities($activity, $next);
+        } catch (\Exception) {
+            return new JsonResponse([], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        if (!$joined) {
+            return new JsonResponse([], Response::HTTP_BAD_REQUEST);
+        }
+
+        return new JsonResponse(['id' => $activity->getId()]);
+    }
+
     #[Route(path: '/activity/{id}/delete', name: 'planner_activity_delete', methods: ['GET', 'POST'])]
     public function deleteActivity(PlannedActivity $activity, Request $request): Response
     {
@@ -408,6 +489,14 @@ final class WeeklyPlannerController extends AbstractController
 
             return $this->redirectToRoute('planner');
         }
+    }
+
+    private function translateSeriesOverlap(): string
+    {
+        /** @var \Symfony\Contracts\Translation\TranslatorInterface $translator */
+        $translator = $this->container->get('translator');
+
+        return $translator->trans(NoOverlappingPlanning::SERIES_MESSAGE, [], 'validators');
     }
 
     /**

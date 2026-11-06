@@ -146,4 +146,59 @@ class PlannedActivityTest extends TestCase
         (new PlannedActivity())->setCustomer($customer)->validateProjectBelongsToCustomer($context);
         (new PlannedActivity())->validateProjectBelongsToCustomer($context);
     }
+
+    public function testOnlyTheNextDayOfTheSamePlanningIsJoinable(): void
+    {
+        $user = new User();
+        $customer = new Customer('ACME');
+        $make = static function (string $begin, string $end) use ($user, $customer): PlannedActivity {
+            $activity = (new PlannedActivity())
+                ->setUser($user)
+                ->setCustomer($customer)
+                ->setHoursPerDay(4.0)
+                ->setComment(null)
+                ->setRecurrenceGroup('series')
+                ->setBegin(new \DateTime($begin))
+                ->setEnd(new \DateTime($end));
+            $activity->setColor('#ff0000');
+
+            return $activity;
+        };
+
+        $first = $make('2026-11-02', '2026-11-03');
+        $this->assertTrue($first->isJoinableWith($make('2026-11-04', '2026-11-06')));
+        $this->assertTrue($first->isJoinableWith($make('2026-11-04', '2026-11-04')->setComment('')));
+
+        $this->assertFalse($first->isJoinableWith($first));
+        $this->assertFalse($first->isJoinableWith($make('2026-11-05', '2026-11-06')), 'a gap');
+        $this->assertFalse($first->isJoinableWith($make('2026-11-03', '2026-11-04')), 'overlapping');
+        $this->assertFalse($make('2026-11-04', '2026-11-06')->isJoinableWith($first), 'wrong order');
+        $this->assertFalse($first->isJoinableWith($make('2026-11-04', '2026-11-04')->setHoursPerDay(2.0)));
+        $this->assertFalse($first->isJoinableWith($make('2026-11-04', '2026-11-04')->setComment('other')));
+        $this->assertFalse($first->isJoinableWith($make('2026-11-04', '2026-11-04')->setRecurrenceGroup(null)));
+        $this->assertFalse($first->isJoinableWith($make('2026-11-04', '2026-11-04')->setUser(new User())));
+        $this->assertFalse($first->isJoinableWith($make('2026-11-04', '2026-11-04')->setCustomer(new Customer('Other'))));
+        $otherColor = $make('2026-11-04', '2026-11-04');
+        $otherColor->setColor('#00ff00');
+        $this->assertFalse($first->isJoinableWith($otherColor));
+    }
+
+    public function testWeeksOfASevenDaySeriesAreNotJoinable(): void
+    {
+        $user = new User();
+        $customer = new Customer('ACME');
+        $make = static fn (string $begin, string $end): PlannedActivity => (new PlannedActivity())
+            ->setUser($user)
+            ->setCustomer($customer)
+            ->setRecurrenceGroup('weekly')
+            ->setBegin(new \DateTime($begin))
+            ->setEnd(new \DateTime($end));
+
+        // two instances of a Monday to Sunday series
+        $this->assertFalse($make('2026-11-02', '2026-11-08')->isJoinableWith($make('2026-11-09', '2026-11-15')));
+        // the two parts of one split instance
+        $this->assertTrue($make('2026-11-02', '2026-11-04')->isJoinableWith($make('2026-11-05', '2026-11-08')));
+        // without a series, any length joins
+        $this->assertTrue($make('2026-11-02', '2026-11-08')->setRecurrenceGroup(null)->isJoinableWith($make('2026-11-09', '2026-11-15')->setRecurrenceGroup(null)));
+    }
 }

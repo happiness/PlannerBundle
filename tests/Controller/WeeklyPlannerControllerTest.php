@@ -1597,6 +1597,121 @@ class WeeklyPlannerControllerTest extends TestCase
         $this->assertNull($activity->getProject());
     }
 
+    private function runSplitActivity(PlannedActivity $activity, array $post, ?PlannedActivityRepository $repo = null, bool $validToken = true, bool $granted = true): JsonResponse
+    {
+        $repo ??= $this->createMock(PlannedActivityRepository::class);
+        $controller = new WeeklyPlannerController($repo, $this->createMock(WeeklyPlannerService::class), $this->createMock(UserRepository::class), $this->createMock(PlannerUserProvider::class));
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturn($granted);
+        $csrfManager = $this->createMock(CsrfTokenManagerInterface::class);
+        $csrfManager->method('isTokenValid')->willReturn($validToken);
+
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturn(true);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['security.csrf.token_manager', $csrfManager],
+        ]);
+        $controller->setContainer($container);
+
+        return $controller->splitActivity($activity, new Request([], $post));
+    }
+
+    public function testSplitActivitySplitsAtTheGivenDay(): void
+    {
+        $activity = $this->createMovableActivity();
+        $second = new PlannedActivity();
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->once())->method('splitActivity')
+            ->with($activity, $this->callback(static fn (\DateTimeInterface $day): bool => $day->format('Y-m-d') === '2026-10-20'))
+            ->willReturn($second);
+
+        $this->assertSame(200, $this->runSplitActivity($activity, ['date' => '2026-10-20'], $repo)->getStatusCode());
+    }
+
+    public function testSplitActivityRejectsInvalidTokenAndDates(): void
+    {
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->never())->method('splitActivity');
+
+        $this->assertSame(403, $this->runSplitActivity($this->createMovableActivity(), ['date' => '2026-10-20'], $repo, false)->getStatusCode());
+        foreach (['', 'tomorrow', '2026-02-30', '20.10.2026'] as $date) {
+            $this->assertSame(400, $this->runSplitActivity($this->createMovableActivity(), ['date' => $date], $repo)->getStatusCode(), $date);
+        }
+    }
+
+    public function testSplitActivityAtAnEdgeIsABadRequest(): void
+    {
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->method('splitActivity')->willReturn(null);
+
+        $this->assertSame(400, $this->runSplitActivity($this->createMovableActivity(), ['date' => '2026-10-19'], $repo)->getStatusCode());
+    }
+
+    public function testSplitActivityDeniedWithoutEditPermission(): void
+    {
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->never())->method('splitActivity');
+
+        $this->expectException(AccessDeniedException::class);
+        $this->runSplitActivity($this->createMovableActivity(), ['date' => '2026-10-20'], $repo, true, false);
+    }
+
+    private function runJoinActivity(PlannedActivity $activity, int $other, ?PlannedActivityRepository $repo, bool $validToken = true, ?callable $isGranted = null): JsonResponse
+    {
+        $controller = new WeeklyPlannerController($repo ?? $this->createMock(PlannedActivityRepository::class), $this->createMock(WeeklyPlannerService::class), $this->createMock(UserRepository::class), $this->createMock(PlannerUserProvider::class));
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturnCallback($isGranted ?? static fn (): bool => true);
+        $csrfManager = $this->createMock(CsrfTokenManagerInterface::class);
+        $csrfManager->method('isTokenValid')->willReturn($validToken);
+
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturn(true);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['security.csrf.token_manager', $csrfManager],
+        ]);
+        $controller->setContainer($container);
+
+        return $controller->joinActivity($activity, $other, new Request([], ['_token' => 'x']));
+    }
+
+    public function testJoinActivityJoinsTheNextPart(): void
+    {
+        $first = $this->createMovableActivity();
+        $second = new PlannedActivity();
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->method('find')->with(9)->willReturn($second);
+        $repo->expects($this->once())->method('joinActivities')->with($first, $second)->willReturn(true);
+
+        $this->assertSame(200, $this->runJoinActivity($first, 9, $repo)->getStatusCode());
+    }
+
+    public function testJoinActivityRejectsInvalidTokenAndWhatCannotBeJoined(): void
+    {
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->method('find')->willReturn(new PlannedActivity());
+        $repo->method('joinActivities')->willReturn(false);
+
+        $this->assertSame(403, $this->runJoinActivity($this->createMovableActivity(), 9, $repo, false)->getStatusCode());
+        $this->assertSame(400, $this->runJoinActivity($this->createMovableActivity(), 9, $repo)->getStatusCode());
+    }
+
+    public function testJoinActivityNeedsDeletePermissionOnTheSecondPart(): void
+    {
+        $second = new PlannedActivity();
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->method('find')->willReturn($second);
+        $repo->expects($this->never())->method('joinActivities');
+
+        $this->expectException(AccessDeniedException::class);
+        $this->runJoinActivity($this->createMovableActivity(), 9, $repo, true, static fn (string $attribute, mixed $subject = null): bool => !($attribute === 'delete' && $subject === $second));
+    }
+
     public function testMoveActivityRejectsInvalidToken(): void
     {
         $repo = $this->createMock(PlannedActivityRepository::class);

@@ -74,6 +74,14 @@
                 <source>planner.add_activity</source>
                 <target>Plan activity for this day</target>
             </trans-unit>
+            <trans-unit id="planner.split_here">
+                <source>planner.split_here</source>
+                <target>Split here</target>
+            </trans-unit>
+            <trans-unit id="planner.join_here">
+                <source>planner.join_here</source>
+                <target>Join</target>
+            </trans-unit>
             <trans-unit id="planner.recurrent_weeks">
                 <source>planner.recurrent_weeks</source>
                 <target>Recurring weeks</target>
