@@ -9,3 +9,8 @@ kimai_planner_api:
     resource: '../../API/'
     type: attribute
     prefix: /api
+
+# outside /{_locale}/ on purpose: calendar apps cannot log in, the token in the URL is the credential
+kimai_planner_feed:
+    resource: '../../Feed/'
+    type: attribute
