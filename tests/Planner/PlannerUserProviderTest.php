@@ -19,8 +19,8 @@ use KimaiPlugin\PlannerBundle\Event\PlannerUsersEvent;
 use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 
 class PlannerUserProviderTest extends TestCase
 {
@@ -98,7 +98,7 @@ class PlannerUserProviderTest extends TestCase
         $this->assertSame([$user], $provider->getVisibleUsers($user));
     }
 
-        public function testUserWithoutLedTeamsSeesNobody(): void
+    public function testUserWithoutLedTeamsSeesNobody(): void
     {
         $user = $this->createUser(1);
         $user->addTeam($this->createTeam(10));
