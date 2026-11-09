@@ -15,9 +15,11 @@ use App\Entity\Team;
 use App\Entity\User;
 use App\Repository\Query\UserQuery;
 use App\Repository\UserRepository;
+use KimaiPlugin\PlannerBundle\Event\PlannerUsersEvent;
 use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Bundle\SecurityBundle\Security;
 
 class PlannerUserProviderTest extends TestCase
@@ -79,7 +81,24 @@ class PlannerUserProviderTest extends TestCase
         $this->assertSame([$user, $other], $provider->getVisibleUsers($user));
     }
 
-    public function testUserWithoutLedTeamsSeesNobody(): void
+    public function testListenersCanLeaveUsersOut(): void
+    {
+        $user = $this->createUser(1);
+        $placeholder = $this->createUser(2);
+        $repository = $this->createMock(UserRepository::class);
+        $repository->method('getUsersForQuery')->willReturn([$user, $placeholder]);
+
+        $dispatcher = new EventDispatcher();
+        $dispatcher->addListener(PlannerUsersEvent::class, static function (PlannerUsersEvent $event) use ($placeholder, $user): void {
+            self::assertSame($user, $event->getCurrentUser());
+            $event->removeUser($placeholder);
+        });
+        $provider = new PlannerUserProvider($repository, $this->createSecurity(['view_all_data']), $dispatcher);
+
+        $this->assertSame([$user], $provider->getVisibleUsers($user));
+    }
+
+        public function testUserWithoutLedTeamsSeesNobody(): void
     {
         $user = $this->createUser(1);
         $user->addTeam($this->createTeam(10));
