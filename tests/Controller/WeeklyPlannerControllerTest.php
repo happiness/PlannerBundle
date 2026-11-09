@@ -146,6 +146,9 @@ class WeeklyPlannerControllerTest extends TestCase
                     $this->assertSame('34', $context['currentWeek']->format('W'));
                     $this->assertSame('2026-08-10', $context['prevWeek']);
                     $this->assertSame('2026-08-24', $context['nextWeek']);
+                    // four weeks shown by default: a period back and forth is four weeks
+                    $this->assertSame('2026-07-20', $context['prevPeriod']);
+                    $this->assertSame('2026-09-14', $context['nextPeriod']);
 
                     $expectedToday = (new \DateTimeImmutable('today'))->modify('this week monday')->format('Y-m-d');
                     $this->assertSame($expectedToday, $context['todayWeek']);
@@ -1107,7 +1110,13 @@ class WeeklyPlannerControllerTest extends TestCase
 
         $repo = $this->createMock(PlannedActivityRepository::class);
         $repo->expects($this->once())->method('savePlannedActivity')->with($activity);
-        $repo->expects($this->once())->method('updateFutureRecurringActivities')->with($activity);
+        // the dates the activity had before the form changed it, to move the rest of the series alike
+        $previousEnd = $activity->getEnd()?->format('Y-m-d');
+        $repo->expects($this->once())->method('updateFutureRecurringActivities')->with(
+            $activity,
+            $this->callback(fn ($begin) => $begin instanceof \DateTimeInterface && $begin->format('Y-m-d') === '2026-09-14'),
+            $this->callback(fn ($end) => $end?->format('Y-m-d') === $previousEnd)
+        );
 
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
@@ -1218,6 +1227,9 @@ class WeeklyPlannerControllerTest extends TestCase
             ->with('@Planner/index.html.twig', $this->callback(function (array $context) use ($expectedWeeks): bool {
                 $this->assertSame($expectedWeeks, $context['weeks']);
                 $this->assertSame([1, 2, 4, 8], $context['weekOptions']);
+                $monday = $context['currentWeek'];
+                $this->assertSame($monday->modify('-' . $expectedWeeks . ' weeks')->format('Y-m-d'), $context['prevPeriod']);
+                $this->assertSame($monday->modify('+' . $expectedWeeks . ' weeks')->format('Y-m-d'), $context['nextPeriod']);
 
                 return true;
             }))

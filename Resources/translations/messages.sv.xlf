@@ -38,6 +38,22 @@
                 <source>planner.expected_hours</source>
                 <target>Förväntade</target>
             </trans-unit>
+            <trans-unit id="planner.previous_week">
+                <source>planner.previous_week</source>
+                <target>Föregående vecka</target>
+            </trans-unit>
+            <trans-unit id="planner.next_week">
+                <source>planner.next_week</source>
+                <target>Nästa vecka</target>
+            </trans-unit>
+            <trans-unit id="planner.previous_period">
+                <source>planner.previous_period</source>
+                <target>Föregående %count% veckor</target>
+            </trans-unit>
+            <trans-unit id="planner.next_period">
+                <source>planner.next_period</source>
+                <target>Nästa %count% veckor</target>
+            </trans-unit>
             <trans-unit id="planner.this_week">
                 <source>planner.this_week</source>
                 <target>Denna vecka</target>

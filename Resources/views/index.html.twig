@@ -9,7 +9,14 @@
             <div class="row align-items-center">
                 <div class="col">
                     <div class="btn-group week-picker-btn-group" role="group" aria-label="{{ 'planner.title'|trans }}">
-                        <a href="{{ path('planner_week', {'date': prevWeek}) }}" class="btn btn-left btn-icon">
+                        {# with one week shown, a period is a week and the single arrows already do it #}
+                        {% if weeks > 1 %}
+                            {% set periodLabel = 'planner.previous_period'|trans({'%count%': weeks}) %}
+                            <a href="{{ path('planner_week', {'date': prevPeriod}) }}" class="btn btn-icon" data-toggle="tooltip" data-placement="top" title="{{ periodLabel }}" aria-label="{{ periodLabel }}">
+                                {{ icon('left2') }}
+                            </a>
+                        {% endif %}
+                        <a href="{{ path('planner_week', {'date': prevWeek}) }}" class="btn btn-left btn-icon" data-toggle="tooltip" data-placement="top" title="{{ 'planner.previous_week'|trans }}" aria-label="{{ 'planner.previous_week'|trans }}">
                             {{ icon('left') }}
                         </a>
                         <span class="btn btn-default pe-none">
@@ -21,9 +28,15 @@
                                 &ndash; {{ 'stats.workingTimeWeekShort'|trans({'%week%': lastWeek|date('W')}) }}
                             {% endif %}
                         </span>
-                        <a href="{{ path('planner_week', {'date': nextWeek}) }}" class="btn btn-right btn-icon">
+                        <a href="{{ path('planner_week', {'date': nextWeek}) }}" class="btn btn-right btn-icon" data-toggle="tooltip" data-placement="top" title="{{ 'planner.next_week'|trans }}" aria-label="{{ 'planner.next_week'|trans }}">
                             {{ icon('right') }}
                         </a>
+                        {% if weeks > 1 %}
+                            {% set periodLabel = 'planner.next_period'|trans({'%count%': weeks}) %}
+                            <a href="{{ path('planner_week', {'date': nextPeriod}) }}" class="btn btn-icon" data-toggle="tooltip" data-placement="top" title="{{ periodLabel }}" aria-label="{{ periodLabel }}">
+                                {{ icon('right2') }}
+                            </a>
+                        {% endif %}
                     </div>
                     <a href="{{ path('planner_week', {'date': todayWeek}) }}" class="btn">
                         {{ icon('calendar', true) }}
@@ -187,7 +200,10 @@
                                                 {% set date = segment.date %}
                                                 <td colspan="{{ segment.span }}" class="position-relative align-middle border-1 day{% if date is weekend %} weekend{% endif %}{% if date is today %} today{% endif %} p-1 {{ segment.activities is not empty ? 'has-activities' : 'no-activities' }}"{% if canCreate and segment.activities is empty %} data-planner-date="{{ date|date('Y-m-d') }}"{% endif %}>
                                                     {% if canCreate and segment.activities is empty %}
-                                                        <a href="{{ path('planner_activity_create', {'user': row.user.id, 'date': date|date('Y-m-d')}) }}"
+                                                        {% set createParams = {'user': row.user.id, 'date': date|date('Y-m-d')} %}
+                                                        {% if group.customer %}{% set createParams = createParams|merge({'customer': group.customer.id}) %}{% endif %}
+                                                        {% if group.project %}{% set createParams = createParams|merge({'project': group.project.id}) %}{% endif %}
+                                                        <a href="{{ path('planner_activity_create', createParams) }}"
                                                            class="stretched-link cursor-crosshair modal-ajax-form"
                                                            title="{{ 'planner.planned_activity'|trans }}"></a>
                                                     {% endif %}
@@ -249,7 +265,7 @@
                             </tbody>
                             {% if plannerData.rows|length > 0 %}
                                 <tfoot>
-                                    <tr class="bg-light fw-bold">
+                                    <tr class="summary">
                                         <td class="text-right p-1" colspan="2">
                                             <div>{{ plannerData.totalPlannedHours }}h / {{ plannerData.totalExpectedHours }}h</div>
                                             {% if plannerData.totalActualHours > 0 %}

@@ -209,6 +209,10 @@ final class WeeklyPlannerController extends AbstractController
             $formActionParams['date'] = $dateParam;
         }
 
+        // the form changes the activity in place, keep the dates to move the rest of a recurring series alike
+        $previousBegin = $activity->getBegin() !== null ? clone $activity->getBegin() : null;
+        $previousEnd = $activity->getEnd() !== null ? clone $activity->getEnd() : null;
+
         $form = $this->createForm(PlannedActivityEditForm::class, $activity, [
             'action' => $this->generateUrl('planner_activity_edit', $formActionParams),
             'method' => 'POST',
@@ -226,7 +230,7 @@ final class WeeklyPlannerController extends AbstractController
                 if ($form->has('edit_mode') && $activity->isRecurring()) {
                     $editMode = $form->get('edit_mode')->getData();
                     if ($editMode === 'future') {
-                        $this->repository->updateFutureRecurringActivities($activity);
+                        $this->repository->updateFutureRecurringActivities($activity, $previousBegin, $previousEnd);
                     }
                 }
 
@@ -505,6 +509,9 @@ final class WeeklyPlannerController extends AbstractController
         $currentWeekMonday = $selectedDate->modify('this week monday 00:00:00');
         $prevWeek = $currentWeekMonday->modify('-1 week')->format('Y-m-d');
         $nextWeek = $currentWeekMonday->modify('+1 week')->format('Y-m-d');
+        // the double arrows move by the number of weeks shown, so the next period starts where this one ends
+        $prevPeriod = $currentWeekMonday->modify('-' . $weeks . ' weeks')->format('Y-m-d');
+        $nextPeriod = $currentWeekMonday->modify('+' . $weeks . ' weeks')->format('Y-m-d');
         $todayWeek = (new \DateTimeImmutable('today'))->modify('this week monday')->format('Y-m-d');
 
         return $this->render('@Planner/index.html.twig', [
@@ -516,6 +523,8 @@ final class WeeklyPlannerController extends AbstractController
             'currentWeek' => $currentWeekMonday,
             'prevWeek' => $prevWeek,
             'nextWeek' => $nextWeek,
+            'prevPeriod' => $prevPeriod,
+            'nextPeriod' => $nextPeriod,
             'todayWeek' => $todayWeek,
             'weeks' => $weeks,
             'weekOptions' => self::WEEK_OPTIONS,

@@ -146,7 +146,14 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $entityManager->flush();
     }
 
-    public function updateFutureRecurringActivities(PlannedActivity $activity): void
+    /**
+     * Copies the edited activity to the following activities of its recurring series.
+     *
+     * Pass the dates the activity had before the edit to move the following activities
+     * as well: their begin and end are shifted by the same number of days, so an activity
+     * stretched from Thursday to Monday-Friday covers Monday-Friday in every following week.
+     */
+    public function updateFutureRecurringActivities(PlannedActivity $activity, ?\DateTimeInterface $previousBegin = null, ?\DateTimeInterface $previousEnd = null): void
     {
         $recurrenceGroup = $activity->getRecurrenceGroup();
         $begin = $activity->getBegin();
@@ -154,19 +161,25 @@ class PlannedActivityRepository extends ServiceEntityRepository
             return;
         }
 
+        $beginShift = $previousBegin !== null ? $this->daysBetween($previousBegin, $begin) : 0;
+        $end = $activity->getEnd();
+        $endShift = $previousEnd !== null && $end !== null ? $this->daysBetween($previousEnd, $end) : 0;
+
+        // "Future" is measured from where the activity was, so moving it later does not skip the activities it passed
         $qb = $this->createQueryBuilder('p');
         $qb->where('p.recurrenceGroup = :group')
             ->andWhere('p.id != :currentId')
             ->andWhere('p.begin >= :begin')
             ->setParameter('group', $recurrenceGroup)
             ->setParameter('currentId', $activity->getId())
-            ->setParameter('begin', $begin->format('Y-m-d'));
+            ->setParameter('begin', ($previousBegin ?? $begin)->format('Y-m-d'));
 
         /** @var array<PlannedActivity> $futureActivities */
         $futureActivities = $qb->getQuery()->getResult();
 
         $entityManager = $this->getEntityManager();
         foreach ($futureActivities as $future) {
+            $this->shiftDates($future, $beginShift, $endShift);
             $future->setUser($activity->getUser());
             $future->setCustomer($activity->getCustomer());
             $future->setProject($activity->getProject());
@@ -177,6 +190,33 @@ class PlannedActivityRepository extends ServiceEntityRepository
             $entityManager->persist($future);
         }
         $entityManager->flush();
+    }
+
+    private function daysBetween(\DateTimeInterface $from, \DateTimeInterface $to): int
+    {
+        $from = new \DateTimeImmutable($from->format('Y-m-d'));
+        $to = new \DateTimeImmutable($to->format('Y-m-d'));
+
+        return (int) $from->diff($to)->format('%r%a');
+    }
+
+    private function shiftDates(PlannedActivity $activity, int $beginShift, int $endShift): void
+    {
+        $begin = $activity->getBegin();
+        $end = $activity->getEnd();
+        if ($begin === null || $end === null || ($beginShift === 0 && $endShift === 0)) {
+            return;
+        }
+
+        $newBegin = (new \DateTime($begin->format('Y-m-d')))->modify(\sprintf('%+d days', $beginShift));
+        $newEnd = (new \DateTime($end->format('Y-m-d')))->modify(\sprintf('%+d days', $endShift));
+        // an activity that was shorter than the edited one must not end before it begins
+        if ($newEnd < $newBegin) {
+            $newEnd = clone $newBegin;
+        }
+
+        $activity->setBegin($newBegin);
+        $activity->setEnd($newEnd);
     }
 
     /**
