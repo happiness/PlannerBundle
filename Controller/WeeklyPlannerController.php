@@ -667,6 +667,9 @@ final class WeeklyPlannerController extends AbstractController
         $currentWeekMonday = $selectedDate->modify('this week monday 00:00:00');
         $prevWeek = $currentWeekMonday->modify('-1 week')->format('Y-m-d');
         $nextWeek = $currentWeekMonday->modify('+1 week')->format('Y-m-d');
+        // the double arrows move by the number of weeks shown, so the next period starts where this one ends
+        $prevPeriod = $currentWeekMonday->modify('-' . $weeks . ' weeks')->format('Y-m-d');
+        $nextPeriod = $currentWeekMonday->modify('+' . $weeks . ' weeks')->format('Y-m-d');
         $todayWeek = (new \DateTimeImmutable('today'))->modify('this week monday')->format('Y-m-d');
 
         return $this->render('@Planner/index.html.twig', [
@@ -678,6 +681,8 @@ final class WeeklyPlannerController extends AbstractController
             'currentWeek' => $currentWeekMonday,
             'prevWeek' => $prevWeek,
             'nextWeek' => $nextWeek,
+            'prevPeriod' => $prevPeriod,
+            'nextPeriod' => $nextPeriod,
             'todayWeek' => $todayWeek,
             'weeks' => $weeks,
             'weekOptions' => self::WEEK_OPTIONS,
