@@ -83,8 +83,9 @@ final class WeeklyPlannerUserRow
     }
 
     /**
-     * Activities grouped by customer/project, ordered by customer and project name, with the reservations first in
-     * the provider's order (unknown keys last, by key).
+     * Activities grouped by customer/project, ordered by customer and project name, with the reservations last, in
+     * the provider's order (unknown keys last, by key): they hold standing time, which matters less at a glance than
+     * the project work.
      *
      * @return array<WeeklyPlannerGroup>
      */
@@ -98,7 +99,7 @@ final class WeeklyPlannerUserRow
         }
 
         $order = function (WeeklyPlannerGroup $group): array {
-            $kind = $group->isReservation() ? 0 : 1;
+            $kind = $group->isReservation() ? 1 : 0;
             $position = $group->isReservation() ? ($this->reservations?->getPosition((string) $group->getReservationKey()) ?? \PHP_INT_MAX) : 0;
 
             return [$kind, $position, $group->getCustomerName(), $group->getProjectName() ?? ''];

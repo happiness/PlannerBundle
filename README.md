@@ -15,7 +15,7 @@
 - **Drag to Plan**: Drag across empty day cells of a row to create a planning spanning several days. A transparent preview block is shown while dragging and stays visible while the dialog is open.
 - **Move and Resize**: Drag a planned activity to another day or row, or drag its left/right handle to extend or shorten it.
 - **Shortcuts**: Frequently used projects (with their customer) are offered as shortcuts when creating a planning, unless the dialog was opened from a project's row and already has it selected.
-- **Reserved Time**: Plan time that belongs to no customer or project, such as a daily buffer or tech leading, when another plugin supplies the reservations (see [Reserved time](#reserved-time)). It is planned and counted like project work, in its own rows above the projects, and nobody can log time to it. Without such a plugin nothing changes.
+- **Reserved Time**: Plan time that belongs to no customer or project, such as a daily buffer or tech leading, when another plugin supplies the reservations (see [Reserved time](#reserved-time)). It is planned and counted like project work, in its own rows below the projects, and nobody can log time to it. Without such a plugin nothing changes.
 - **Multiple Weeks**: Show 1, 2, 4 (default) or 8 weeks at once; capacity is summarized per week.
 - **REST API**: Create, read, update and delete planned activities via `/api/planner/activities` (see the Kimai API docs under the "Planner" tag).
 - **Quick Modal Editing**: Create, update, or delete planned blocks seamlessly via modal dialogs.
@@ -140,7 +140,7 @@ services:
 
 - The dialog shows a "Reserved time" field above the customer when there is at least one. Choosing one hides customer, project and colour; the bars take the reservation's colour.
 - A reservation counts as planned work in every gauge, like a project.
-- Each reservation gets its own row under every person, above the projects, in the order the provider returns them. Clicking or dragging in that row plans it, and dropping other planning there turns it into that reservation (dropping it on a project row turns it back).
+- Each reservation gets its own row under every person, below the projects, in the order the provider returns them. Clicking or dragging in that row plans it, and dropping other planning there turns it into that reservation (dropping it on a project row turns it back).
 - Return a reservation that is no longer used as `hidden` rather than leaving it out: its plannings are then left out of the planner and the API until it is shown again. A key nobody returns is still shown, under the key itself and grey, and still counts.
 - The API returns the key as `reservation` (`null` for everything else), and `GET /api/planner/activities` filters by `reservations[]`.
 
