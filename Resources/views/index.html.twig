@@ -9,7 +9,14 @@
             <div class="row align-items-center">
                 <div class="col">
                     <div class="btn-group week-picker-btn-group" role="group" aria-label="{{ 'planner.title'|trans }}">
-                        <a href="{{ path('planner_week', {'date': prevWeek}) }}" class="btn btn-left btn-icon">
+                        {# with one week shown, a period is a week and the single arrows already do it #}
+                        {% if weeks > 1 %}
+                            {% set periodLabel = 'planner.previous_period'|trans({'%count%': weeks}) %}
+                            <a href="{{ path('planner_week', {'date': prevPeriod}) }}" class="btn btn-icon" data-toggle="tooltip" data-placement="top" title="{{ periodLabel }}" aria-label="{{ periodLabel }}">
+                                {{ icon('left2') }}
+                            </a>
+                        {% endif %}
+                        <a href="{{ path('planner_week', {'date': prevWeek}) }}" class="btn btn-left btn-icon" data-toggle="tooltip" data-placement="top" title="{{ 'planner.previous_week'|trans }}" aria-label="{{ 'planner.previous_week'|trans }}">
                             {{ icon('left') }}
                         </a>
                         <span class="btn btn-default pe-none">
@@ -21,9 +28,15 @@
                                 &ndash; {{ 'stats.workingTimeWeekShort'|trans({'%week%': lastWeek|date('W')}) }}
                             {% endif %}
                         </span>
-                        <a href="{{ path('planner_week', {'date': nextWeek}) }}" class="btn btn-right btn-icon">
+                        <a href="{{ path('planner_week', {'date': nextWeek}) }}" class="btn btn-right btn-icon" data-toggle="tooltip" data-placement="top" title="{{ 'planner.next_week'|trans }}" aria-label="{{ 'planner.next_week'|trans }}">
                             {{ icon('right') }}
                         </a>
+                        {% if weeks > 1 %}
+                            {% set periodLabel = 'planner.next_period'|trans({'%count%': weeks}) %}
+                            <a href="{{ path('planner_week', {'date': nextPeriod}) }}" class="btn btn-icon" data-toggle="tooltip" data-placement="top" title="{{ periodLabel }}" aria-label="{{ periodLabel }}">
+                                {{ icon('right2') }}
+                            </a>
+                        {% endif %}
                     </div>
                     <a href="{{ path('planner_week', {'date': todayWeek}) }}" class="btn">
                         {{ icon('calendar', true) }}

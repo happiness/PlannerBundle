@@ -146,6 +146,9 @@ class WeeklyPlannerControllerTest extends TestCase
                     $this->assertSame('34', $context['currentWeek']->format('W'));
                     $this->assertSame('2026-08-10', $context['prevWeek']);
                     $this->assertSame('2026-08-24', $context['nextWeek']);
+                    // four weeks shown by default: a period back and forth is four weeks
+                    $this->assertSame('2026-07-20', $context['prevPeriod']);
+                    $this->assertSame('2026-09-14', $context['nextPeriod']);
 
                     $expectedToday = (new \DateTimeImmutable('today'))->modify('this week monday')->format('Y-m-d');
                     $this->assertSame($expectedToday, $context['todayWeek']);
@@ -1224,6 +1227,9 @@ class WeeklyPlannerControllerTest extends TestCase
             ->with('@Planner/index.html.twig', $this->callback(function (array $context) use ($expectedWeeks): bool {
                 $this->assertSame($expectedWeeks, $context['weeks']);
                 $this->assertSame([1, 2, 4, 8], $context['weekOptions']);
+                $monday = $context['currentWeek'];
+                $this->assertSame($monday->modify('-' . $expectedWeeks . ' weeks')->format('Y-m-d'), $context['prevPeriod']);
+                $this->assertSame($monday->modify('+' . $expectedWeeks . ' weeks')->format('Y-m-d'), $context['nextPeriod']);
 
                 return true;
             }))
