@@ -151,7 +151,7 @@ class WeeklyPlannerUserRowTest extends TestCase
         $this->assertTrue($row->isBalanced());
     }
 
-    public function testReservationsComeAfterTimeOffInTheProvidersOrderAndUnknownOnesLast(): void
+    public function testReservationsComeAfterTheProjectsInTheProvidersOrderAndUnknownOnesLast(): void
     {
         $lead = new PlanningReservation('lead', 'Tech leading');
         $buffer = new PlanningReservation('buffer', 'Agency buffer', '#ff0000');
@@ -167,16 +167,16 @@ class WeeklyPlannerUserRowTest extends TestCase
 
         $this->assertCount(5, $groups);
         $this->assertTrue($groups[0]->isTimeOff());
-        $this->assertSame($lead, $groups[1]->getReservation());
-        $this->assertSame('Tech leading', $groups[1]->getReservationName());
-        $this->assertSame($buffer, $groups[2]->getReservation());
-        $this->assertCount(2, $groups[2]->getActivities());
+        $this->assertSame('Acme', $groups[1]->getCustomerName());
+        $this->assertFalse($groups[1]->isReservation());
+        $this->assertSame($lead, $groups[2]->getReservation());
+        $this->assertSame('Tech leading', $groups[2]->getReservationName());
+        $this->assertSame($buffer, $groups[3]->getReservation());
+        $this->assertCount(2, $groups[3]->getActivities());
         // a key the provider does not know is shown under the key
-        $this->assertTrue($groups[3]->isReservation());
-        $this->assertNull($groups[3]->getReservation());
-        $this->assertSame('gone', $groups[3]->getReservationName());
-        $this->assertSame('Acme', $groups[4]->getCustomerName());
-        $this->assertFalse($groups[4]->isReservation());
+        $this->assertTrue($groups[4]->isReservation());
+        $this->assertNull($groups[4]->getReservation());
+        $this->assertSame('gone', $groups[4]->getReservationName());
     }
 
     public function testReservationsCountAsPlannedWork(): void
