@@ -384,7 +384,7 @@
                             </tbody>
                             {% if plannerData.rows|length > 0 %}
                                 <tfoot>
-                                    <tr class="bg-light fw-bold">
+                                    <tr class="summary">
                                         <td class="text-right p-1" colspan="2">
                                             <div>{{ plannerData.totalPlannedHours }}h / {{ plannerData.totalCapacityHours }}h</div>
                                             {% if plannerData.totalTentativeHours > 0 %}
