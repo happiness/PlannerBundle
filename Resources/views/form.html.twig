@@ -168,6 +168,44 @@
                 {% endif %}
                 {{ form_row(form.comment) }}
             {% endif %}
+            <script type="text/javascript">
+                (function () {
+                    // A project belongs to exactly one customer: choosing a project before its customer fills the customer in.
+                    const customer = document.getElementById('{{ form.customer.vars.id }}');
+                    const project = document.getElementById('{{ form.project.vars.id }}');
+                    if (customer === null || project === null) {
+                        return;
+                    }
+                    const setCustomer = (customerId) => {
+                        if (customerId === '' || customer.value === customerId || project.value === '') {
+                            return;
+                        }
+                        // the customer select then reloads the projects, which keeps the chosen one because it belongs to it
+                        customer.tomselect !== undefined ? customer.tomselect.setValue(customerId) : (customer.value = customerId, customer.dispatchEvent(new Event('change', {bubbles: true})));
+                    };
+                    project.addEventListener('change', () => {
+                        if (project.value === '' || customer.value !== '') {
+                            return;
+                        }
+                        const option = project.selectedOptions[0];
+                        if (option !== undefined && option.dataset.customer !== undefined) {
+                            setCustomer(option.dataset.customer);
+                            return;
+                        }
+                        // options reloaded through the API (after clearing the customer) do not carry their customer
+                        const projectId = project.value;
+                        fetch('{{ path('get_project', {id: 0}) }}'.replace(/0$/, projectId), {headers: {'Accept': 'application/json'}})
+                            .then((response) => response.ok ? response.json() : null)
+                            .then((data) => {
+                                const id = data === null ? null : (typeof data.customer === 'object' && data.customer !== null ? data.customer.id : data.customer);
+                                if (id !== null && id !== undefined && project.value === projectId && customer.value === '') {
+                                    setCustomer(String(id));
+                                }
+                            })
+                            .catch(() => {});
+                    });
+                })();
+            </script>
             {{ form_rest(form) }}
             <script type="text/javascript">
                 (function () {
