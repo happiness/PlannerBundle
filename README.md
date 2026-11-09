@@ -92,6 +92,22 @@ Permissions can be customized anytime via the Kimai UI under **System > Role per
 
 ---
 
+## Extending
+
+Other plugins can leave users out of the planner, for example accounts that hold time but are not people. Listen to `KimaiPlugin\PlannerBundle\Event\PlannerUsersEvent`: it carries the users the current user is about to see, already limited to what they may see, and `removeUser()` takes one out of the planner grid and the planner API.
+
+```php
+#[AsEventListener]
+public function __invoke(PlannerUsersEvent $event): void
+{
+    foreach ($event->getUsers() as $user) {
+        if ($this->isNotAPerson($user)) {
+            $event->removeUser($user);
+        }
+    }
+}
+```
+
 ## Development & Testing
 
 Run tests and code checks using the provided scripts:
