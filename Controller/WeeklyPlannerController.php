@@ -501,6 +501,9 @@ final class WeeklyPlannerController extends AbstractController
         $users = $this->userProvider->getVisibleUsers($currentUser, $query);
 
         $plannerData = $this->plannerService->getPlannerData($users, $selectedDate, $weeks);
+        if ($query->isOrderedByFreeHours()) {
+            $plannerData->sortByFreeHours();
+        }
 
         $page = new PageSetup('planner.title');
         $page->setHelp('planner.html');
