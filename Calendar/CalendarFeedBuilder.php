@@ -13,6 +13,7 @@ namespace KimaiPlugin\PlannerBundle\Calendar;
 
 use App\Entity\User;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
@@ -28,7 +29,8 @@ class CalendarFeedBuilder
 {
     public function __construct(
         private readonly TranslatorInterface $translator,
-        private readonly UrlGeneratorInterface $urlGenerator
+        private readonly UrlGeneratorInterface $urlGenerator,
+        private readonly ?PlanningReservations $reservations = null
     ) {
     }
 
@@ -63,7 +65,7 @@ class CalendarFeedBuilder
             // time off without hours takes the whole contract day
             $hoursPerDay = $activity->getHoursPerDay();
             $hours = $hoursPerDay === null ? $this->translator->trans('planner.whole_day', [], 'messages', $locale) : self::formatHours($hoursPerDay);
-            $title = $activity->isTimeOff() ? $this->translator->trans('planner.time_off', [], 'messages', $locale) : ($activity->getName() ?? '');
+            $title = $activity->isTimeOff() ? $this->translator->trans('planner.time_off', [], 'messages', $locale) : ($this->reservations?->get($activity->getReservation())?->name ?? $activity->getName() ?? '');
             // most calendar apps ignore STATUS in subscribed calendars, so the title says it too
             if ($activity->isTentative()) {
                 $title = $this->translator->trans('planner.tentative', [], 'messages', $locale) . ': ' . $title;

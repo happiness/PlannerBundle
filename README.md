@@ -23,6 +23,7 @@
 - **Multiple Weeks**: Show 1, 2, 4 (default) or 8 weeks at once; capacity is summarized per week.
 - **Calendar Feed**: Subscribe to your own planning in Google Calendar, Outlook or Apple Calendar through a private address (see [Calendar feed](#calendar-feed)).
 - **Tentative Planning**: Mark planning that isn't confirmed yet, such as work for a deal that isn't signed. Tentative blocks are faded with a dashed border, and their hours are shown on top of the confirmed capacity ("+ 8 hrs tentative") without changing its colour. A "Planning" filter shows all, confirmed only or tentative only (the capacity always counts everything; "tentative only" also hides users without tentative work). "Confirm all for this project" (on the project row or in the dialog) confirms the ongoing and future tentative planning of a project for everyone you may edit, after showing how many plans, people and which period it changes.
+- **Reserved Time**: Plan time that belongs to no customer or project, such as a daily buffer or tech leading, when another plugin supplies the reservations (see [Reserved time](#reserved-time)). It is planned and counted like project work, in its own rows between time off and the projects, and nobody can log time to it. Without such a plugin nothing changes.
 - **Who's Free**: "Order by" in the search offers "Most free hours": the people with the most free hours across the shown weeks, from today on, come first (their capacity after time off and public holidays, minus confirmed planning: tentative work doesn't count), overbooked people last, and each name shows its free hours ("16h free" or "4h over"). Switch to one week to ask about a single week. It is kept in the URL and can be bookmarked like the other filters.
 - **REST API**: Create, read, update and delete planned activities via `/api/planner/activities` (see the Kimai API docs under the "Planner" tag).
 - **Quick Modal Editing**: Create, update, or delete planned blocks seamlessly via modal dialogs.
@@ -129,9 +130,9 @@ All endpoints require an API token and the `view_planner` permission; write oper
 
 | Method | Path | Description |
 | :--- | :--- | :--- |
-| `GET` | `/api/planner/activities` | List activities. Filters: `user`, `customers[]`, `projects[]`, `begin`, `end` (`Y-m-d`), `tentative` (`1` tentative only, `0` confirmed only) |
+| `GET` | `/api/planner/activities` | List activities. Filters: `user`, `customers[]`, `projects[]`, `reservations[]` (keys), `begin`, `end` (`Y-m-d`), `tentative` (`1` tentative only, `0` confirmed only) |
 | `GET` | `/api/planner/activities/{id}` | Fetch one activity |
-| `POST` | `/api/planner/activities` | Create. Body: `customer` (required unless `timeOff`), `project`, `user` (defaults to you), `begin`, `end`, `hoursPerDay` (`null` or left out when switching to time off: the whole day), `timeOff` (time off never keeps a customer or project), `color`, `tentative` (never for time off), `comment`, `recurrentWeeks` |
+| `POST` | `/api/planner/activities` | Create. Body: `customer` (required unless `timeOff`), `project`, `user` (defaults to you), `begin`, `end`, `hoursPerDay` (`null` or left out when switching to time off: the whole day), `timeOff` (time off never keeps a customer or project), `reservation` (a reservation key instead of customer and project; only when reservations are offered, see [Reserved time](#reserved-time)), `color`, `tentative` (never for time off), `comment`, `recurrentWeeks` |
 | `PATCH` | `/api/planner/activities/{id}` | Update any subset of fields; `edit_mode: "future"` also updates later activities of a recurring series, moving their dates by as many days as this one moved |
 | `DELETE` | `/api/planner/activities/{id}` | Delete; `?mode=future` also deletes later activities of a recurring series |
 | `GET` | `/api/planner/holidays` | Public holidays users have off. Required: `begin`, `end` (`Y-m-d`, at most 366 days). Optional: `users[]` (default: everyone you may see). Returns `user`, `date`, `name`, `calendar`, `calendarName`, `type` per day |
@@ -157,6 +158,22 @@ services:
 
 Time off is returned with `"timeOff": true`, `customer` and `project` set to `null`, and `hoursPerDay` set to `null` when it covers the whole day, so clients must not assume either is always present.
 
+## Reserved time
+
+Reserved time holds hours in someone's planning for something that is not a customer or project: a daily buffer, tech leading, internal work that must not be logged as project time. The planner has none of its own: another plugin offers them by decorating `KimaiPlugin\PlannerBundle\Reservation\PlanningReservationProviderInterface`, whose `getReservations()` returns `PlanningReservation` objects (a stable `key` stored on the planning, a `name`, an optional `color` and a `hidden` flag):
+
+```yaml
+services:
+    App\MyReservations:
+        decorates: KimaiPlugin\PlannerBundle\Reservation\PlanningReservationProviderInterface
+```
+
+- The dialog shows a "Reserved time" field above the customer when there is at least one. Choosing one hides customer, project, colour and tentative; the bars take the reservation's colour.
+- A reservation counts as planned work in every gauge and in "Most free hours", like a project. It is never tentative, and one person cannot have the same reservation twice on one day.
+- Each reservation gets its own row under every person, between time off and the projects, in the order the provider returns them. Clicking or dragging in that row plans it, and dropping other planning there turns it into that reservation (dropping it on a project row turns it back).
+- Return a reservation that is no longer used as `hidden` rather than leaving it out: its plannings are then left out of the planner, the API and the calendar feed until it is shown again. A key nobody returns is still shown, under the key itself and grey, and still counts.
+- The API returns the key as `reservation` (`null` for everything else), and `GET /api/planner/activities` filters by `reservations[]`.
+
 ## Calendar feed
 
 Everyone with the `view_planner` permission can subscribe to their own planned work from a calendar app. The "Calendar feed" button above the planner opens a page with a private address to add as a calendar subscription ("From URL" in Google Calendar, "Subscribe from web" in Outlook, "New Calendar Subscription" in Apple Calendar).
@@ -167,6 +184,10 @@ Everyone with the `view_planner` permission can subscribe to their own planned w
 - The address carries a random 64-character token and needs no login, which is how calendar apps can fetch it. Renewing the address on the same page makes the old one stop working; "Switch off" removes it. The feed also stops for users who are deactivated or lose `view_planner`.
 
 ## Upgrading
+
+### Reserved time
+
+The migration `Version20261110000000` adds the nullable column `reservation` to `kimai2_planned_activities`. Existing planning is unchanged. Run it after updating (see [Installation](#installation)).
 
 ### Tentative planning
 

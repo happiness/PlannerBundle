@@ -13,6 +13,7 @@ namespace KimaiPlugin\PlannerBundle\Planner;
 
 use App\Entity\User;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
 
 final class WeeklyPlannerUserRow
 {
@@ -26,7 +27,7 @@ final class WeeklyPlannerUserRow
      */
     private array $uniqueActivities = [];
 
-    public function __construct(private readonly User $user)
+    public function __construct(private readonly User $user, private readonly ?PlanningReservations $reservations = null)
     {
     }
 
@@ -82,7 +83,8 @@ final class WeeklyPlannerUserRow
     }
 
     /**
-     * Activities grouped by customer/project, ordered by customer and project name, with time off first.
+     * Activities grouped by customer/project, ordered by customer and project name, with time off first and then the
+     * reservations in the provider's order (unknown keys last, by key).
      *
      * @return array<WeeklyPlannerGroup>
      */
@@ -91,11 +93,17 @@ final class WeeklyPlannerUserRow
         $groups = [];
         foreach ($this->uniqueActivities as $activity) {
             $key = WeeklyPlannerGroup::keyFor($activity);
-            $groups[$key] ??= WeeklyPlannerGroup::createFor($activity);
+            $groups[$key] ??= WeeklyPlannerGroup::createFor($activity, $this->reservations?->get($activity->getReservation()));
             $groups[$key]->addActivity($activity);
         }
 
-        uasort($groups, static fn (WeeklyPlannerGroup $a, WeeklyPlannerGroup $b): int => [!$a->isTimeOff(), $a->getCustomerName(), $a->getProjectName() ?? ''] <=> [!$b->isTimeOff(), $b->getCustomerName(), $b->getProjectName() ?? '']);
+        $order = function (WeeklyPlannerGroup $group): array {
+            $kind = $group->isTimeOff() ? 0 : ($group->isReservation() ? 1 : 2);
+            $position = $group->isReservation() ? ($this->reservations?->getPosition((string) $group->getReservationKey()) ?? \PHP_INT_MAX) : 0;
+
+            return [$kind, $position, $group->getCustomerName(), $group->getProjectName() ?? ''];
+        };
+        uasort($groups, static fn (WeeklyPlannerGroup $a, WeeklyPlannerGroup $b): int => $order($a) <=> $order($b));
 
         return array_values($groups);
     }

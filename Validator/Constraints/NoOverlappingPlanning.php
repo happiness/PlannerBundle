@@ -14,7 +14,7 @@ namespace KimaiPlugin\PlannerBundle\Validator\Constraints;
 use Symfony\Component\Validator\Constraint;
 
 /**
- * A user cannot have the same customer/project planned twice on one day.
+ * A user cannot have the same customer/project, or the same reservation, planned twice on one day.
  */
 #[\Attribute(\Attribute::TARGET_CLASS)]
 final class NoOverlappingPlanning extends Constraint
@@ -27,10 +27,14 @@ final class NoOverlappingPlanning extends Constraint
 
     public string $message = 'This project is already planned for this user on one of these days.';
 
+    public string $reservationMessage = 'This reserved time is already planned for this user on one of these days.';
+
     /**
      * Not a violation of this constraint: the controllers report it for repeated and following weeks of a series.
      */
     public const SERIES_MESSAGE = 'This project is already planned for this user in one of the following weeks.';
+
+    public const RESERVATION_SERIES_MESSAGE = 'This reserved time is already planned for this user in one of the following weeks.';
 
     public function getTargets(): string
     {

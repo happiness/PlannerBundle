@@ -68,4 +68,24 @@ class NoOverlappingPlanningValidatorTest extends TestCase
     {
         $this->assertSame(NoOverlappingPlanning::CLASS_CONSTRAINT, (new NoOverlappingPlanning())->getTargets());
     }
+
+    public function testAReservationSaysItIsReservedTime(): void
+    {
+        $repository = $this->createMock(PlannedActivityRepository::class);
+        $repository->method('isPlanningChanged')->willReturn(true);
+        $repository->method('countOverlapping')->willReturn(1);
+
+        $builder = $this->createMock(ConstraintViolationBuilderInterface::class);
+        $builder->method('atPath')->willReturnSelf();
+        $builder->method('setTranslationDomain')->willReturnSelf();
+        $builder->method('setCode')->willReturnSelf();
+
+        $constraint = new NoOverlappingPlanning();
+        $context = $this->createMock(ExecutionContextInterface::class);
+        $context->expects($this->once())->method('buildViolation')->with($constraint->reservationMessage)->willReturn($builder);
+
+        $validator = new NoOverlappingPlanningValidator($repository);
+        $validator->initialize($context);
+        $validator->validate((new PlannedActivity())->setReservation('buffer'), $constraint);
+    }
 }

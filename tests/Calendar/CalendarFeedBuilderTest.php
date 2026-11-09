@@ -16,13 +16,16 @@ use App\Entity\Project;
 use App\Entity\User;
 use KimaiPlugin\PlannerBundle\Calendar\CalendarFeedBuilder;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Reservation\PlanningReservation;
+use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
+use KimaiPlugin\PlannerBundle\Tests\Reservation\PlanningReservationsTest;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 class CalendarFeedBuilderTest extends TestCase
 {
-    private function createBuilder(): CalendarFeedBuilder
+    private function createBuilder(?PlanningReservations $reservations = null): CalendarFeedBuilder
     {
         $translator = $this->createStub(TranslatorInterface::class);
         $translator->method('trans')->willReturnCallback(static fn (string $id, array $parameters = []): string => match ($id) {
@@ -41,7 +44,7 @@ class CalendarFeedBuilderTest extends TestCase
             ? 'https://kimai.example.com/en/planner'
             : 'https://kimai.example.com/' . $parameters['_locale'] . '/planner/week/' . $parameters['date']);
 
-        return new CalendarFeedBuilder($translator, $urls);
+        return new CalendarFeedBuilder($translator, $urls, $reservations);
     }
 
     private function createActivity(int $id, string $begin, string $end): PlannedActivity
@@ -166,5 +169,18 @@ class CalendarFeedBuilderTest extends TestCase
         $this->assertContains('SUMMARY:Time off (Whole day)', $lines);
         $this->assertContains('DESCRIPTION:Hours per day: Whole day', $lines);
         $this->assertContains('SUMMARY:Time off (4h)', $lines);
+    }
+
+    public function testAReservationIsTitledWithItsName(): void
+    {
+        $buffer = $this->createActivity(1, '2026-11-09', '2026-11-13')->setReservation('buffer')->setHoursPerDay(1.0);
+        $unknown = $this->createActivity(2, '2026-11-09', '2026-11-09')->setReservation('gone');
+        $reservations = PlanningReservationsTest::create([new PlanningReservation('buffer', 'Agency buffer')]);
+
+        $lines = $this->lines($this->createBuilder($reservations)->build($this->createUser(), [$buffer, $unknown]));
+
+        $this->assertContains('SUMMARY:Agency buffer (1h)', $lines);
+        $this->assertContains('DESCRIPTION:Hours per day: 1', $lines);
+        $this->assertContains('SUMMARY:gone (6h)', $lines);
     }
 }

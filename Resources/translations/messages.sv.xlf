@@ -218,6 +218,14 @@
                 <source>planner.time_off</source>
                 <target>Ledig</target>
             </trans-unit>
+            <trans-unit id="planner.reservation">
+                <source>planner.reservation</source>
+                <target>Reserverad tid</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation_help">
+                <source>planner.reservation_help</source>
+                <target>Tid som hålls för något som inte är en kund eller ett projekt. Lämna tomt för att planera en kund eller ett projekt.</target>
+            </trans-unit>
             <trans-unit id="planner.time_off_help">
                 <source>planner.time_off_help</source>
                 <target>Inte tillgänglig för planering. Lämna timmarna tomma för hela dagen.</target>

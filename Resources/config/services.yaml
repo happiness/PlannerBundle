@@ -15,3 +15,6 @@ services:
 
     # replace the holidays by decorating this service, see README
     KimaiPlugin\PlannerBundle\Holiday\HolidayProviderInterface: '@KimaiPlugin\PlannerBundle\Holiday\YasumiHolidayProvider'
+
+    # offer reservations (time held for something that is not a project) by decorating this service, see README
+    KimaiPlugin\PlannerBundle\Reservation\PlanningReservationProviderInterface: '@KimaiPlugin\PlannerBundle\Reservation\NoPlanningReservations'

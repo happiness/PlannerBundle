@@ -63,6 +63,7 @@ final class PlannedActivityController extends BaseApiController
     #[Rest\QueryParam(name: 'begin', requirements: [new Constraints\DateTime(format: 'Y-m-d', message: 'This value is not a valid date, expected format: Y-m-d (2026-10-19).')], strict: true, nullable: true, description: 'Only activities ending on or after this day are returned. Format: Y-m-d')]
     #[Rest\QueryParam(name: 'end', requirements: [new Constraints\DateTime(format: 'Y-m-d', message: 'This value is not a valid date, expected format: Y-m-d (2026-10-19).')], strict: true, nullable: true, description: 'Only activities beginning on or before this day are returned. Format: Y-m-d')]
     #[Rest\QueryParam(name: 'tentative', requirements: '0|1', strict: true, nullable: true, description: 'Pass 1 for tentative activities only, 0 for confirmed ones only (default: both)')]
+    #[Rest\QueryParam(name: 'reservations', map: true, requirements: '[^/]{1,64}', strict: true, nullable: true, default: [], description: 'List of reservation keys to filter, e.g.: reservations[]=buffer&reservations[]=tech-lead')]
     public function cgetAction(ParamFetcherInterface $paramFetcher, CustomerRepository $customerRepository, ProjectRepository $projectRepository): Response
     {
         /** @var User $currentUser */
@@ -95,6 +96,8 @@ final class PlannedActivityController extends BaseApiController
         $begin = $paramFetcher->get('begin');
         $end = $paramFetcher->get('end');
         $tentative = $paramFetcher->get('tentative');
+        /** @var array<string> $reservations */
+        $reservations = $paramFetcher->get('reservations');
 
         $activities = $this->repository->findByFilter(
             $users,
@@ -102,7 +105,8 @@ final class PlannedActivityController extends BaseApiController
             \is_string($end) && $end !== '' ? new \DateTimeImmutable($end) : null,
             $customers,
             $projects,
-            \is_string($tentative) && $tentative !== '' ? $tentative === '1' : null
+            \is_string($tentative) && $tentative !== '' ? $tentative === '1' : null,
+            array_values(array_unique(array_map('strval', $reservations)))
         );
 
         $view = new View($activities, Response::HTTP_OK);
@@ -188,7 +192,7 @@ final class PlannedActivityController extends BaseApiController
 
         $weeks = $form->get('recurrentWeeks')->getData();
         if ($form->isValid() && \is_int($weeks) && $this->repository->countRecurringOverlaps($activity, $weeks) > 0) {
-            $form->get('recurrentWeeks')->addError(new FormError(NoOverlappingPlanning::SERIES_MESSAGE));
+            $form->get('recurrentWeeks')->addError(new FormError($activity->isReservation() ? NoOverlappingPlanning::RESERVATION_SERIES_MESSAGE : NoOverlappingPlanning::SERIES_MESSAGE));
         }
 
         if (!$form->isValid()) {
@@ -247,7 +251,7 @@ final class PlannedActivityController extends BaseApiController
         }
 
         if ($editMode === 'future' && $activity->isRecurring() && $form->isValid() && $this->repository->countFutureRecurringOverlaps($activity, $previousBegin, $previousEnd) > 0) {
-            $form->addError(new FormError(NoOverlappingPlanning::SERIES_MESSAGE));
+            $form->addError(new FormError($activity->isReservation() ? NoOverlappingPlanning::RESERVATION_SERIES_MESSAGE : NoOverlappingPlanning::SERIES_MESSAGE));
         }
 
         if (!$form->isValid()) {

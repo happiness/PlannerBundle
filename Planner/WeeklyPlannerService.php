@@ -20,6 +20,7 @@ use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Holiday\HolidayProviderInterface;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
+use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
 
 /**
  * @final not final for mocking in tests
@@ -30,7 +31,8 @@ class WeeklyPlannerService
         private readonly PlannedActivityRepository $activityRepository,
         private readonly WorkingTimeService $workingTimeService,
         private readonly TimesheetStatisticService $statisticService,
-        private readonly ?HolidayProviderInterface $holidayProvider = null
+        private readonly ?HolidayProviderInterface $holidayProvider = null,
+        private readonly ?PlanningReservations $reservations = null
     ) {
     }
 
@@ -79,7 +81,7 @@ class WeeklyPlannerService
         }
 
         foreach ($users as $user) {
-            $userRow = new WeeklyPlannerUserRow($user);
+            $userRow = new WeeklyPlannerUserRow($user, $this->reservations);
             $calculator = $this->workingTimeService->getContractMode($user)->getCalculator($user);
             $holidays = $this->holidayProvider?->getHolidays($user, $start, $end) ?? [];
 

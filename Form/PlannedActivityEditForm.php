@@ -19,6 +19,7 @@ use App\Form\Type\DatePickerType;
 use App\Form\Type\UserType;
 use App\Form\Type\YesNoType;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
@@ -37,6 +38,10 @@ use Symfony\Component\Validator\Constraints\LessThanOrEqual;
 class PlannedActivityEditForm extends AbstractType
 {
     use FormTrait;
+
+    public function __construct(private readonly ?PlanningReservations $reservations = null)
+    {
+    }
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
@@ -75,7 +80,24 @@ class PlannedActivityEditForm extends AbstractType
             'activity_enabled' => false,
         ]);
 
-        // after customer and project: switching time off on drops them while the data is mapped
+        // after customer and project: choosing a reservation drops them while the data is mapped
+        $reservations = $this->getReservationChoices($activity?->getReservation());
+        if ($reservations !== []) {
+            $builder->add('reservation', ChoiceType::class, [
+                'label' => 'planner.reservation',
+                'help' => 'planner.reservation_help',
+                'required' => false,
+                'placeholder' => '',
+                'choices' => $reservations,
+                'choice_translation_domain' => false,
+                'documentation' => [
+                    'type' => 'string',
+                    'description' => 'Key of a reservation (time held for something that is not a customer or project), instead of customer and project (default: none)',
+                ],
+            ]);
+        }
+
+        // after customer, project and reservation: switching time off on drops them while the data is mapped
         $builder->add('timeOff', YesNoType::class, [
             'label' => 'planner.time_off',
             'help' => 'planner.time_off_help',
@@ -175,12 +197,15 @@ class PlannedActivityEditForm extends AbstractType
             $event->setData($data);
         });
 
-        // the flag is only written when it changes, so a customer or project submitted for existing time off
-        // would stick: drop them before the validation listener (priority 0) runs
+        // the flag and the reservation are only written when they change, so a customer or project submitted for
+        // existing time off or reservation would stick: drop them before the validation listener (priority 0) runs
         $builder->addEventListener(FormEvents::POST_SUBMIT, static function (FormEvent $event): void {
             $activity = $event->getData();
             if ($activity instanceof PlannedActivity && $activity->isTimeOff()) {
                 $activity->setTimeOff(true);
+            }
+            if ($activity instanceof PlannedActivity && $activity->isReservation()) {
+                $activity->setReservation($activity->getReservation());
             }
         }, 10);
 
@@ -202,6 +227,32 @@ class PlannedActivityEditForm extends AbstractType
         if ($customer !== null) {
             $activity->setCustomer($customer);
         }
+    }
+
+    /**
+     * The reservations that can be chosen, plus the one already set, also when it is not offered any more: the planning
+     * stays editable without being moved to something else.
+     *
+     * @return array<string, string> name => key
+     */
+    private function getReservationChoices(?string $current): array
+    {
+        $names = [];
+        foreach ($this->reservations?->getSelectable() ?? [] as $reservation) {
+            $names[$reservation->key] = $reservation->name;
+        }
+
+        if ($current !== null && !\array_key_exists($current, $names)) {
+            $names[$current] = $this->reservations?->get($current)?->name ?? $current;
+        }
+
+        // choices are keyed by label, two reservations of the same name must not swallow each other
+        $choices = [];
+        foreach ($names as $key => $name) {
+            $choices[\array_key_exists($name, $choices) ? $name . ' (' . $key . ')' : $name] = (string) $key;
+        }
+
+        return $choices;
     }
 
     public function configureOptions(OptionsResolver $resolver): void

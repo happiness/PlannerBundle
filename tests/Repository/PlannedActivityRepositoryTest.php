@@ -22,6 +22,9 @@ use Doctrine\ORM\UnitOfWork;
 use Doctrine\Persistence\ManagerRegistry;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
+use KimaiPlugin\PlannerBundle\Reservation\PlanningReservation;
+use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
+use KimaiPlugin\PlannerBundle\Tests\Reservation\PlanningReservationsTest;
 use PHPUnit\Framework\TestCase;
 
 class PlannedActivityRepositoryTest extends TestCase
@@ -907,5 +910,107 @@ class PlannedActivityRepositoryTest extends TestCase
         $this->assertSame($customer, $repository->findCustomer(3));
         $this->assertSame($project, $repository->findProject(7));
         $this->assertNull($repository->findProject(8));
+    }
+
+    public function testSplitActivityKeepsTheReservation(): void
+    {
+        $activity = (new PlannedActivity())
+            ->setUser(new User())
+            ->setReservation('buffer')
+            ->setHoursPerDay(1.0)
+            ->setBegin(new \DateTime('2026-11-02'))
+            ->setEnd(new \DateTime('2026-11-06'));
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $second = $this->createRepository($em)->splitActivity($activity, new \DateTimeImmutable('2026-11-04'));
+
+        $this->assertSame('buffer', $second?->getReservation());
+        $this->assertNull($second?->getCustomer());
+    }
+
+    public function testCreateRecurringActivitiesKeepsTheReservation(): void
+    {
+        $activity = (new PlannedActivity())
+            ->setUser(new User())
+            ->setReservation('buffer')
+            ->setRecurrenceGroup('group')
+            ->setBegin(new \DateTime('2026-11-02'))
+            ->setEnd(new \DateTime('2026-11-02'));
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $created = $this->createRepository($em)->createRecurringActivities($activity, 2);
+
+        $this->assertCount(2, $created);
+        $this->assertSame('buffer', $created[1]->getReservation());
+    }
+
+    /**
+     * @param array<string> $conditions filled with the conditions of the query
+     */
+    private function createRecordingRepository(array &$conditions, mixed $result, ?PlanningReservations $reservations = null): PlannedActivityRepository
+    {
+        $query = $this->createMock(Query::class);
+        $query->method('getResult')->willReturn($result);
+        $query->method('getSingleScalarResult')->willReturn($result);
+
+        $qb = $this->createMock(QueryBuilder::class);
+        foreach (['select', 'from', 'leftJoin', 'addSelect', 'orderBy', 'addOrderBy', 'setParameter'] as $method) {
+            $qb->method($method)->willReturnSelf();
+        }
+        foreach (['where', 'andWhere'] as $method) {
+            $qb->method($method)->willReturnCallback(function (string $condition) use (&$conditions, $qb) {
+                $conditions[] = $condition;
+
+                return $qb;
+            });
+        }
+        $qb->method('getQuery')->willReturn($query);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('createQueryBuilder')->willReturn($qb);
+        $metadata = new ClassMetadata(PlannedActivity::class);
+        $em->method('getClassMetadata')->with(PlannedActivity::class)->willReturn($metadata);
+
+        $registry = $this->createMock(ManagerRegistry::class);
+        $registry->method('getManagerForClass')->willReturn($em);
+
+        return new PlannedActivityRepository($registry, $reservations);
+    }
+
+    public function testFindByFilterFiltersReservationsAndLeavesHiddenOnesOut(): void
+    {
+        $conditions = [];
+        $reservations = PlanningReservationsTest::create([new PlanningReservation('buffer', 'Buffer'), new PlanningReservation('old', 'Old', null, true)]);
+        $repository = $this->createRecordingRepository($conditions, [], $reservations);
+
+        $repository->findByFilter([new User()], null, null, [], [], null, ['buffer']);
+
+        $this->assertSame([
+            'p.user IN (:users)',
+            'p.reservation IN (:reservations)',
+            'p.reservation IS NULL OR p.reservation NOT IN (:hiddenReservations)',
+        ], $conditions);
+    }
+
+    public function testThePlannerLeavesHiddenReservationsOut(): void
+    {
+        $conditions = [];
+        $reservations = PlanningReservationsTest::create([new PlanningReservation('old', 'Old', null, true)]);
+        $this->createRecordingRepository($conditions, [], $reservations)->findPlannedActivitiesForUsersAndRange([new User()], new \DateTime('2026-11-02'), new \DateTime('2026-11-08'));
+        $this->assertContains('p.reservation IS NULL OR p.reservation NOT IN (:hiddenReservations)', $conditions);
+
+        // nothing hidden, nothing to leave out
+        $conditions = [];
+        $this->createRecordingRepository($conditions, [])->findPlannedActivitiesForUsersAndRange([new User()], new \DateTime('2026-11-02'), new \DateTime('2026-11-08'));
+        $this->assertNotContains('p.reservation IS NULL OR p.reservation NOT IN (:hiddenReservations)', $conditions);
+    }
+
+    public function testOverlapOfAReservationIsTheSameReservation(): void
+    {
+        $conditions = [];
+        $activity = (new PlannedActivity())->setUser(new User())->setReservation('buffer')->setBegin(new \DateTime('2026-11-02'))->setEnd(new \DateTime('2026-11-03'));
+
+        $this->assertSame(1, $this->createRecordingRepository($conditions, 1)->countOverlapping($activity));
+        $this->assertSame(['p.user = :user', 'p.begin <= :end', 'p.end >= :begin', 'p.reservation = :reservation'], $conditions);
     }
 }

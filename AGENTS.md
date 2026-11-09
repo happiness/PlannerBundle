@@ -79,7 +79,8 @@ var/plugins/PlannerBundle/
 │   ├── Version20260914000000.php      # Schema updates (recurring activities support)
 │   ├── Version20261019000000.php      # customer_id/project_id columns, title becomes nullable
 │   ├── Version20261102000000.php      # kimai2_planner_calendar_tokens (calendar feed tokens)
-│   └── Version20261102120000.php      # tentative flag
+│   ├── Version20261102120000.php      # tentative flag
+│   └── Version20261110000000.php      # reservation key (reserved time)
 ├── Planner/
 │   ├── PlannerUserProvider.php        # Resolves which users' plans the current user may see (web + API)
 │   ├── TentativeConfirmer.php         # "Confirm all for this project": ongoing/future tentative plans the user may edit (web + API)
@@ -90,6 +91,13 @@ var/plugins/PlannerBundle/
 │   ├── WeeklyPlannerWeek.php          # One user's capacity figures for one calendar week of the displayed range
 │   ├── WeeklyPlannerGroup.php         # One user's activities for one customer/project; builds merged day segments (one sub-row in the grid)
 │   └── WeeklyPlannerDay.php           # Daily metrics (planned hours, actual hours, contract hours, status)
+├── Reservation/
+│   ├── PlanningReservationProviderInterface.php # Which reservations (reserved time) exist; decorate it to offer some
+│   ├── NoPlanningReservations.php     # Default provider: none, the planner works as without the feature
+│   ├── PlanningReservation.php        # One reservation: key (stored on the planning), name, colour, hidden
+│   └── PlanningReservations.php       # The provider's reservations, asked once per request, with the lookups the planner needs
+├── Twig/
+│   └── PlannerReservationExtension.php # planner_reservation(key) and planner_reservations() for the templates
 ├── Repository/
 │   └── PlannedActivityRepository.php  # PlannedActivity queries (date ranges, user filtering)
 ├── Resources/
@@ -169,7 +177,12 @@ var/plugins/PlannerBundle/
    - The feed answers 404 for an unknown token, a disabled user and a user whose roles lack `view_planner` (`RolePermissionManager::hasRolePermission()`; there is no security token on this request, so voters cannot be used).
    - Events are all-day (`DTEND` is the exclusive day after `end`), `TRANSP:TRANSPARENT`, UID `planner-activity-{id}@{host}`. Labels use the feed owner's language (`User::getLanguage()`), not the request's. A feed with no planning has no events, which Google and Outlook accept.
    - Time off is titled `planner.time_off` with its hours, or `planner.whole_day` when it has none.
-11. **Isolated Database Migrations**:
+11. **Reserved Time**:
+   - `PlannedActivity::$reservation` holds a provider's key (string, 64 at most) instead of a customer and project. `setReservation()` drops customer, project, title, tentative and time off; `setTimeOff(true)` drops the reservation. The entity requires a customer unless it is time off or a reservation, and never knows names: those come from `PlanningReservations`.
+   - The form adds the `reservation` choice only when there are selectable reservations or the planning already has one (kept as a choice even when hidden or unknown, so it stays editable). It is mapped after customer and project and before `timeOff`, and the POST_SUBMIT listener re-applies it, like time off. JS hides `.planner-project-field` (customer, project, colour, tentative, suggestions) while one is chosen.
+   - Groups key reservations as `reservation:<key>`; `WeeklyPlannerUserRow::getGroups()` sorts time off, then reservations in provider order (unknown keys last), then customers and projects. Rows of known, visible reservations carry `data-reservation`, which click/drag-create (`reservation` query parameter) and move (`reservation` POST field, 400 unless selectable) use.
+   - Hidden reservations are left out in the repository (`excludeHiddenReservations()` on the grid, API and feed queries), so they count nowhere until shown again. The overlap check compares user and reservation; copies, splits, joins and "all future" edits carry the key.
+12. **Isolated Database Migrations**:
    - Always run and test migrations using the bundle's dedicated configuration file:
      `bin/console doctrine:migrations:migrate --configuration=var/plugins/PlannerBundle/Migrations/doctrine_migrations.yaml --no-interaction`
 

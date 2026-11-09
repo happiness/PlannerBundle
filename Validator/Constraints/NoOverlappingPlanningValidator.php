@@ -38,7 +38,7 @@ final class NoOverlappingPlanningValidator extends ConstraintValidator
             return;
         }
 
-        $this->context->buildViolation($constraint->message)
+        $this->context->buildViolation($value->isReservation() ? $constraint->reservationMessage : $constraint->message)
             ->atPath('begin')
             ->setTranslationDomain('validators')
             ->setCode(NoOverlappingPlanning::OVERLAPPING)

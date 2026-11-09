@@ -27,6 +27,7 @@ use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Planner\WorkingDayRanges;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
+use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
 use KimaiPlugin\PlannerBundle\Validator\Constraints\NoOverlappingPlanning;
 use KimaiPlugin\PlannerBundle\Voter\PlannedActivityVoter;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
@@ -51,7 +52,8 @@ final class WeeklyPlannerController extends AbstractController
         private readonly PlannedActivityRepository $repository,
         private readonly WeeklyPlannerService $plannerService,
         private readonly UserRepository $userRepository,
-        private readonly PlannerUserProvider $userProvider
+        private readonly PlannerUserProvider $userProvider,
+        private readonly ?PlanningReservations $reservations = null
     ) {
     }
 
@@ -152,6 +154,9 @@ final class WeeklyPlannerController extends AbstractController
         if ($request->query->getBoolean('off')) {
             $activity->setTimeOff(true);
             $activity->setHoursPerDay(null);
+        } elseif ($this->reservations !== null && $this->reservations->isSelectable($request->query->getString('reservation'))) {
+            // like a customer/project row, a reservation's row pre-selects the reservation
+            $activity->setReservation($request->query->getString('reservation'));
         } else {
             $this->prefillCustomerAndProject($activity, $request);
         }
@@ -178,7 +183,7 @@ final class WeeklyPlannerController extends AbstractController
 
         $weeks = $form->isSubmitted() && $form->has('recurrentWeeks') ? $form->get('recurrentWeeks')->getData() : null;
         if ($form->isSubmitted() && $form->isValid() && \is_int($weeks) && $this->repository->countRecurringOverlaps($activity, $weeks) > 0) {
-            $form->get('recurrentWeeks')->addError(new FormError($this->translateSeriesOverlap()));
+            $form->get('recurrentWeeks')->addError(new FormError($this->translateSeriesOverlap($activity)));
         }
 
         if ($form->isSubmitted() && $form->isValid()) {
@@ -245,7 +250,7 @@ final class WeeklyPlannerController extends AbstractController
 
         $future = $form->isSubmitted() && $form->has('edit_mode') && $activity->isRecurring() && $form->get('edit_mode')->getData() === 'future';
         if ($future && $form->isValid() && $this->repository->countFutureRecurringOverlaps($activity, $previousBegin, $previousEnd) > 0) {
-            $form->addError(new FormError($this->translateSeriesOverlap()));
+            $form->addError(new FormError($this->translateSeriesOverlap($activity)));
         }
 
         if ($form->isSubmitted() && $form->isValid()) {
@@ -312,9 +317,18 @@ final class WeeklyPlannerController extends AbstractController
             $activity->setUser($user);
         }
 
-        // time off has no customer or project, it only moves in time and between users
+        // time off has no customer, project or reservation, it only moves in time and between users;
+        // dropped on a reservation's row, other planning becomes that reservation
+        $reservation = $request->request->getString('reservation');
+        if ($reservation !== '' && !$activity->isTimeOff()) {
+            if ($this->reservations === null || !$this->reservations->isSelectable($reservation)) {
+                return new JsonResponse([], Response::HTTP_BAD_REQUEST);
+            }
+            $activity->setReservation($reservation);
+        }
+
         $customerId = $request->request->getInt('customer');
-        if ($customerId > 0 && !$activity->isTimeOff()) {
+        if ($customerId > 0 && $reservation === '' && !$activity->isTimeOff()) {
             $customer = $this->repository->findCustomer($customerId);
             $projectId = $request->request->getInt('project');
             $project = $projectId > 0 ? $this->repository->findProject($projectId) : null;
@@ -324,6 +338,7 @@ final class WeeklyPlannerController extends AbstractController
                 throw $this->createAccessDeniedException();
             }
 
+            $activity->setReservation(null);
             $activity->setCustomer($customer);
             $activity->setProject($project);
         }
@@ -511,12 +526,12 @@ final class WeeklyPlannerController extends AbstractController
         }
     }
 
-    private function translateSeriesOverlap(): string
+    private function translateSeriesOverlap(PlannedActivity $activity): string
     {
         /** @var \Symfony\Contracts\Translation\TranslatorInterface $translator */
         $translator = $this->container->get('translator');
 
-        return $translator->trans(NoOverlappingPlanning::SERIES_MESSAGE, [], 'validators');
+        return $translator->trans($activity->isReservation() ? NoOverlappingPlanning::RESERVATION_SERIES_MESSAGE : NoOverlappingPlanning::SERIES_MESSAGE, [], 'validators');
     }
 
     /**
