@@ -170,6 +170,14 @@
                 <source>planner.suggestions</source>
                 <target>Frequently used</target>
             </trans-unit>
+            <trans-unit id="planner.reservation">
+                <source>planner.reservation</source>
+                <target>Reserved time</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation_help">
+                <source>planner.reservation_help</source>
+                <target>Time held for something that is not a customer or project. Leave empty to plan a customer or project.</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>

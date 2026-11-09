@@ -18,6 +18,7 @@ use App\Timesheet\TimesheetStatisticService;
 use App\WorkingTime\WorkingTimeService;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
+use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
 
 /**
  * @final not final for mocking in tests
@@ -27,7 +28,8 @@ class WeeklyPlannerService
     public function __construct(
         private readonly PlannedActivityRepository $activityRepository,
         private readonly WorkingTimeService $workingTimeService,
-        private readonly TimesheetStatisticService $statisticService
+        private readonly TimesheetStatisticService $statisticService,
+        private readonly ?PlanningReservations $reservations = null
     ) {
     }
 
@@ -74,7 +76,7 @@ class WeeklyPlannerService
         }
 
         foreach ($users as $user) {
-            $userRow = new WeeklyPlannerUserRow($user);
+            $userRow = new WeeklyPlannerUserRow($user, $this->reservations);
             $calculator = $this->workingTimeService->getContractMode($user)->getCalculator($user);
 
             $cur = $start;

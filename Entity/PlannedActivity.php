@@ -28,6 +28,7 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 #[ORM\Index(columns: ['recurrence_group'], name: 'IDX_PLANNED_ACTIVITY_RECURRENCE')]
 #[ORM\Index(columns: ['customer_id'], name: 'IDX_PLANNED_ACTIVITY_CUSTOMER')]
 #[ORM\Index(columns: ['project_id'], name: 'IDX_PLANNED_ACTIVITY_PROJECT')]
+#[ORM\Index(columns: ['reservation'], name: 'IDX_PLANNED_ACTIVITY_RESERVATION')]
 #[ORM\Entity(repositoryClass: PlannedActivityRepository::class)]
 #[ORM\ChangeTrackingPolicy('DEFERRED_EXPLICIT')]
 #[Serializer\ExclusionPolicy('all')]
@@ -63,12 +64,11 @@ class PlannedActivity
     private ?\DateTime $end = null;
 
     /**
-     * Nullable in the database only because rows created before customers were introduced have none;
-     * the validation requires a customer whenever an activity is saved through the form or the API.
+     * Nullable in the database because rows created before customers were introduced have none, and neither have
+     * reservations; the validation requires a customer for every other activity saved through the form or the API.
      */
     #[ORM\ManyToOne(targetEntity: Customer::class)]
     #[ORM\JoinColumn(name: 'customer_id', nullable: true, onDelete: 'CASCADE')]
-    #[Assert\NotNull]
     #[Serializer\Expose]
     #[Serializer\Groups(['Default'])]
     private ?Customer $customer = null;
@@ -103,6 +103,16 @@ class PlannedActivity
     #[Serializer\Expose]
     #[Serializer\Groups(['Default'])]
     private ?string $recurrenceGroup = null;
+
+    /**
+     * Key of a reservation (see PlanningReservationProviderInterface): time held for something that is not a customer
+     * or project, planned and counted like project work.
+     */
+    #[ORM\Column(name: 'reservation', type: Types::STRING, length: 64, nullable: true)]
+    #[Assert\Length(max: 64)]
+    #[Serializer\Expose]
+    #[Serializer\Groups(['Default'])]
+    private ?string $reservation = null;
 
     public function __construct()
     {
@@ -203,7 +213,18 @@ class PlannedActivity
             return $this->customer->getName();
         }
 
-        return $this->title;
+        return $this->title ?? $this->reservation;
+    }
+
+    #[Assert\Callback]
+    public function validateRequiredFields(ExecutionContextInterface $context): void
+    {
+        if ($this->customer === null && $this->reservation === null) {
+            $context->buildViolation('This value should not be null.')
+                ->atPath('customer')
+                ->setTranslationDomain('validators')
+                ->addViolation();
+        }
     }
 
     #[Assert\Callback]
@@ -229,6 +250,34 @@ class PlannedActivity
     public function setHoursPerDay(float $hoursPerDay): self
     {
         $this->hoursPerDay = $hoursPerDay;
+
+        return $this;
+    }
+
+    public function getReservation(): ?string
+    {
+        return $this->reservation;
+    }
+
+    public function isReservation(): bool
+    {
+        return $this->reservation !== null;
+    }
+
+    /**
+     * A reservation is not customer work: setting one drops customer, project and title, and the colour, since its bars
+     * take the reservation's colour.
+     */
+    public function setReservation(?string $reservation): self
+    {
+        $this->reservation = $reservation === '' ? null : $reservation;
+
+        if ($this->reservation !== null) {
+            $this->customer = null;
+            $this->project = null;
+            $this->title = null;
+            $this->color = null;
+        }
 
         return $this;
     }

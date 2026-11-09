@@ -18,12 +18,15 @@ use App\Form\Type\CustomerType;
 use App\Form\Type\DatePickerType;
 use App\Form\Type\UserType;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\Form\FormEvent;
+use Symfony\Component\Form\FormEvents;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\GreaterThanOrEqual;
 use Symfony\Component\Validator\Constraints\LessThanOrEqual;
@@ -34,6 +37,10 @@ use Symfony\Component\Validator\Constraints\LessThanOrEqual;
 class PlannedActivityEditForm extends AbstractType
 {
     use FormTrait;
+
+    public function __construct(private readonly ?PlanningReservations $reservations = null)
+    {
+    }
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
@@ -56,7 +63,8 @@ class PlannedActivityEditForm extends AbstractType
 
         $builder->add('customer', CustomerType::class, [
             'label' => 'customer',
-            'required' => true,
+            // a reservation takes the place of customer and project, the entity validates everything else
+            'required' => $activity?->getReservation() === null,
             'placeholder' => '',
             'query_builder_for_user' => true,
             'customers' => $activity?->getCustomer(),
@@ -71,6 +79,23 @@ class PlannedActivityEditForm extends AbstractType
             'required' => false,
             'activity_enabled' => false,
         ]);
+
+        // after customer and project: choosing a reservation drops them while the data is mapped
+        $reservations = $this->getReservationChoices($activity?->getReservation());
+        if ($reservations !== []) {
+            $builder->add('reservation', ChoiceType::class, [
+                'label' => 'planner.reservation',
+                'help' => 'planner.reservation_help',
+                'required' => false,
+                'placeholder' => '',
+                'choices' => $reservations,
+                'choice_translation_domain' => false,
+                'documentation' => [
+                    'type' => 'string',
+                    'description' => 'Key of a reservation (time held for something that is not a customer or project), instead of customer and project (default: none)',
+                ],
+            ]);
+        }
 
         $builder
             ->add('begin', DatePickerType::class, [
@@ -137,6 +162,41 @@ class PlannedActivityEditForm extends AbstractType
                 'rows' => 3,
             ],
         ]);
+
+        // the reservation is only written when it changes, so a customer or project submitted for an existing
+        // reservation would stick: drop them before the validation listener (priority 0) runs
+        $builder->addEventListener(FormEvents::POST_SUBMIT, static function (FormEvent $event): void {
+            $activity = $event->getData();
+            if ($activity instanceof PlannedActivity && $activity->isReservation()) {
+                $activity->setReservation($activity->getReservation());
+            }
+        }, 10);
+    }
+
+    /**
+     * The reservations that can be chosen, plus the one already set, also when it is not offered any more: the planning
+     * stays editable without being moved to something else.
+     *
+     * @return array<string, string> name => key
+     */
+    private function getReservationChoices(?string $current): array
+    {
+        $names = [];
+        foreach ($this->reservations?->getSelectable() ?? [] as $reservation) {
+            $names[$reservation->key] = $reservation->name;
+        }
+
+        if ($current !== null && !\array_key_exists($current, $names)) {
+            $names[$current] = $this->reservations?->get($current)?->name ?? $current;
+        }
+
+        // choices are keyed by label, two reservations of the same name must not swallow each other
+        $choices = [];
+        foreach ($names as $key => $name) {
+            $choices[\array_key_exists($name, $choices) ? $name . ' (' . $key . ')' : $name] = (string) $key;
+        }
+
+        return $choices;
     }
 
     public function configureOptions(OptionsResolver $resolver): void

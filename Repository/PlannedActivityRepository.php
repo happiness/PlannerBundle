@@ -15,15 +15,18 @@ use App\Entity\Customer;
 use App\Entity\Project;
 use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\DBAL\ArrayParameterType;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
 
 /**
  * @extends ServiceEntityRepository<PlannedActivity>
  */
 class PlannedActivityRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    public function __construct(ManagerRegistry $registry, private readonly ?PlanningReservations $reservations = null)
     {
         parent::__construct($registry, PlannedActivity::class);
     }
@@ -100,6 +103,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $splitActivity->setCustomer($activity->getCustomer());
         $splitActivity->setProject($activity->getProject());
         $splitActivity->setTitle($activity->getTitle());
+        $splitActivity->setReservation($activity->getReservation());
         $splitActivity->setHoursPerDay($activity->getHoursPerDay());
         $splitActivity->setColor($activity->getColor());
         $splitActivity->setComment($activity->getComment());
@@ -184,6 +188,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
             $future->setCustomer($activity->getCustomer());
             $future->setProject($activity->getProject());
             $future->setTitle($activity->getTitle());
+            $future->setReservation($activity->getReservation());
             $future->setHoursPerDay($activity->getHoursPerDay());
             $future->setColor($activity->getColor());
             $future->setComment($activity->getComment());
@@ -242,6 +247,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
             $recurring->setCustomer($activity->getCustomer());
             $recurring->setProject($activity->getProject());
             $recurring->setTitle($activity->getTitle());
+            $recurring->setReservation($activity->getReservation());
             $recurring->setHoursPerDay($activity->getHoursPerDay());
             $recurring->setColor($activity->getColor());
             $recurring->setComment($activity->getComment());
@@ -285,6 +291,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
             ->setParameter('users', $users)
             ->setParameter('start', $start->format('Y-m-d'))
             ->setParameter('end', $end->format('Y-m-d'));
+        $this->excludeHiddenReservations($qb);
 
         /** @var array<PlannedActivity> $result */
         $result = $qb->getQuery()->getResult();
@@ -304,6 +311,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
      * @param array<User> $users
      * @param array<Customer> $customers
      * @param array<Project> $projects
+     * @param array<string> $reservations reservation keys
      * @return array<PlannedActivity>
      */
     public function findByFilter(
@@ -311,7 +319,8 @@ class PlannedActivityRepository extends ServiceEntityRepository
         ?\DateTimeInterface $begin = null,
         ?\DateTimeInterface $end = null,
         array $customers = [],
-        array $projects = []
+        array $projects = [],
+        array $reservations = []
     ): array {
         if ($users === []) {
             return [];
@@ -343,9 +352,27 @@ class PlannedActivityRepository extends ServiceEntityRepository
             $qb->andWhere('p.project IN (:projects)')->setParameter('projects', $projects);
         }
 
+        if ($reservations !== []) {
+            $qb->andWhere('p.reservation IN (:reservations)')->setParameter('reservations', array_map('strval', $reservations), ArrayParameterType::STRING);
+        }
+
+        $this->excludeHiddenReservations($qb);
+
         /** @var array<PlannedActivity> $result */
         $result = $qb->getQuery()->getResult();
 
         return $result;
+    }
+
+    /**
+     * Plannings of a hidden (e.g. archived) reservation are left out of the planner as if they did not exist.
+     */
+    private function excludeHiddenReservations(QueryBuilder $qb): void
+    {
+        $hidden = $this->reservations?->getHiddenKeys() ?? [];
+        if ($hidden !== []) {
+            $qb->andWhere('p.reservation IS NULL OR p.reservation NOT IN (:hiddenReservations)')
+                ->setParameter('hiddenReservations', $hidden, ArrayParameterType::STRING);
+        }
     }
 }

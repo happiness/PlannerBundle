@@ -25,6 +25,7 @@ use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
+use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
 use KimaiPlugin\PlannerBundle\Voter\PlannedActivityVoter;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -47,7 +48,8 @@ final class WeeklyPlannerController extends AbstractController
         private readonly PlannedActivityRepository $repository,
         private readonly WeeklyPlannerService $plannerService,
         private readonly UserRepository $userRepository,
-        private readonly PlannerUserProvider $userProvider
+        private readonly PlannerUserProvider $userProvider,
+        private readonly ?PlanningReservations $reservations = null
     ) {
     }
 
@@ -144,7 +146,12 @@ final class WeeklyPlannerController extends AbstractController
             }
         }
 
-        $this->prefillCustomerAndProject($activity, $request);
+        // like a customer/project row, a reservation's row pre-selects the reservation
+        if ($this->reservations !== null && $this->reservations->isSelectable($request->query->getString('reservation'))) {
+            $activity->setReservation($request->query->getString('reservation'));
+        } else {
+            $this->prefillCustomerAndProject($activity, $request);
+        }
 
         if (!$this->isGranted(PlannedActivityVoter::CREATE, $activity)) {
             throw $this->createAccessDeniedException();
@@ -286,8 +293,17 @@ final class WeeklyPlannerController extends AbstractController
             $activity->setUser($user);
         }
 
+        // dropped on a reservation's row, the planning becomes that reservation
+        $reservation = $request->request->getString('reservation');
+        if ($reservation !== '') {
+            if ($this->reservations === null || !$this->reservations->isSelectable($reservation)) {
+                return new JsonResponse([], Response::HTTP_BAD_REQUEST);
+            }
+            $activity->setReservation($reservation);
+        }
+
         $customerId = $request->request->getInt('customer');
-        if ($customerId > 0) {
+        if ($customerId > 0 && $reservation === '') {
             $customer = $this->repository->findCustomer($customerId);
             $projectId = $request->request->getInt('project');
             $project = $projectId > 0 ? $this->repository->findProject($projectId) : null;
@@ -297,6 +313,7 @@ final class WeeklyPlannerController extends AbstractController
                 throw $this->createAccessDeniedException();
             }
 
+            $activity->setReservation(null);
             $activity->setCustomer($customer);
             $activity->setProject($project);
         }

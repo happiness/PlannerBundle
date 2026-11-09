@@ -61,7 +61,8 @@ var/plugins/PlannerBundle/
 │   ├── doctrine_migrations.yaml       # Plugin migration configuration
 │   ├── Version20260909000000.php      # Initial planner schema (kimai2_planned_activities table)
 │   ├── Version20260914000000.php      # Schema updates (recurring activities support)
-│   └── Version20261019000000.php      # customer_id/project_id columns, title becomes nullable
+│   ├── Version20261019000000.php      # customer_id/project_id columns, title becomes nullable
+│   └── Version20261110000000.php      # reservation key (reserved time)
 ├── Planner/
 │   ├── PlannerUserProvider.php        # Resolves which users' plans the current user may see (web + API)
 │   ├── WeeklyPlannerService.php       # Domain service aggregating week data, user rows, capacity & actuals
@@ -70,6 +71,13 @@ var/plugins/PlannerBundle/
 │   ├── WeeklyPlannerWeek.php          # One user's capacity figures for one calendar week of the displayed range
 │   ├── WeeklyPlannerGroup.php         # One user's activities for one customer/project; builds merged day segments (one sub-row in the grid)
 │   └── WeeklyPlannerDay.php           # Daily metrics (planned hours, actual hours, contract hours, status)
+├── Reservation/
+│   ├── PlanningReservationProviderInterface.php # Which reservations (reserved time) exist; decorate it to offer some
+│   ├── NoPlanningReservations.php     # Default provider: none, the planner works as without the feature
+│   ├── PlanningReservation.php        # One reservation: key (stored on the planning), name, colour, hidden
+│   └── PlanningReservations.php       # The provider's reservations, asked once per request, with the lookups the planner needs
+├── Twig/
+│   └── PlannerReservationExtension.php # planner_reservation(key) and planner_reservations() for the templates
 ├── Repository/
 │   └── PlannedActivityRepository.php  # PlannedActivity queries (date ranges, user filtering)
 ├── Resources/
@@ -129,7 +137,12 @@ var/plugins/PlannerBundle/
 8. **Move and Resize**:
    - Activities with the edit permission carry `data-planner-move-url`/`-begin`/`-end`; a left/right handle (`data-planner-handle`) is rendered only where the activity really begins/ends. The JS maps the pointer to a day through the `th[data-planner-day]` headers (merged cells do not map to one day) and to a row through `tr.planner-row-details`.
    - `POST /planner/activity/{id}/move` (CSRF token `planner_move`) takes `begin`, `end` and optionally `user`, `customer`, `project`. The voter is checked before and after the changes, so planning cannot be moved to someone the user may not plan for. Hours per day are never changed. Only the single activity is moved, also when it is recurring.
-9. **Isolated Database Migrations**:
+9. **Reserved Time**:
+   - `PlannedActivity::$reservation` holds a provider's key (string, 64 at most) instead of a customer and project. `setReservation()` drops customer, project and title. The entity requires a customer unless it is a reservation (`validateRequiredFields()`), and never knows names: those come from `PlanningReservations`.
+   - The form adds the `reservation` choice only when there are selectable reservations or the planning already has one (kept as a choice even when hidden or unknown, so it stays editable). It is mapped after customer and project, and a POST_SUBMIT listener re-applies it, because the form only writes changed values. JS hides `.planner-project-field` (customer, project, colour, suggestions) while one is chosen.
+   - Groups key reservations as `reservation:<key>`; `WeeklyPlannerUserRow::getGroups()` sorts reservations first, in provider order (unknown keys last), then customers and projects. Rows of known, visible reservations carry `data-reservation`, which click/drag-create (`reservation` query parameter) and move (`reservation` POST field, 400 unless selectable) use.
+   - Hidden reservations are left out in the repository (`excludeHiddenReservations()` on the grid and API queries), so they count nowhere until shown again. Copies (recurring weeks, "all future" edits, removing a day) carry the key.
+10. **Isolated Database Migrations**:
    - Always run and test migrations using the bundle's dedicated configuration file:
      `bin/console doctrine:migrations:migrate --configuration=var/plugins/PlannerBundle/Migrations/doctrine_migrations.yaml --no-interaction`
 

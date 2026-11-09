@@ -14,9 +14,10 @@ namespace KimaiPlugin\PlannerBundle\Planner;
 use App\Entity\Customer;
 use App\Entity\Project;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Reservation\PlanningReservation;
 
 /**
- * All planned activities of one user for one customer/project within the displayed week.
+ * All planned activities of one user for one customer/project, or one reservation, within the displayed week.
  *
  * Rows of the same group are rendered on one line, consecutive days of the same activity are merged into one segment.
  */
@@ -27,16 +28,27 @@ final class WeeklyPlannerGroup
      */
     private array $activities = [];
 
+    public const RESERVATION_PREFIX = 'reservation:';
+
+    /**
+     * @param string|null $reservationKey also set for a key the provider does not know, then $reservation is null
+     */
     public function __construct(
         private readonly string $key,
         private readonly ?Customer $customer,
         private readonly ?Project $project,
-        private readonly ?string $legacyTitle
+        private readonly ?string $legacyTitle,
+        private readonly ?string $reservationKey = null,
+        private readonly ?PlanningReservation $reservation = null
     ) {
     }
 
     public static function keyFor(PlannedActivity $activity): string
     {
+        if ($activity->getReservation() !== null) {
+            return self::RESERVATION_PREFIX . $activity->getReservation();
+        }
+
         if ($activity->getCustomer() === null) {
             return 'legacy:' . ($activity->getTitle() ?? '');
         }
@@ -49,14 +61,37 @@ final class WeeklyPlannerGroup
             . ':p' . ($project === null ? 0 : ($project->getId() ?? 'o' . spl_object_id($project)));
     }
 
-    public static function createFor(PlannedActivity $activity): self
+    public static function createFor(PlannedActivity $activity, ?PlanningReservation $reservation = null): self
     {
-        return new self(self::keyFor($activity), $activity->getCustomer(), $activity->getProject(), $activity->getTitle());
+        return new self(self::keyFor($activity), $activity->getCustomer(), $activity->getProject(), $activity->getTitle(), $activity->getReservation(), $reservation);
     }
 
     public function getKey(): string
     {
         return $this->key;
+    }
+
+    public function isReservation(): bool
+    {
+        return $this->reservationKey !== null;
+    }
+
+    public function getReservationKey(): ?string
+    {
+        return $this->reservationKey;
+    }
+
+    /**
+     * Null for a key the provider does not know (any more), which is shown under the key itself.
+     */
+    public function getReservation(): ?PlanningReservation
+    {
+        return $this->reservation;
+    }
+
+    public function getReservationName(): ?string
+    {
+        return $this->reservation?->name ?? $this->reservationKey;
     }
 
     public function getCustomer(): ?Customer
@@ -71,7 +106,7 @@ final class WeeklyPlannerGroup
 
     public function getCustomerName(): string
     {
-        return $this->customer?->getName() ?? $this->legacyTitle ?? '';
+        return $this->customer?->getName() ?? $this->legacyTitle ?? $this->reservationKey ?? '';
     }
 
     public function getProjectName(): ?string

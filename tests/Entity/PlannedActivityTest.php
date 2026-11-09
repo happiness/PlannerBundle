@@ -146,4 +146,58 @@ class PlannedActivityTest extends TestCase
         (new PlannedActivity())->setCustomer($customer)->validateProjectBelongsToCustomer($context);
         (new PlannedActivity())->validateProjectBelongsToCustomer($context);
     }
+
+    public function testReservationDropsCustomerAndProject(): void
+    {
+        $customer = new Customer('ACME');
+        $project = new Project();
+        $project->setCustomer($customer);
+
+        $activity = (new PlannedActivity())->setCustomer($customer)->setProject($project)->setTitle('Legacy');
+        $activity->setReservation('buffer');
+
+        $this->assertSame('buffer', $activity->getReservation());
+        $this->assertTrue($activity->isReservation());
+        $this->assertNull($activity->getCustomer());
+        $this->assertNull($activity->getProject());
+        $this->assertNull($activity->getTitle());
+        $this->assertSame('buffer', $activity->getName());
+
+        // an empty key is no reservation and keeps what is there
+        $work = (new PlannedActivity())->setCustomer($customer)->setReservation('');
+        $this->assertNull($work->getReservation());
+        $this->assertFalse($work->isReservation());
+        $this->assertSame($customer, $work->getCustomer());
+    }
+
+    public function testWorkNeedsACustomerAndAReservationDoesNot(): void
+    {
+        $paths = [];
+        $builder = $this->createMock(ConstraintViolationBuilderInterface::class);
+        $builder->method('atPath')->willReturnCallback(function (string $path) use ($builder, &$paths) {
+            $paths[] = $path;
+
+            return $builder;
+        });
+        $builder->method('setTranslationDomain')->willReturnSelf();
+
+        $context = $this->createMock(ExecutionContextInterface::class);
+        $context->method('buildViolation')->willReturn($builder);
+
+        (new PlannedActivity())->setReservation('buffer')->validateRequiredFields($context);
+        (new PlannedActivity())->setCustomer(new Customer('ACME'))->validateRequiredFields($context);
+        $this->assertSame([], $paths);
+
+        (new PlannedActivity())->validateRequiredFields($context);
+        $this->assertSame(['customer'], $paths);
+    }
+
+    public function testReservationTakesTheReservationsColour(): void
+    {
+        $activity = new PlannedActivity();
+        $activity->setColor('#ff0000');
+        $activity->setReservation('buffer');
+
+        $this->assertNull($activity->getColor());
+    }
 }

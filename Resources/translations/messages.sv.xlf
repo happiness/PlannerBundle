@@ -170,6 +170,14 @@
                 <source>planner.suggestions</source>
                 <target>Ofta använda</target>
             </trans-unit>
+            <trans-unit id="planner.reservation">
+                <source>planner.reservation</source>
+                <target>Reserverad tid</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation_help">
+                <source>planner.reservation_help</source>
+                <target>Tid som hålls för något som inte är en kund eller ett projekt. Lämna tomt för att planera en kund eller ett projekt.</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>

@@ -15,6 +15,7 @@
 - **Drag to Plan**: Drag across empty day cells of a row to create a planning spanning several days. A transparent preview block is shown while dragging and stays visible while the dialog is open.
 - **Move and Resize**: Drag a planned activity to another day or row, or drag its left/right handle to extend or shorten it.
 - **Shortcuts**: Frequently used projects (with their customer) are offered as shortcuts when creating a planning, unless the dialog was opened from a project's row and already has it selected.
+- **Reserved Time**: Plan time that belongs to no customer or project, such as a daily buffer or tech leading, when another plugin supplies the reservations (see [Reserved time](#reserved-time)). It is planned and counted like project work, in its own rows above the projects, and nobody can log time to it. Without such a plugin nothing changes.
 - **Multiple Weeks**: Show 1, 2, 4 (default) or 8 weeks at once; capacity is summarized per week.
 - **REST API**: Create, read, update and delete planned activities via `/api/planner/activities` (see the Kimai API docs under the "Planner" tag).
 - **Quick Modal Editing**: Create, update, or delete planned blocks seamlessly via modal dialogs.
@@ -121,13 +122,33 @@ All endpoints require an API token and the `view_planner` permission; write oper
 
 | Method | Path | Description |
 | :--- | :--- | :--- |
-| `GET` | `/api/planner/activities` | List activities. Filters: `user`, `customers[]`, `projects[]`, `begin`, `end` (`Y-m-d`) |
+| `GET` | `/api/planner/activities` | List activities. Filters: `user`, `customers[]`, `projects[]`, `reservations[]` (keys), `begin`, `end` (`Y-m-d`) |
 | `GET` | `/api/planner/activities/{id}` | Fetch one activity |
-| `POST` | `/api/planner/activities` | Create. Body: `customer` (required), `project`, `user` (defaults to you), `begin`, `end`, `hoursPerDay`, `color`, `comment`, `recurrentWeeks` |
+| `POST` | `/api/planner/activities` | Create. Body: `customer` (required unless `reservation`), `project`, `reservation` (a reservation key instead of customer and project; only when reservations are offered, see [Reserved time](#reserved-time)), `user` (defaults to you), `begin`, `end`, `hoursPerDay`, `color`, `comment`, `recurrentWeeks` |
 | `PATCH` | `/api/planner/activities/{id}` | Update any subset of fields; `edit_mode: "future"` also updates later activities of a recurring series, moving their dates by as many days as this one moved |
 | `DELETE` | `/api/planner/activities/{id}` | Delete; `?mode=future` also deletes later activities of a recurring series |
 
+## Reserved time
+
+Reserved time holds hours in someone's planning for something that is not a customer or project: a daily buffer, tech leading, internal work that must not be logged as project time. The planner has none of its own: another plugin offers them by decorating `KimaiPlugin\PlannerBundle\Reservation\PlanningReservationProviderInterface`, whose `getReservations()` returns `PlanningReservation` objects (a stable `key` stored on the planning, a `name`, an optional `color` and a `hidden` flag):
+
+```yaml
+services:
+    App\MyReservations:
+        decorates: KimaiPlugin\PlannerBundle\Reservation\PlanningReservationProviderInterface
+```
+
+- The dialog shows a "Reserved time" field above the customer when there is at least one. Choosing one hides customer, project and colour; the bars take the reservation's colour.
+- A reservation counts as planned work in every gauge, like a project.
+- Each reservation gets its own row under every person, above the projects, in the order the provider returns them. Clicking or dragging in that row plans it, and dropping other planning there turns it into that reservation (dropping it on a project row turns it back).
+- Return a reservation that is no longer used as `hidden` rather than leaving it out: its plannings are then left out of the planner and the API until it is shown again. A key nobody returns is still shown, under the key itself and grey, and still counts.
+- The API returns the key as `reservation` (`null` for everything else), and `GET /api/planner/activities` filters by `reservations[]`.
+
 ## Upgrading
+
+### Reserved time
+
+The migration `Version20261110000000` adds the nullable column `reservation` to `kimai2_planned_activities`. Existing planning is unchanged. Run it after updating (see [Installation](#installation)).
 
 ### From 1.x to 2.0.0
 

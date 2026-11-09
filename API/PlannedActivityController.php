@@ -59,6 +59,7 @@ final class PlannedActivityController extends BaseApiController
     #[Rest\QueryParam(name: 'projects', map: true, requirements: '\d+', strict: true, nullable: true, default: [], description: 'List of project IDs to filter, e.g.: projects[]=1&projects[]=2')]
     #[Rest\QueryParam(name: 'begin', requirements: [new Constraints\DateTime(format: 'Y-m-d', message: 'This value is not a valid date, expected format: Y-m-d (2026-10-19).')], strict: true, nullable: true, description: 'Only activities ending on or after this day are returned. Format: Y-m-d')]
     #[Rest\QueryParam(name: 'end', requirements: [new Constraints\DateTime(format: 'Y-m-d', message: 'This value is not a valid date, expected format: Y-m-d (2026-10-19).')], strict: true, nullable: true, description: 'Only activities beginning on or before this day are returned. Format: Y-m-d')]
+    #[Rest\QueryParam(name: 'reservations', map: true, requirements: '[^/]{1,64}', strict: true, nullable: true, default: [], description: 'List of reservation keys to filter, e.g.: reservations[]=buffer&reservations[]=tech-lead')]
     public function cgetAction(ParamFetcherInterface $paramFetcher, CustomerRepository $customerRepository, ProjectRepository $projectRepository): Response
     {
         /** @var User $currentUser */
@@ -90,13 +91,16 @@ final class PlannedActivityController extends BaseApiController
 
         $begin = $paramFetcher->get('begin');
         $end = $paramFetcher->get('end');
+        /** @var array<string> $reservations */
+        $reservations = $paramFetcher->get('reservations');
 
         $activities = $this->repository->findByFilter(
             $users,
             \is_string($begin) && $begin !== '' ? new \DateTimeImmutable($begin) : null,
             \is_string($end) && $end !== '' ? new \DateTimeImmutable($end) : null,
             $customers,
-            $projects
+            $projects,
+            array_values(array_unique(array_map('strval', $reservations)))
         );
 
         $view = new View($activities, Response::HTTP_OK);

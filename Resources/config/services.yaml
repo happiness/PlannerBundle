@@ -12,3 +12,6 @@ services:
             - '../../DependencyInjection/'
             - '../../Migrations/'
             - '../../tests/'
+
+    # offer reservations (time held for something that is not a project) by decorating this service, see README
+    KimaiPlugin\PlannerBundle\Reservation\PlanningReservationProviderInterface: '@KimaiPlugin\PlannerBundle\Reservation\NoPlanningReservations'

@@ -174,11 +174,14 @@
                                     </tr>
                                     {% set groups = row.groups %}
                                     {% for group in groups %}
-                                        <tr class="planner-row planner-row-details is-collapsed" data-user-id="{{ row.user.id }}"{% if group.customer %} data-customer-id="{{ group.customer.id }}"{% endif %}{% if group.project %} data-project-id="{{ group.project.id }}"{% endif %}>
+                                        {# a reservation the provider does not know (any more) is shown under its key, grey, and offers nothing new #}
+                                        <tr class="planner-row planner-row-details is-collapsed" data-user-id="{{ row.user.id }}"{% if group.reservation is not null %} data-reservation="{{ group.reservationKey }}"{% endif %}{% if group.customer %} data-customer-id="{{ group.customer.id }}"{% endif %}{% if group.project %} data-project-id="{{ group.project.id }}"{% endif %}>
                                             <td class="planner-group-cell p-1 border-top-0" colspan="2">
-                                                <div class="d-flex justify-content-between align-items-center planner-group-label" title="{{ group.customerName }}{% if group.projectName %} / {{ group.projectName }}{% endif %}">
+                                                {% set groupName = group.reservationKey is not null ? group.reservationName : group.customerName %}
+                                                {% set reservationColor = group.reservationKey is null ? null : (group.reservation is not null ? group.reservation.colorSafe : '#adb5bd') %}
+                                                <div class="d-flex justify-content-between align-items-center planner-group-label" title="{{ groupName }}{% if group.projectName %} / {{ group.projectName }}{% endif %}">
                                                     <div class="text-truncate">
-                                                        <span class="fw-bold small">{{ group.customerName }}</span>{% if group.projectName %}<span class="text-muted small"> / {{ group.projectName }}</span>{% endif %}
+                                                        <span class="fw-bold small{% if group.reservationKey is not null and group.reservation is null %} text-muted{% endif %}">{{ groupName }}</span>{% if group.projectName %}<span class="text-muted small"> / {{ group.projectName }}</span>{% endif %}
                                                     </div>
                                                     <span class="text-muted small ms-2 flex-shrink-0">{{ group.getPlannedHours(row.days) }}h</span>
                                                 </div>
@@ -187,7 +190,7 @@
                                                 {% set date = segment.date %}
                                                 <td colspan="{{ segment.span }}" class="position-relative align-middle border-1 day{% if date is weekend %} weekend{% endif %}{% if date is today %} today{% endif %} p-1 {{ segment.activities is not empty ? 'has-activities' : 'no-activities' }}"{% if canCreate and segment.activities is empty %} data-planner-date="{{ date|date('Y-m-d') }}"{% endif %}>
                                                     {% if canCreate and segment.activities is empty %}
-                                                        {% set createParams = {'user': row.user.id, 'date': date|date('Y-m-d')} %}
+                                                        {% set createParams = {'user': row.user.id, 'date': date|date('Y-m-d')}|merge(group.reservation is not null ? {'reservation': group.reservationKey} : {}) %}
                                                         {% if group.customer %}{% set createParams = createParams|merge({'customer': group.customer.id}) %}{% endif %}
                                                         {% if group.project %}{% set createParams = createParams|merge({'project': group.project.id}) %}{% endif %}
                                                         <a href="{{ path('planner_activity_create', createParams) }}"
@@ -199,9 +202,9 @@
                                                         {% set canMove = is_granted('edit', activity) %}
                                                         <a href="{{ path('planner_activity_edit', {'id': activity.id, 'date': date|date('Y-m-d')}) }}"
                                                            class="planner-activity position-relative z-2 d-flex justify-content-between align-items-center px-2 py-1 rounded text-decoration-none modal-ajax-form shadow-sm{% if not loop.first %} mt-1{% endif %}{% if canMove %} planner-movable{% endif %}"
-                                                           style="background-color: {{ activity.colorSafe }}; color: {{ activity.colorSafe|font_contrast }};"
+                                                           {% set barColor = reservationColor ?? activity.colorSafe %}style="background-color: {{ barColor }}; color: {{ barColor|font_contrast }};"
                                                            {% if canMove %}data-planner-move-url="{{ path('planner_activity_move', {'id': activity.id}) }}" data-planner-begin="{{ activity.begin|date('Y-m-d') }}" data-planner-end="{{ activity.end|date('Y-m-d') }}"{% endif %}
-                                                           title="{{ activity.name }} ({{ activity.hoursPerDay }}h){% if activity.hasComment %}: {{ activity.comment|u.truncate(1024, '...') }}{% endif %}">
+                                                           title="{{ activity.reservation is not null ? groupName : activity.name }} ({{ activity.hoursPerDay }}h){% if activity.hasComment %}: {{ activity.comment|u.truncate(1024, '...') }}{% endif %}">
                                                             {% if canMove and activity.begin|date('Y-m-d') == date|date('Y-m-d') %}<span class="planner-handle planner-handle-start" data-planner-handle="start"></span>{% endif %}
                                                             <span class="text-truncate small">{% if activity.hasComment %}{{ icon('comment') }} {% endif %}{{ activity.hoursPerDay }}h</span>
                                                             {% if canMove and activity.end|date('Y-m-d') == segmentEnd|date('Y-m-d') %}<span class="planner-handle planner-handle-end" data-planner-handle="end"></span>{% endif %}
@@ -618,6 +621,9 @@
                 }
                 const bounds = range(d);
                 const params = new URLSearchParams({user: d.row.dataset.userId, date: bounds[0], end: bounds[1]});
+                if (d.row.dataset.reservation) {
+                    params.set('reservation', d.row.dataset.reservation);
+                }
                 if (d.row.dataset.customerId) {
                     params.set('customer', d.row.dataset.customerId);
                 }
@@ -820,7 +826,10 @@
                 if (t.row.dataset.userId !== m.row.dataset.userId) {
                     body.set('user', t.row.dataset.userId);
                 }
-                if (t.row.dataset.customerId && (t.row.dataset.customerId !== m.row.dataset.customerId || t.row.dataset.projectId !== m.row.dataset.projectId)) {
+                // dropped on a reservation's row the planning becomes that reservation, on a project's row that project
+                if (t.row.dataset.reservation && t.row.dataset.reservation !== m.row.dataset.reservation) {
+                    body.set('reservation', t.row.dataset.reservation);
+                } else if (t.row.dataset.customerId && (t.row.dataset.customerId !== m.row.dataset.customerId || t.row.dataset.projectId !== m.row.dataset.projectId)) {
                     body.set('customer', t.row.dataset.customerId);
                     if (t.row.dataset.projectId) {
                         body.set('project', t.row.dataset.projectId);
