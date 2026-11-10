@@ -156,6 +156,36 @@ final class WeeklyPlannerGroup
     }
 
     /**
+     * Whether this customer/project is planned more than once on the day, confirmed or tentative alike: usually a
+     * slip from before moving and stretching refused it, so the grid marks it. Time off is never marked.
+     */
+    public function isPlannedTwiceOn(\DateTimeInterface $date): bool
+    {
+        $counts = [0, 0];
+        foreach ($this->activities as $activity) {
+            if (!$activity->isTimeOff() && $activity->coversDate($date)) {
+                ++$counts[(int) $activity->isTentative()];
+            }
+        }
+
+        return max($counts) > 1;
+    }
+
+    /**
+     * The activity of this group that can be joined to the end of $activity, if one is shown.
+     */
+    public function getJoinableAfter(PlannedActivity $activity): ?PlannedActivity
+    {
+        foreach ($this->activities as $next) {
+            if ($activity->isJoinableWith($next)) {
+                return $next;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Splits the days into render segments: a single activity covering several consecutive days becomes one
      * segment with a span, empty days and days with more than one activity are one segment each.
      *
