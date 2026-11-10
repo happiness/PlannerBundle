@@ -62,7 +62,9 @@ final class PlannerQuery extends BaseQuery
      */
     public function setOrderBy(?string $orderBy): self
     {
-        return parent::setOrderBy(\in_array($orderBy, self::ORDER_BY_CHOICES, true) ? $orderBy : self::ORDER_BY_NAME);
+        parent::setOrderBy(\in_array($orderBy, self::ORDER_BY_CHOICES, true) ? $orderBy : self::ORDER_BY_NAME);
+
+        return $this;
     }
 
     public function isOrderedByFreeHours(): bool

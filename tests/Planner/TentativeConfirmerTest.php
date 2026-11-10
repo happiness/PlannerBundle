@@ -42,12 +42,18 @@ class TentativeConfirmerTest extends TestCase
         $ongoing = $this->createActivity(1, '2026-10-30', '2026-11-04');
         $future = $this->createActivity(2, '2026-11-16', '2026-11-18');
         $notMine = $this->createActivity(3, '2026-11-09', '2026-11-09');
+        // someone the current user may not even see: neither counted nor returned
+        $hidden = $this->createActivity(4, '2026-11-10', '2026-11-10');
 
         $repository = $this->createMock(PlannedActivityRepository::class);
-        $repository->expects($this->once())->method('findTentativeForProject')->with($project, $today)->willReturn([$ongoing, $future, $notMine]);
+        $repository->expects($this->once())->method('findTentativeForProject')->with($project, $today)->willReturn([$ongoing, $future, $notMine, $hidden]);
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
-        $authChecker->method('isGranted')->willReturnCallback(static fn (string $attribute, mixed $subject): bool => $attribute === PlannedActivityVoter::EDIT && $subject !== $notMine);
+        $authChecker->method('isGranted')->willReturnCallback(static fn (string $attribute, mixed $subject): bool => match ($attribute) {
+            PlannedActivityVoter::EDIT => $subject !== $notMine && $subject !== $hidden,
+            PlannedActivityVoter::VIEW => $subject !== $hidden,
+            default => false,
+        });
 
         $confirmation = (new TentativeConfirmer($repository, $authChecker))->prepare($project, $today);
 

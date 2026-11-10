@@ -8,6 +8,9 @@
         <div class="card-body">
             <p>{{ 'planner.calendar.intro'|trans }}</p>
             {% if feedUrl %}
+                {% if shownOnce %}
+                    <div class="alert alert-warning">{{ 'planner.calendar.shown_once'|trans }}</div>
+                {% endif %}
                 <div class="input-group mb-2">
                     <input type="text" class="form-control" id="planner-calendar-url" value="{{ feedUrl }}" readonly aria-label="{{ 'planner.calendar.title'|trans }}">
                     <button type="button" class="btn" id="planner-calendar-copy" data-copied="{{ 'planner.calendar.copied'|trans }}">
@@ -21,14 +24,30 @@
                     <li>{{ 'planner.calendar.howto_outlook'|trans }}</li>
                     <li>{{ 'planner.calendar.howto_apple'|trans }}</li>
                 </ul>
+            {% elseif hasFeed %}
+                <div class="alert alert-info">{{ 'planner.calendar.hidden'|trans }}</div>
             {% endif %}
         </div>
-        <div class="card-footer d-flex gap-2">
-            <form method="post" action="{{ path('planner_calendar_update') }}">
-                <input type="hidden" name="_token" value="{{ csrf_token('planner_calendar') }}">
-                {% if feedUrl %}
+        <form method="post" action="{{ path('planner_calendar_update') }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('planner_calendar') }}">
+            {% if canChooseComments %}
+                <div class="card-body border-top">
+                    <label class="form-check form-switch mb-1">
+                        <input class="form-check-input" type="checkbox" name="include_comments" value="1"{% if includeComments %} checked{% endif %}>
+                        <span class="form-check-label">{{ 'planner.calendar.include_comments'|trans }}</span>
+                    </label>
+                    <div class="form-hint">{{ 'planner.calendar_feed.comments_help'|trans }}</div>
+                </div>
+            {% endif %}
+            <div class="card-footer d-flex gap-2">
+                {% if hasFeed %}
+                    {% if canChooseComments %}
+                        <button type="submit" name="action" value="save" class="btn btn-primary">
+                            {{ icon('save', true) }}{{ 'action.save'|trans }}
+                        </button>
+                    {% endif %}
                     <button type="submit" name="action" value="reset" class="btn" data-confirm="{{ 'planner.calendar.renew_confirm'|trans }}">
-                        {{ icon('reload', true) }}{{ 'planner.calendar.renew'|trans }}
+                        {{ icon('repeat', true) }}{{ 'planner.calendar.renew'|trans }}
                     </button>
                     <button type="submit" name="action" value="remove" class="btn btn-ghost-danger" data-confirm="{{ 'planner.calendar.remove_confirm'|trans }}">
                         {{ icon('delete', true) }}{{ 'planner.calendar.remove'|trans }}
@@ -38,9 +57,9 @@
                         {{ icon('create', true) }}{{ 'planner.calendar.create'|trans }}
                     </button>
                 {% endif %}
-            </form>
-            <a href="{{ path('planner') }}" class="btn btn-link ms-auto">{{ 'planner.title'|trans }}</a>
-        </div>
+                <a href="{{ path('planner') }}" class="btn btn-link ms-auto">{{ 'planner.title'|trans }}</a>
+            </div>
+        </form>
     </div>
     <script>
         (function () {

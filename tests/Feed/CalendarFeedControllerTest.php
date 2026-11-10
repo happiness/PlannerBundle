@@ -15,7 +15,9 @@ use App\Entity\User;
 use App\Security\RolePermissionManager;
 use App\User\PermissionService;
 use KimaiPlugin\PlannerBundle\Calendar\CalendarFeedBuilder;
+use KimaiPlugin\PlannerBundle\Calendar\CalendarFeedSettings;
 use KimaiPlugin\PlannerBundle\Calendar\CalendarFeedTokens;
+use KimaiPlugin\PlannerBundle\Entity\CalendarFeedToken;
 use KimaiPlugin\PlannerBundle\Feed\CalendarFeedController;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use PHPUnit\Framework\TestCase;
@@ -23,19 +25,30 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class CalendarFeedControllerTest extends TestCase
 {
-    private function createController(?User $user, bool $mayPlan = true, ?PlannedActivityRepository $repository = null): CalendarFeedController
+    private function createController(?User $user, bool $mayUseFeed = true, ?PlannedActivityRepository $repository = null, ?CalendarFeedBuilder $builder = null, ?bool $userChoice = null, bool $mayPlan = true): CalendarFeedController
     {
+        $feed = null;
+        if ($user !== null) {
+            $feed = new CalendarFeedToken($user, str_repeat('b', 64), true);
+            $feed->setIncludeComments($userChoice);
+        }
         $tokens = $this->createStub(CalendarFeedTokens::class);
-        $tokens->method('findUser')->willReturn($user);
+        $tokens->method('findFeed')->willReturn($feed);
 
-        $builder = $this->createStub(CalendarFeedBuilder::class);
-        $builder->method('build')->willReturn("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n");
+        if ($builder === null) {
+            $builder = $this->createStub(CalendarFeedBuilder::class);
+            $builder->method('build')->willReturn("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n");
+        }
+
+        // the organisation leaves comments out but lets people choose
+        $settings = $this->createStub(CalendarFeedSettings::class);
+        $settings->method('includeComments')->willReturnCallback(static fn (?bool $choice): bool => $choice ?? false);
 
         $service = $this->createStub(PermissionService::class);
         $service->method('getPermissions')->willReturn([]);
-        $permissions = new RolePermissionManager($service, ['ROLE_USER' => ['view_planner' => $mayPlan]], ['view_planner' => true]);
+        $permissions = new RolePermissionManager($service, ['ROLE_USER' => ['view_planner' => $mayPlan, 'calendar_feed_planner' => $mayUseFeed]], ['view_planner' => true, 'calendar_feed_planner' => true]);
 
-        return new CalendarFeedController($tokens, $builder, $repository ?? $this->createStub(PlannedActivityRepository::class), $permissions);
+        return new CalendarFeedController($tokens, $settings, $builder, $repository ?? $this->createStub(PlannedActivityRepository::class), $permissions);
     }
 
     public function testFeed(): void
@@ -77,13 +90,39 @@ class CalendarFeedControllerTest extends TestCase
         $this->createController($user)->feed(str_repeat('a', 64));
     }
 
-    public function testUserWithoutPlannerPermission(): void
+    public function testUserWithoutFeedPermission(): void
     {
+        // view_planner alone is not enough: the feed needs calendar_feed_planner, so admins decide who may use it
         $user = new User();
         $user->setEnabled(true);
 
         $this->expectException(NotFoundHttpException::class);
         $this->createController($user, false)->feed(str_repeat('a', 64));
+    }
+
+    public function testUserWithoutPlannerPermission(): void
+    {
+        // a role that lost the planner keeps no feed, even with calendar_feed_planner still granted
+        $user = new User();
+        $user->setEnabled(true);
+
+        $this->expectException(NotFoundHttpException::class);
+        $this->createController($user, true, null, null, null, false)->feed(str_repeat('a', 64));
+    }
+
+    public function testTheUsersCommentChoiceReachesTheBuilder(): void
+    {
+        $user = new User();
+        $user->setEnabled(true);
+        $user->setTimezone('Europe/Stockholm');
+
+        $builder = $this->createMock(CalendarFeedBuilder::class);
+        $builder->expects($this->once())->method('build')->with($user, [], true)->willReturn("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n");
+
+        $repository = $this->createStub(PlannedActivityRepository::class);
+        $repository->method('findPlannedActivitiesForUserAndRange')->willReturn([]);
+
+        $this->createController($user, true, $repository, $builder, true)->feed(str_repeat('a', 64));
     }
 
     public function testIsRegisteredAsAController(): void

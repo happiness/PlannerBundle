@@ -13,6 +13,7 @@ namespace KimaiPlugin\PlannerBundle\Feed;
 
 use App\Security\RolePermissionManager;
 use KimaiPlugin\PlannerBundle\Calendar\CalendarFeedBuilder;
+use KimaiPlugin\PlannerBundle\Calendar\CalendarFeedSettings;
 use KimaiPlugin\PlannerBundle\Calendar\CalendarFeedTokens;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use Symfony\Component\HttpFoundation\Response;
@@ -23,9 +24,9 @@ use Symfony\Component\Routing\Attribute\Route;
 /**
  * The calendar feed, fetched by calendar apps that cannot log in.
  *
- * Its route sits outside "/{_locale}/", which Kimai's access control leaves public: the secret token
- * in the URL is the only credential. Unknown tokens, disabled users and users who lost the
- * planner permission all get the same 404.
+ * Its route sits outside the "/{_locale}/" prefix, so Kimai's access control rule that asks for
+ * ROLE_USER there does not cover it: the secret token in the URL is the only credential. Unknown
+ * tokens, disabled users and users who lost view_planner or calendar_feed_planner all get the same 404.
  */
 #[AsController]
 final class CalendarFeedController
@@ -37,6 +38,7 @@ final class CalendarFeedController
 
     public function __construct(
         private readonly CalendarFeedTokens $tokens,
+        private readonly CalendarFeedSettings $settings,
         private readonly CalendarFeedBuilder $builder,
         private readonly PlannedActivityRepository $repository,
         private readonly RolePermissionManager $permissions
@@ -46,8 +48,10 @@ final class CalendarFeedController
     #[Route(path: '/planner-calendar/{token}.ics', name: 'planner_calendar_feed', requirements: ['token' => '[0-9a-f]{64}'], methods: ['GET'])]
     public function feed(string $token): Response
     {
-        $user = $this->tokens->findUser($token);
-        if ($user === null || !$user->isEnabled() || !$this->permissions->hasRolePermission($user, 'view_planner')) {
+        $feed = $this->tokens->findFeed($token);
+        $user = $feed?->getUser();
+        // the feed is the planner seen from outside: it needs the planner and the feed permission
+        if ($user === null || !$user->isEnabled() || !$this->permissions->hasRolePermission($user, 'view_planner') || !$this->permissions->hasRolePermission($user, 'calendar_feed_planner')) {
             throw new NotFoundHttpException();
         }
 
@@ -58,7 +62,9 @@ final class CalendarFeedController
             $today->modify(\sprintf('+%d days', self::DAYS_AHEAD))->setTime(23, 59, 59)
         );
 
-        return new Response($this->builder->build($user, $activities), Response::HTTP_OK, [
+        $includeComments = $this->settings->includeComments($feed?->getIncludeComments());
+
+        return new Response($this->builder->build($user, $activities, $includeComments), Response::HTTP_OK, [
             'Content-Type' => 'text/calendar; charset=utf-8',
             'Content-Disposition' => 'inline; filename="planner.ics"',
             'Cache-Control' => 'private, no-store',

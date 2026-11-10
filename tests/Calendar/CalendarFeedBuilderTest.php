@@ -34,8 +34,8 @@ class CalendarFeedBuilderTest extends TestCase
             'project' => 'Project',
             'planner.hours_per_day' => 'Hours per day',
             'planner.time_off' => 'Time off',
-            'planner.whole_day' => 'Whole day',
             'planner.tentative' => 'Tentative',
+            'planner.whole_day' => 'whole day',
             default => $id,
         });
 
@@ -96,7 +96,7 @@ class CalendarFeedBuilderTest extends TestCase
             ->setHoursPerDay(7.5)
             ->setComment("Sprint review\nwith the client");
 
-        $lines = $this->lines($this->createBuilder()->build($this->createUser(), [$activity], new \DateTimeImmutable('2026-11-02 10:00:00', new \DateTimeZone('Europe/Stockholm'))));
+        $lines = $this->lines($this->createBuilder()->build($this->createUser(), [$activity], true, new \DateTimeImmutable('2026-11-02 10:00:00', new \DateTimeZone('Europe/Stockholm'))));
 
         $this->assertContains('UID:planner-activity-42@kimai.example.com', $lines);
         $this->assertContains('DTSTAMP:20261102T090000Z', $lines);
@@ -107,6 +107,40 @@ class CalendarFeedBuilderTest extends TestCase
         $this->assertContains('DESCRIPTION:Customer: Acme\, Inc.\nProject: Website\; phase 2\nHours per day: 7.5\n\nSprint review\nwith the client', $lines);
         $this->assertContains('URL:https://kimai.example.com/en/planner/week/2026-11-09', $lines);
         $this->assertContains('TRANSP:TRANSPARENT', $lines);
+    }
+
+    public function testCommentsStayOutUnlessIncluded(): void
+    {
+        $activity = $this->createActivity(42, '2026-11-09', '2026-11-09')->setCustomer(new Customer('Acme'))->setComment('Internal: client is late paying');
+
+        $lines = $this->lines($this->createBuilder()->build($this->createUser(), [$activity]));
+
+        $this->assertContains('DESCRIPTION:Customer: Acme\nHours per day: 6', $lines);
+        $this->assertSame([], array_filter($lines, static fn (string $line): bool => str_contains($line, 'late paying')));
+    }
+
+    public function testTimeOffWithoutHoursIsAWholeDay(): void
+    {
+        $activity = $this->createActivity(43, '2026-11-09', '2026-11-10')->setTimeOff(true)->setHoursPerDay(null);
+
+        $lines = $this->lines($this->createBuilder()->build($this->createUser(), [$activity]));
+
+        $this->assertContains('SUMMARY:Time off (whole day)', $lines);
+        $this->assertContains('DESCRIPTION:Hours per day: whole day', $lines);
+    }
+
+    public function testTentativeWorkIsMarkedAsTentative(): void
+    {
+        $customer = new Customer('Acme');
+        $tentative = $this->createActivity(7, '2026-11-09', '2026-11-09')->setCustomer($customer)->setTentative(true);
+        $confirmed = $this->createActivity(8, '2026-11-10', '2026-11-10')->setCustomer($customer);
+
+        $lines = $this->lines($this->createBuilder()->build($this->createUser(), [$tentative, $confirmed]));
+
+        $this->assertContains('SUMMARY:Tentative: Acme (6h)', $lines);
+        $this->assertContains('SUMMARY:Acme (6h)', $lines);
+        $this->assertSame(1, \count(array_keys($lines, 'STATUS:TENTATIVE', true)));
+        $this->assertLessThan(array_search('UID:planner-activity-8@kimai.example.com', $lines, true), array_search('STATUS:TENTATIVE', $lines, true));
     }
 
     public function testUnsavedActivitiesAreLeftOut(): void
@@ -145,20 +179,6 @@ class CalendarFeedBuilderTest extends TestCase
         $this->assertSame('SHORT:line', CalendarFeedBuilder::fold('SHORT:line'));
     }
 
-    public function testTentativeWorkIsMarkedAsTentative(): void
-    {
-        $customer = new Customer('Acme');
-        $tentative = $this->createActivity(7, '2026-11-09', '2026-11-09')->setCustomer($customer)->setTentative(true);
-        $confirmed = $this->createActivity(8, '2026-11-10', '2026-11-10')->setCustomer($customer);
-
-        $lines = $this->lines($this->createBuilder()->build($this->createUser(), [$tentative, $confirmed]));
-
-        $this->assertContains('SUMMARY:Tentative: Acme (6h)', $lines);
-        $this->assertContains('SUMMARY:Acme (6h)', $lines);
-        $this->assertSame(1, \count(array_keys($lines, 'STATUS:TENTATIVE', true)));
-        $this->assertLessThan(array_search('UID:planner-activity-8@kimai.example.com', $lines, true), array_search('STATUS:TENTATIVE', $lines, true));
-    }
-
     public function testTimeOff(): void
     {
         $wholeDay = $this->createActivity(1, '2026-11-09', '2026-11-10')->setTimeOff(true)->setHoursPerDay(null);
@@ -166,8 +186,8 @@ class CalendarFeedBuilderTest extends TestCase
 
         $lines = $this->lines($this->createBuilder()->build($this->createUser(), [$wholeDay, $morning]));
 
-        $this->assertContains('SUMMARY:Time off (Whole day)', $lines);
-        $this->assertContains('DESCRIPTION:Hours per day: Whole day', $lines);
+        $this->assertContains('SUMMARY:Time off (whole day)', $lines);
+        $this->assertContains('DESCRIPTION:Hours per day: whole day', $lines);
         $this->assertContains('SUMMARY:Time off (4h)', $lines);
     }
 

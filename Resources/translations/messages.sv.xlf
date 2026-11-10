@@ -334,6 +334,50 @@
                 <source>planner.calendar.remove_confirm</source>
                 <target>Den nuvarande adressen slutar fungera. Stänga av kalenderflödet?</target>
             </trans-unit>
+            <trans-unit id="planner.calendar.shown_once">
+                <source>planner.calendar.shown_once</source>
+                <target>Kopiera adressen nu. Den sparas hashad och visas inte igen: tappar du bort den förnyar du den och prenumererar igen.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.hidden">
+                <source>planner.calendar.hidden</source>
+                <target>Ditt kalenderflöde är aktivt. Adressen sparas hashad och kan inte visas igen: förnya den för att få en ny och prenumerera sedan på den.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.include_comments">
+                <source>planner.calendar.include_comments</source>
+                <target>Ta med anteckningar i mitt flöde</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments">
+                <source>planner.calendar_feed.comments</source>
+                <target>Anteckningar i kalenderflöden</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_help">
+                <source>planner.calendar_feed.comments_help</source>
+                <target>Anteckningar innehåller ofta detaljer som bara är menade för kollegor. Ett kalenderflöde lämnar ut allt det innehåller till den kalendertjänst var och en prenumererar från, till exempel Google eller Microsoft.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_exclude">
+                <source>planner.calendar_feed.comments_exclude</source>
+                <target>Utelämna</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_include">
+                <source>planner.calendar_feed.comments_include</source>
+                <target>Ta med</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_user">
+                <source>planner.calendar_feed.comments_user</source>
+                <target>Låt var och en välja för sitt eget flöde</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_user_help">
+                <source>planner.calendar_feed.comments_user_help</source>
+                <target>Var och en kan då slå på eller av anteckningar i sitt eget flöde, med valet ovan som utgångsläge.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.hash">
+                <source>planner.calendar_feed.hash</source>
+                <target>Spara flödesadresser hashade</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.hash_help">
+                <source>planner.calendar_feed.hash_help</source>
+                <target>En läckt databaskopia avslöjar då ingen fungerande flödesadress. En adress visas bara en gång, direkt när den skapas: den som tappar bort sin förnyar den och prenumererar igen. Befintliga adresser hashas nästa gång en kalender hämtar dem.</target>
+            </trans-unit>
             <trans-unit id="planner.tentative">
                 <source>planner.tentative</source>
                 <target>Preliminär</target>
@@ -417,6 +461,18 @@
             <trans-unit id="planner.tentative_hours_short">
                 <source>planner.tentative_hours_short</source>
                 <target>%hours% tim preliminärt</target>
+            </trans-unit>
+            <trans-unit id="planner.day_hours">
+                <source>planner.day_hours</source>
+                <target>%planned% av %expected% tim planerade, %actual% tim rapporterade</target>
+            </trans-unit>
+            <trans-unit id="planner.week_hours">
+                <source>planner.week_hours</source>
+                <target>%planned%/%expected% tim (%actual% tim)</target>
+            </trans-unit>
+            <trans-unit id="planner.day_time_off">
+                <source>planner.day_time_off</source>
+                <target>Ledig: %hours% tim</target>
             </trans-unit>
         </body>
     </file>

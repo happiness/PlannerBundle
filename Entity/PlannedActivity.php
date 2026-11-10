@@ -291,7 +291,7 @@ class PlannedActivity
     }
 
     /**
-     * Time off belongs to no customer, project or reservation, switching it on drops them.
+     * Time off belongs to no customer, project or reservation and is never tentative, switching it on drops them.
      */
     public function setTimeOff(bool $timeOff): self
     {

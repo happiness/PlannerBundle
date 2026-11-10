@@ -149,4 +149,18 @@ class WeeklyPlannerDayTest extends TestCase
         $this->assertSame($holiday, $day->getHoliday());
         $this->assertFalse($day->isWorkingDay());
     }
+
+    public function testTimeOffOnAHolidayDoesNotCountTwice(): void
+    {
+        // the holiday already takes the contract hours to zero, so time off has nothing left to take
+        $holiday = new PublicHoliday(new \DateTimeImmutable('2026-12-25'), 'Christmas Day', 'SE', 'Sweden', 'official');
+        $day = new WeeklyPlannerDay(new \DateTimeImmutable('2026-12-25'), 0.0, 0.0, $holiday);
+        $day->addActivity((new PlannedActivity())->setTimeOff(true)->setHoursPerDay(null));
+        $day->addActivity((new PlannedActivity())->setTimeOff(true)->setHoursPerDay(8.0));
+
+        $this->assertSame(0.0, $day->getTimeOffHours());
+        $this->assertSame(0.0, $day->getCapacityHours());
+        $this->assertSame(0.0, $day->getPlannedHours());
+        $this->assertFalse($day->isDayOff());
+    }
 }

@@ -19,8 +19,9 @@ use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 /**
  * Confirms all tentative work of a project at once, e.g. when the deal is signed.
  *
- * Only ongoing and future activities change, past ones stay as they were planned. Activities of users the current user
- * may not edit are skipped and stay tentative.
+ * Only ongoing and future activities change, past ones stay as they were planned. Activities the current user may see
+ * but not edit are skipped and stay tentative. Those they may not even see are left out altogether, so neither the
+ * count nor the IDs reveal other people's planning.
  *
  * @final not final for mocking in tests
  */
@@ -41,7 +42,7 @@ class TentativeConfirmer
         foreach ($this->repository->findTentativeForProject($project, $today) as $activity) {
             if ($this->authorizationChecker->isGranted(PlannedActivityVoter::EDIT, $activity)) {
                 $activities[] = $activity;
-            } else {
+            } elseif ($this->authorizationChecker->isGranted(PlannedActivityVoter::VIEW, $activity)) {
                 $skipped[] = $activity;
             }
         }

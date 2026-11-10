@@ -334,6 +334,50 @@
                 <source>planner.calendar.remove_confirm</source>
                 <target>The current address stops working. Switch off the calendar feed?</target>
             </trans-unit>
+            <trans-unit id="planner.calendar.shown_once">
+                <source>planner.calendar.shown_once</source>
+                <target>Copy this address now. It is stored hashed and won't be shown again: if you lose it, renew it and subscribe again.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.hidden">
+                <source>planner.calendar.hidden</source>
+                <target>Your calendar feed is active. Its address is stored hashed, so it can't be shown again: renew it to get a new one, then subscribe again with that.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.include_comments">
+                <source>planner.calendar.include_comments</source>
+                <target>Include notes in my feed</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments">
+                <source>planner.calendar_feed.comments</source>
+                <target>Notes in calendar feeds</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_help">
+                <source>planner.calendar_feed.comments_help</source>
+                <target>Notes often hold details meant for colleagues only. A calendar feed hands everything in it to whichever calendar service each person subscribes from, such as Google or Microsoft.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_exclude">
+                <source>planner.calendar_feed.comments_exclude</source>
+                <target>Leave out</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_include">
+                <source>planner.calendar_feed.comments_include</source>
+                <target>Include</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_user">
+                <source>planner.calendar_feed.comments_user</source>
+                <target>Let people choose for their own feed</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_user_help">
+                <source>planner.calendar_feed.comments_user_help</source>
+                <target>Each person can then switch notes on or off for their own feed, starting from the choice above.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.hash">
+                <source>planner.calendar_feed.hash</source>
+                <target>Store feed addresses hashed</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.hash_help">
+                <source>planner.calendar_feed.hash_help</source>
+                <target>A leaked database backup then reveals no working feed address. An address is shown only once, right after it is created: whoever loses theirs renews it and subscribes again. Existing addresses are hashed the next time a calendar fetches them.</target>
+            </trans-unit>
             <trans-unit id="planner.tentative">
                 <source>planner.tentative</source>
                 <target>Tentative</target>
@@ -417,6 +461,18 @@
             <trans-unit id="planner.tentative_hours_short">
                 <source>planner.tentative_hours_short</source>
                 <target>%hours%h tentative</target>
+            </trans-unit>
+            <trans-unit id="planner.day_hours">
+                <source>planner.day_hours</source>
+                <target>%planned% of %expected% hrs planned, %actual% hrs logged</target>
+            </trans-unit>
+            <trans-unit id="planner.week_hours">
+                <source>planner.week_hours</source>
+                <target>%planned%/%expected% hrs (%actual% hrs)</target>
+            </trans-unit>
+            <trans-unit id="planner.day_time_off">
+                <source>planner.day_time_off</source>
+                <target>Time off: %hours% hrs</target>
             </trans-unit>
         </body>
     </file>

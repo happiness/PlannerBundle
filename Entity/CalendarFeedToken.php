@@ -38,13 +38,26 @@ class CalendarFeedToken
     #[ORM\JoinColumn(name: 'user_id', nullable: false, onDelete: 'CASCADE')]
     private User $user;
 
+    /**
+     * The token itself, or its SHA-256 hash when $hashed is set.
+     */
     #[ORM\Column(name: 'token', type: Types::STRING, length: 64, nullable: false)]
     private string $token;
 
-    public function __construct(User $user, string $token)
+    #[ORM\Column(name: 'hashed', type: Types::BOOLEAN, nullable: false, options: ['default' => false])]
+    private bool $hashed = false;
+
+    /**
+     * The user's own choice on comments in their feed, null to follow the organisation.
+     */
+    #[ORM\Column(name: 'include_comments', type: Types::BOOLEAN, nullable: true)]
+    private ?bool $includeComments = null;
+
+    public function __construct(User $user, string $token, bool $hashed = false)
     {
         $this->user = $user;
         $this->token = $token;
+        $this->hashed = $hashed;
     }
 
     public function getId(): ?int
@@ -62,8 +75,24 @@ class CalendarFeedToken
         return $this->token;
     }
 
-    public function setToken(string $token): void
+    public function setToken(string $token, bool $hashed = false): void
     {
         $this->token = $token;
+        $this->hashed = $hashed;
+    }
+
+    public function isHashed(): bool
+    {
+        return $this->hashed;
+    }
+
+    public function getIncludeComments(): ?bool
+    {
+        return $this->includeComments;
+    }
+
+    public function setIncludeComments(?bool $includeComments): void
+    {
+        $this->includeComments = $includeComments;
     }
 }

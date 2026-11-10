@@ -7,14 +7,16 @@
     <div class="page-header d-print-none">
         <div class="container-fluid">
             {# a row of its own, the navigation row below is already full #}
-            <div class="row mb-2">
-                <div class="col-auto ms-auto">
-                    <a href="{{ path('planner_calendar') }}" class="btn" title="{{ 'planner.calendar.intro'|trans }}">
-                        {{ icon('calendar', true) }}
-                        {{ 'planner.calendar.button'|trans }}
-                    </a>
+            {% if is_granted('calendar_feed_planner') %}
+                <div class="row mb-2">
+                    <div class="col-auto ms-auto">
+                        <a href="{{ path('planner_calendar') }}" class="btn" title="{{ 'planner.calendar.intro'|trans }}">
+                            {{ icon('calendar', true) }}
+                            {{ 'planner.calendar.button'|trans }}
+                        </a>
+                    </div>
                 </div>
-            </div>
+            {% endif %}
             <div class="row align-items-center">
                 <div class="col">
                     <div class="btn-group week-picker-btn-group" role="group" aria-label="{{ 'planner.title'|trans }}">
@@ -208,7 +210,7 @@
                                                     <div class="planner-summary-badge">
                                                         <div class="planner-summary-pct">{{ week.plannedPercentage }}%</div>
                                                         <div class="planner-summary-hours">
-                                                            {{ week.totalPlannedHours }}/{{ week.totalCapacityHours }} hrs ({{ week.totalActualHours }} hrs)
+                                                            {{ 'planner.week_hours'|trans({'%planned%': week.totalPlannedHours, '%expected%': week.totalCapacityHours, '%actual%': week.totalActualHours}) }}
                                                         </div>
                                                     </div>
                                                     {# tentative work on top of the confirmed planning, it does not change the colour #}
@@ -246,9 +248,9 @@
                                                 {% set dayClass = 'planner-day-muted' %}
                                                 {% set dayFill = 0 %}
                                             {% endif %}
-                                            {% set dayHours = day.plannedHours ~ '/' ~ day.capacityHours ~ ' hrs (' ~ day.actualHours ~ ' hrs)' %}
+                                            {% set dayHours = 'planner.day_hours'|trans({'%planned%': day.plannedHours, '%expected%': day.capacityHours, '%actual%': day.actualHours}) %}
                                             {% if day.timeOffHours > 0 %}
-                                                {% set dayHours = dayHours ~ ', ' ~ 'planner.time_off'|trans ~ ': ' ~ day.timeOffHours ~ ' hrs' %}
+                                                {% set dayHours = dayHours ~ ', ' ~ 'planner.day_time_off'|trans({'%hours%': day.timeOffHours}) %}
                                             {% endif %}
                                             {# tentative work is a dashed band on top of the confirmed fill, it never changes the colour;
                                                on a full day it overlaps the top of the fill, so overbooking if it is confirmed stays visible #}

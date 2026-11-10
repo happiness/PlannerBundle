@@ -36,8 +36,10 @@ class CalendarFeedBuilder
 
     /**
      * @param array<PlannedActivity> $activities
+     * @param bool $includeComments comments tend to hold details meant for colleagues only, and the feed hands them
+     *                              to whichever calendar provider the user subscribes from
      */
-    public function build(User $user, array $activities, ?\DateTimeImmutable $now = null): string
+    public function build(User $user, array $activities, bool $includeComments = false, ?\DateTimeImmutable $now = null): string
     {
         $locale = $user->getLanguage();
         $stamp = ($now ?? new \DateTimeImmutable())->setTimezone(new \DateTimeZone('UTC'))->format('Ymd\THis\Z');
@@ -62,13 +64,14 @@ class CalendarFeedBuilder
                 continue;
             }
 
-            // time off without hours takes the whole contract day
+            // time off without hours is the whole working day
             $hoursPerDay = $activity->getHoursPerDay();
-            $hours = $hoursPerDay === null ? $this->translator->trans('planner.whole_day', [], 'messages', $locale) : self::formatHours($hoursPerDay);
-            $title = $activity->isTimeOff() ? $this->translator->trans('planner.time_off', [], 'messages', $locale) : ($this->reservations?->get($activity->getReservation())?->name ?? $activity->getName() ?? '');
+            $hours = $hoursPerDay === null ? null : self::formatHours($hoursPerDay);
+            $hoursLabel = $hours ?? $this->translator->trans('planner.whole_day', [], 'messages', $locale);
+            $name = $activity->isTimeOff() ? $this->translator->trans('planner.time_off', [], 'messages', $locale) : ($this->reservations?->get($activity->getReservation())->name ?? $activity->getName() ?? '');
             // most calendar apps ignore STATUS in subscribed calendars, so the title says it too
             if ($activity->isTentative()) {
-                $title = $this->translator->trans('planner.tentative', [], 'messages', $locale) . ': ' . $title;
+                $name = $this->translator->trans('planner.tentative', [], 'messages', $locale) . ': ' . $name;
             }
             $description = [];
             if ($activity->getCustomer() !== null) {
@@ -77,8 +80,8 @@ class CalendarFeedBuilder
             if ($activity->getProject() !== null) {
                 $description[] = $this->translator->trans('project', [], 'messages', $locale) . ': ' . $activity->getProject()->getName();
             }
-            $description[] = $this->translator->trans('planner.hours_per_day', [], 'messages', $locale) . ': ' . $hours;
-            if ($activity->hasComment()) {
+            $description[] = $this->translator->trans('planner.hours_per_day', [], 'messages', $locale) . ': ' . $hoursLabel;
+            if ($includeComments && $activity->hasComment()) {
                 $description[] = '';
                 $description[] = (string) $activity->getComment();
             }
@@ -91,7 +94,7 @@ class CalendarFeedBuilder
             $lines[] = 'DTSTART;VALUE=DATE:' . $begin->format('Ymd');
             // the end of an all-day event is exclusive
             $lines[] = 'DTEND;VALUE=DATE:' . \DateTimeImmutable::createFromInterface($end)->modify('+1 day')->format('Ymd');
-            $lines[] = 'SUMMARY:' . self::escape(\sprintf('%s (%s)', $title, $hoursPerDay === null ? $hours : $hours . 'h'));
+            $lines[] = 'SUMMARY:' . self::escape($hours === null ? \sprintf('%s (%s)', $name, $hoursLabel) : \sprintf('%s (%sh)', $name, $hours));
             $lines[] = 'DESCRIPTION:' . self::escape(implode("\n", $description));
             $lines[] = 'URL:' . $url;
             if ($activity->isTentative()) {

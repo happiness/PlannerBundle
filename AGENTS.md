@@ -48,7 +48,8 @@ var/plugins/PlannerBundle/
 │   └── PublicHolidayController.php   # REST API (GET /api/planner/holidays)
 ├── Calendar/
 │   ├── CalendarFeedBuilder.php        # iCalendar (RFC 5545) output: all-day events, escaping, line folding
-│   └── CalendarFeedTokens.php         # Create, renew, remove and look up feed tokens (Entity/CalendarFeedToken)
+│   ├── CalendarFeedSettings.php       # The organisation's feed settings: comments, personal choice, hashing
+│   └── CalendarFeedTokens.php         # Create, renew, remove and look up feed tokens (Entity/CalendarFeedToken), hashed or plain
 ├── Controller/
 │   ├── CalendarFeedSettingsController.php # /{_locale}/planner/calendar: show, renew, switch off the feed address
 │   └── WeeklyPlannerController.php    # Weekly planner routes, week switching, modal CRUD actions
@@ -60,6 +61,8 @@ var/plugins/PlannerBundle/
 │   ├── CalendarFeedToken.php          # One calendar feed token per user (own table, kept out of audited preferences)
 │   └── PlannedActivity.php           # Planned time block entity (user, customer, project, date range, daily hours, comments, color)
 ├── EventSubscriber/
+│   ├── CalendarFeedHashingListener.php # Hashes plain feed tokens when "Store feed addresses hashed" is saved as on
+│   ├── CalendarFeedSettingsSubscriber.php # System settings: comments in feeds, personal choice, hashed tokens
 │   ├── HolidayPreferenceSubscriber.php # Per-user holiday calendar preference (contract permission)
 │   ├── HolidaySettingsSubscriber.php # System settings: default holiday calendar, observance days off
 │   ├── MenuSubscriber.php            # Injects "Planner" item into main navigation
@@ -80,7 +83,8 @@ var/plugins/PlannerBundle/
 │   ├── Version20261019000000.php      # customer_id/project_id columns, title becomes nullable
 │   ├── Version20261102000000.php      # kimai2_planner_calendar_tokens (calendar feed tokens)
 │   ├── Version20261102120000.php      # tentative flag
-│   └── Version20261110000000.php      # reservation key (reserved time)
+│   ├── Version20261110000000.php      # reservation key (reserved time)
+│   └── Version20261110180000.php      # calendar feed tokens: hashed flag and the user's choice on comments
 ├── Planner/
 │   ├── PlannerUserProvider.php        # Resolves which users' plans the current user may see (web + API)
 │   ├── TentativeConfirmer.php         # "Confirm all for this project": ongoing/future tentative plans the user may edit (web + API)
@@ -144,7 +148,7 @@ var/plugins/PlannerBundle/
 4. **Customer/Project Link & Legacy Rows**:
    - `customer_id` is nullable **in the database only** because rows created before the link existed have none; `PlannedActivity` validates `customer` as `NotNull`, so every save through the form or API requires one. `project` is optional and must belong to the customer.
    - `title` is a legacy column (nullable, no longer in the form). Use `getName()`: project name, else customer name, else legacy title.
-   - Time off (`time_off`) is the exception: `validateRequiredFields()` asks for neither customer nor hours, and `setTimeOff(true)` drops customer, project and title. `hours_per_day` is nullable for it: `null` means the whole contract day (`WeeklyPlannerDay::getHoursOf()`). Time off never counts as planned; `WeeklyPlannerDay::getCapacityHours()` is the contract hours minus time off, and every percentage and allocation state (day, week, user row) is measured against capacity, not contract hours. Time off is one group (`WeeklyPlannerGroup::TIME_OFF_KEY`), listed first, whose row carries `data-planner-off` so dragging in it creates time off (`?off=1`); moving time off ignores the target row's customer/project.
+   - Time off (`time_off`) is the exception: `validateRequiredFields()` asks for neither customer nor hours, and `setTimeOff(true)` drops customer, project, title and tentative (the switch hides with the other work fields). `hours_per_day` is nullable for it: `null` means the whole contract day (`WeeklyPlannerDay::getHoursOf()`). Time off never counts as planned; `WeeklyPlannerDay::getCapacityHours()` is the contract hours minus time off, and every percentage and allocation state (day, week, user row) is measured against capacity, not contract hours. Time off is one group (`WeeklyPlannerGroup::TIME_OFF_KEY`), listed first, whose row carries `data-planner-off` so dragging in it creates time off (`?off=1`); moving time off ignores the target row's customer/project.
    - Plugins are not loaded in Kimai's `test` environment, so plugin tests are unit tests (mocks / `TypeTestCase`); there is no HTTP-level API test. Core files must not be touched, which rules out registering the plugin for tests.
    - The API doc bundle cannot dump the plugin's form models from the CLI (core forms using `UserType` fail the same way); review the generated docs in the logged-in `/api/doc` UI after changing API attributes.
 5. **Grid Layout (Forecast style)**:
@@ -172,9 +176,11 @@ var/plugins/PlannerBundle/
    - `WorkingDayRanges` asks the same provider, so planning across a holiday is split around it. Holiday cells carry `data-planner-holiday` (the name) next to `data-planner-non-working`, and clicking one asks `planner.holiday_question` instead of the generic day-off question.
 10. **Calendar Feed**:
    - `Feed/` is imported in `routes.yaml` without the `/{_locale}` prefix, so the feed needs no login; the 64-hex token is the only credential. Anything else added to `Feed/` is public too. A plain controller class there needs `#[AsController]`, or Symfony cannot call it (only `AbstractController` subclasses are registered automatically).
-   - Kimai's `access_control` entry `^/{_locale}/` is a literal regex and matches no real path, so routes under `/{_locale}/` are *not* protected by the firewall either. Every controller in `Controller/` must carry its own `#[IsGranted]`; `CalendarFeedSettingsController` does (`view_planner`).
-   - Tokens live in their own table (`Entity\CalendarFeedToken`, `kimai2_planner_calendar_tokens`, migration `Version20261102000000`), never in a user preference: audit plugins version every preference value (renewed tokens would stay readable in the audit log) and users can write any existing preference through `PATCH /api/users/{id}/preferences`. Stored in plain text so the settings page can show the URL again.
-   - The feed answers 404 for an unknown token, a disabled user and a user whose roles lack `view_planner` (`RolePermissionManager::hasRolePermission()`; there is no security token on this request, so voters cannot be used).
+   - The feed lives outside the `/{_locale}/` prefix, so Kimai's `access_control` rule that requires `ROLE_USER` there (a real pattern since Kimai 2.72, kimai/kimai#6316; before that a literal regex that matched nothing) does not cover it. Every controller under `/{_locale}/` in `Controller/` must still carry its own `#[IsGranted]`, as `CalendarFeedSettingsController` does (`view_planner` and `calendar_feed_planner`).
+   - Tokens live in their own table (`Entity\CalendarFeedToken`, `kimai2_planner_calendar_tokens`, migrations `Version20261102000000` and `Version20261110180000`), never in a user preference: audit plugins version every preference value (renewed tokens would stay readable in the audit log) and users can write any existing preference through `PATCH /api/users/{id}/preferences`.
+   - `CalendarFeedSettings` reads the three system settings (`planner.calendar_comments`, `planner.calendar_comments_user`, `planner.calendar_hash_tokens`); unset means comments out, no personal choice, hashing on. `CalendarFeedSettingsSubscriber` adds them to the `planner` section after `HolidaySettingsSubscriber` creates it.
+   - With hashing on, `token` holds the SHA-256 of the token and `hashed` is set; `findFeed()` looks up both forms and hashes a plain token it finds. Plain tokens are also hashed in one statement (`CalendarFeedTokens::HASH_PLAIN_TOKENS_SQL`, MySQL `SHA2()`) by `Version20261110180000::postUp()` unless hashing is switched off, and by `CalendarFeedHashingListener` (a Doctrine entity listener on core's `Configuration`, since Kimai dispatches no event when settings are saved) whenever the setting is saved as on. A token stored hashed is only known in the request that creates it: the settings controller passes it to the next page view once through the session. `include_comments` is the user's own choice (`null` follows the organisation), kept only when it differs from the organisation's.
+   - The feed answers 404 for an unknown token, a disabled user and a user whose roles lack `view_planner` or `calendar_feed_planner` (`RolePermissionManager::hasRolePermission()`; there is no security token on this request, so voters cannot be used).
    - Events are all-day (`DTEND` is the exclusive day after `end`), `TRANSP:TRANSPARENT`, UID `planner-activity-{id}@{host}`. Labels use the feed owner's language (`User::getLanguage()`), not the request's. A feed with no planning has no events, which Google and Outlook accept.
    - Time off is titled `planner.time_off` with its hours, or `planner.whole_day` when it has none.
 11. **Reserved Time**:

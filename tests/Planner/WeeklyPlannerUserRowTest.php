@@ -149,6 +149,8 @@ class WeeklyPlannerUserRowTest extends TestCase
         $this->assertSame(6.0, $row->getTotalCapacityHours());
         $this->assertSame(100, $row->getPlannedPercentage());
         $this->assertTrue($row->isBalanced());
+        // time off is not free time, so "Most free hours" sees the day as full
+        $this->assertSame(0.0, $row->getFreeHours(new \DateTimeImmutable('2026-11-01')));
     }
 
     public function testReservationsComeAfterTheProjectsInTheProvidersOrderAndUnknownOnesLast(): void
