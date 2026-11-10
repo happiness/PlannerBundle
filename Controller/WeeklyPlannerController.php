@@ -34,6 +34,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[Route(path: '/planner')]
 #[IsGranted('view_planner')]
@@ -264,7 +265,7 @@ final class WeeklyPlannerController extends AbstractController
      * a new user and customer/project. The hours per day stay as they are, so resizing repeats them on the added days.
      */
     #[Route(path: '/activity/{id}/move', name: 'planner_activity_move', methods: ['POST'])]
-    public function moveActivity(PlannedActivity $activity, Request $request, ValidatorInterface $validator): JsonResponse
+    public function moveActivity(PlannedActivity $activity, Request $request, ValidatorInterface $validator, TranslatorInterface $translator): JsonResponse
     {
         if (!$this->isCsrfTokenValid(self::MOVE_TOKEN, $request->request->getString('_token'))) {
             return new JsonResponse([], Response::HTTP_FORBIDDEN);
@@ -319,10 +320,85 @@ final class WeeklyPlannerController extends AbstractController
             return new JsonResponse(['message' => $violations->get(0)->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
+        // a drag or stretch onto the same customer/project is a slip far more often than a plan: the dialog and the
+        // API, where planning twice is typed on purpose, have no such rule
+        if ($this->repository->countOverlapping($activity) > 0) {
+            return new JsonResponse(['message' => $translator->trans('planner.overlapping', [], 'validators')], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
         try {
             $this->repository->savePlannedActivity($activity);
         } catch (\Exception $ex) {
             return new JsonResponse([], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        return new JsonResponse(['id' => $activity->getId()]);
+    }
+
+    /**
+     * Splits a multi-day activity into two at the given day, which becomes the first day of the second part.
+     * Called from the split marker between two days of an activity in the grid; joining undoes it.
+     */
+    #[Route(path: '/activity/{id}/split', name: 'planner_activity_split', methods: ['POST'])]
+    public function splitActivity(PlannedActivity $activity, Request $request): JsonResponse
+    {
+        if (!$this->isCsrfTokenValid(self::MOVE_TOKEN, $request->request->getString('_token'))) {
+            return new JsonResponse([], Response::HTTP_FORBIDDEN);
+        }
+
+        if (!$this->canEdit($activity)) {
+            throw $this->createAccessDeniedException();
+        }
+
+        // round trip, as createFromFormat() rolls an impossible date like 2026-02-30 over into the next month
+        $day = $request->request->getString('date');
+        $date = \DateTime::createFromFormat('!Y-m-d', $day);
+        if ($date === false || $date->format('Y-m-d') !== $day) {
+            return new JsonResponse([], Response::HTTP_BAD_REQUEST);
+        }
+
+        try {
+            $second = $this->repository->splitActivity($activity, $date);
+        } catch (\Exception) {
+            return new JsonResponse([], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        if ($second === null) {
+            return new JsonResponse([], Response::HTTP_BAD_REQUEST);
+        }
+
+        return new JsonResponse(['id' => $activity->getId(), 'split' => $second->getId()]);
+    }
+
+    /**
+     * Joins an activity with the one starting the day after it ends, when both are the same planning
+     * (the reverse of a split). Called from the join marker between the two in the grid.
+     */
+    #[Route(path: '/activity/{id}/join/{other}', name: 'planner_activity_join', requirements: ['other' => '\d+'], methods: ['POST'])]
+    public function joinActivity(PlannedActivity $activity, int $other, Request $request): JsonResponse
+    {
+        if (!$this->isCsrfTokenValid(self::MOVE_TOKEN, $request->request->getString('_token'))) {
+            return new JsonResponse([], Response::HTTP_FORBIDDEN);
+        }
+
+        $next = $this->repository->find($other);
+        if (!$next instanceof PlannedActivity) {
+            throw $this->createNotFoundException();
+        }
+
+        // the second part is deleted, so it needs the same permissions as the first
+        if (!$this->canEdit($activity) || !$this->isGranted(PlannedActivityVoter::DELETE, $next)) {
+            throw $this->createAccessDeniedException();
+        }
+
+        try {
+            $joined = $this->repository->joinActivities($activity, $next);
+        } catch (\Exception) {
+            return new JsonResponse([], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        if (!$joined) {
+            return new JsonResponse([], Response::HTTP_BAD_REQUEST);
         }
 
         return new JsonResponse(['id' => $activity->getId()]);
