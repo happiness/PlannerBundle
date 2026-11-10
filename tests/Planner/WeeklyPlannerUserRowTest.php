@@ -16,6 +16,8 @@ use App\Entity\User;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerDay;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerUserRow;
+use KimaiPlugin\PlannerBundle\Reservation\PlanningReservation;
+use KimaiPlugin\PlannerBundle\Tests\Reservation\PlanningReservationsTest;
 use PHPUnit\Framework\TestCase;
 
 class WeeklyPlannerUserRowTest extends TestCase
@@ -145,5 +147,48 @@ class WeeklyPlannerUserRowTest extends TestCase
         $this->assertTrue($row->isBalanced());
         // time off is not free time, so "Most free hours" sees the day as full
         $this->assertSame(0.0, $row->getFreeHours(new \DateTimeImmutable('2026-11-01')));
+    }
+
+    public function testReservationsComeAfterTheProjectsInTheProvidersOrderAndUnknownOnesLast(): void
+    {
+        $lead = new PlanningReservation('lead', 'Tech leading');
+        $buffer = new PlanningReservation('buffer', 'Agency buffer', '#ff0000');
+        $row = new WeeklyPlannerUserRow(new User(), PlanningReservationsTest::create([$lead, $buffer]));
+        $row->addUniqueActivity((new PlannedActivity())->setCustomer(new Customer('Acme')));
+        $row->addUniqueActivity((new PlannedActivity())->setReservation('gone'));
+        $row->addUniqueActivity((new PlannedActivity())->setReservation('buffer'));
+        $row->addUniqueActivity((new PlannedActivity())->setTimeOff(true));
+        $row->addUniqueActivity((new PlannedActivity())->setReservation('lead'));
+        $row->addUniqueActivity((new PlannedActivity())->setReservation('buffer'));
+
+        $groups = $row->getGroups();
+
+        $this->assertCount(5, $groups);
+        $this->assertTrue($groups[0]->isTimeOff());
+        $this->assertSame('Acme', $groups[1]->getCustomerName());
+        $this->assertFalse($groups[1]->isReservation());
+        $this->assertSame($lead, $groups[2]->getReservation());
+        $this->assertSame('Tech leading', $groups[2]->getReservationName());
+        $this->assertSame($buffer, $groups[3]->getReservation());
+        $this->assertCount(2, $groups[3]->getActivities());
+        // a key the provider does not know is shown under the key
+        $this->assertTrue($groups[4]->isReservation());
+        $this->assertNull($groups[4]->getReservation());
+        $this->assertSame('gone', $groups[4]->getReservationName());
+    }
+
+    public function testReservationsCountAsPlannedWork(): void
+    {
+        $row = new WeeklyPlannerUserRow(new User());
+        $day = new WeeklyPlannerDay(new \DateTimeImmutable('2026-11-02'), 8.0, 0.0);
+        $buffer = (new PlannedActivity())->setReservation('buffer')->setHoursPerDay(1.0)->setBegin(new \DateTime('2026-11-02'))->setEnd(new \DateTime('2026-11-02'));
+        $work = (new PlannedActivity())->setCustomer(new Customer('Acme'))->setHoursPerDay(7.0)->setBegin(new \DateTime('2026-11-02'))->setEnd(new \DateTime('2026-11-02'));
+        $day->addActivity($buffer);
+        $day->addActivity($work);
+        $row->addDay($day);
+
+        $this->assertSame(8.0, $row->getTotalPlannedHours());
+        $this->assertSame(8.0, $row->getTotalCapacityHours());
+        $this->assertTrue($row->isBalanced());
     }
 }

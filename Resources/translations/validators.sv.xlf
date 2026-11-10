@@ -6,6 +6,10 @@
                 <source>This project is already planned for this user on one of these days.</source>
                 <target>Projektet är redan planerat för den här användaren någon av dagarna.</target>
             </trans-unit>
+            <trans-unit id="planner.overlapping_reservation">
+                <source>This reserved time is already planned for this user on one of these days.</source>
+                <target>Den reserverade tiden är redan planerad för den här användaren någon av dagarna.</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>

@@ -28,6 +28,7 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 #[ORM\Index(columns: ['recurrence_group'], name: 'IDX_PLANNED_ACTIVITY_RECURRENCE')]
 #[ORM\Index(columns: ['customer_id'], name: 'IDX_PLANNED_ACTIVITY_CUSTOMER')]
 #[ORM\Index(columns: ['project_id'], name: 'IDX_PLANNED_ACTIVITY_PROJECT')]
+#[ORM\Index(columns: ['reservation'], name: 'IDX_PLANNED_ACTIVITY_RESERVATION')]
 #[ORM\Entity(repositoryClass: PlannedActivityRepository::class)]
 #[ORM\ChangeTrackingPolicy('DEFERRED_EXPLICIT')]
 #[Serializer\ExclusionPolicy('all')]
@@ -63,8 +64,8 @@ class PlannedActivity
     private ?\DateTime $end = null;
 
     /**
-     * Nullable in the database because rows created before customers were introduced have none and time off has none;
-     * the validation requires a customer for every other activity saved through the form or the API.
+     * Nullable in the database because rows created before customers were introduced have none, and neither have time
+     * off and reservations; the validation requires a customer for every other activity saved through the form or the API.
      */
     #[ORM\ManyToOne(targetEntity: Customer::class)]
     #[ORM\JoinColumn(name: 'customer_id', nullable: true, onDelete: 'CASCADE')]
@@ -120,6 +121,16 @@ class PlannedActivity
     #[Serializer\Expose]
     #[Serializer\Groups(['Default'])]
     private bool $tentative = false;
+
+    /**
+     * Key of a reservation (see PlanningReservationProviderInterface): time held for something that is not a customer
+     * or project, planned and counted like project work.
+     */
+    #[ORM\Column(name: 'reservation', type: Types::STRING, length: 64, nullable: true)]
+    #[Assert\Length(max: 64)]
+    #[Serializer\Expose]
+    #[Serializer\Groups(['Default'])]
+    private ?string $reservation = null;
 
     public function __construct()
     {
@@ -220,7 +231,7 @@ class PlannedActivity
             return $this->customer->getName();
         }
 
-        return $this->title;
+        return $this->title ?? $this->reservation;
     }
 
     #[Assert\Callback]
@@ -230,7 +241,7 @@ class PlannedActivity
             return;
         }
 
-        if ($this->customer === null) {
+        if ($this->customer === null && $this->reservation === null) {
             $context->buildViolation('This value should not be null.')
                 ->atPath('customer')
                 ->setTranslationDomain('validators')
@@ -278,7 +289,7 @@ class PlannedActivity
     }
 
     /**
-     * Time off belongs to no customer or project and is never tentative, switching it on drops them.
+     * Time off belongs to no customer, project or reservation and is never tentative, switching it on drops them.
      */
     public function setTimeOff(bool $timeOff): self
     {
@@ -289,6 +300,37 @@ class PlannedActivity
             $this->project = null;
             $this->title = null;
             $this->tentative = false;
+            $this->reservation = null;
+        }
+
+        return $this;
+    }
+
+    public function getReservation(): ?string
+    {
+        return $this->reservation;
+    }
+
+    public function isReservation(): bool
+    {
+        return $this->reservation !== null;
+    }
+
+    /**
+     * A reservation is neither customer work nor time off, and never tentative: setting one drops all of them, and the
+     * colour, since its bars take the reservation's colour.
+     */
+    public function setReservation(?string $reservation): self
+    {
+        $this->reservation = $reservation === '' ? null : $reservation;
+
+        if ($this->reservation !== null) {
+            $this->customer = null;
+            $this->project = null;
+            $this->title = null;
+            $this->color = null;
+            $this->tentative = false;
+            $this->timeOff = false;
         }
 
         return $this;
@@ -333,14 +375,17 @@ class PlannedActivity
         return $this->recurrenceGroup !== null && $this->recurrenceGroup !== '';
     }
 
+    /**
+     * Time off and reservations are never tentative.
+     */
     public function isTentative(): bool
     {
-        return $this->tentative;
+        return $this->tentative && !$this->timeOff && $this->reservation === null;
     }
 
     public function setTentative(bool $tentative): self
     {
-        $this->tentative = $tentative;
+        $this->tentative = $tentative && !$this->timeOff && $this->reservation === null;
 
         return $this;
     }
@@ -392,6 +437,7 @@ class PlannedActivity
         return $this->user === $next->getUser()
             && $this->customer === $next->getCustomer()
             && $this->project === $next->getProject()
+            && $this->reservation === $next->getReservation()
             && $this->title === $next->getTitle()
             && $this->hoursPerDay === $next->getHoursPerDay()
             && $this->timeOff === $next->isTimeOff()

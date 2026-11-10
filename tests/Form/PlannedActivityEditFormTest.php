@@ -16,10 +16,18 @@ use App\Entity\Project;
 use App\Entity\User;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Form\PlannedActivityEditForm;
+use KimaiPlugin\PlannerBundle\Reservation\PlanningReservation;
+use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
+use KimaiPlugin\PlannerBundle\Tests\Reservation\PlanningReservationsTest;
+use Symfony\Component\Form\AbstractTypeExtension;
+use Symfony\Component\Form\Extension\Core\Type\FormType;
 use Symfony\Component\Form\FormEvent;
 use Symfony\Component\Form\FormEvents;
+use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\FormInterface;
+use Symfony\Component\Form\Forms;
 use Symfony\Component\Form\Test\TypeTestCase;
+use Symfony\Component\OptionsResolver\OptionsResolver;
 
 class PlannedActivityEditFormTest extends TypeTestCase
 {
@@ -204,5 +212,58 @@ class PlannedActivityEditFormTest extends TypeTestCase
         PlannedActivityEditForm::fillCustomerFromProject(new FormEvent($this->createMock(FormInterface::class), $activity));
 
         $this->assertNull($activity->getCustomer());
+    }
+
+    public function testReservationIsOfferedOnlyWhenThereAreAny(): void
+    {
+        $form = $this->factory->createBuilder(PlannedActivityEditForm::class, new PlannedActivity(), ['user' => new User()]);
+        $this->assertFalse($form->has('reservation'));
+
+        $reservations = PlanningReservationsTest::create([new PlanningReservation('buffer', 'Agency buffer'), new PlanningReservation('old', 'Old', null, true)]);
+        $builder = $this->createFormFactoryWith($reservations)->createBuilder(PlannedActivityEditForm::class, new PlannedActivity(), ['user' => new User()]);
+        $this->assertTrue($builder->has('reservation'));
+        $this->assertSame(['Agency buffer' => 'buffer'], $builder->get('reservation')->getOption('choices'));
+
+        // the reservation a planning already has stays choosable, also when hidden or unknown
+        $builder = $this->createFormFactoryWith($reservations)->createBuilder(PlannedActivityEditForm::class, (new PlannedActivity())->setReservation('gone'), ['user' => new User()]);
+        $this->assertSame(['Agency buffer' => 'buffer', 'gone' => 'gone'], $builder->get('reservation')->getOption('choices'));
+
+        // without any reservations, a planning that has one still shows it
+        $builder = $this->createFormFactoryWith(PlanningReservationsTest::create([]))->createBuilder(PlannedActivityEditForm::class, (new PlannedActivity())->setReservation('gone'), ['user' => new User()]);
+        $this->assertSame(['gone' => 'gone'], $builder->get('reservation')->getOption('choices'));
+    }
+
+    public function testReservationNeverKeepsASubmittedCustomer(): void
+    {
+        $customer = new Customer('ACME');
+
+        // what the form leaves behind when an existing reservation gets a customer: the unchanged key is not written again
+        $activity = (new PlannedActivity())->setReservation('buffer');
+        $activity->setCustomer($customer);
+
+        $this->dispatchOwnListener(FormEvents::POST_SUBMIT, $activity, $activity);
+
+        $this->assertSame('buffer', $activity->getReservation());
+        $this->assertNull($activity->getCustomer());
+    }
+
+    private function createFormFactoryWith(PlanningReservations $reservations): FormFactoryInterface
+    {
+        return Forms::createFormFactoryBuilder()
+            ->addExtensions($this->getExtensions())
+            ->addType(new PlannedActivityEditForm($reservations))
+            // the API documentation option, which NelmioApiDocBundle adds in the application
+            ->addTypeExtension(new class() extends AbstractTypeExtension {
+                public function configureOptions(OptionsResolver $resolver): void
+                {
+                    $resolver->setDefined('documentation');
+                }
+
+                public static function getExtendedTypes(): iterable
+                {
+                    return [FormType::class];
+                }
+            })
+            ->getFormFactory();
     }
 }

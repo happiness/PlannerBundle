@@ -776,4 +776,92 @@ class PlannedActivityRepositoryTest extends TestCase
         $this->assertSame($project, $repository->findProject(7));
         $this->assertNull($repository->findProject(8));
     }
+
+    public function testSplitActivityKeepsTheReservation(): void
+    {
+        $activity = (new PlannedActivity())
+            ->setUser(new User())
+            ->setReservation('buffer')
+            ->setHoursPerDay(1.0)
+            ->setBegin(new \DateTime('2026-11-02'))
+            ->setEnd(new \DateTime('2026-11-06'));
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $second = $this->createRepository($em)->splitActivity($activity, new \DateTimeImmutable('2026-11-04'));
+
+        $this->assertSame('buffer', $second?->getReservation());
+        $this->assertNull($second?->getCustomer());
+    }
+
+    public function testCreateRecurringActivitiesKeepsTheReservation(): void
+    {
+        $activity = (new PlannedActivity())
+            ->setUser(new User())
+            ->setReservation('buffer')
+            ->setRecurrenceGroup('group')
+            ->setBegin(new \DateTime('2026-11-02'))
+            ->setEnd(new \DateTime('2026-11-02'));
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $created = $this->createRepository($em)->createRecurringActivities($activity, 2);
+
+        $this->assertCount(2, $created);
+        $this->assertSame('buffer', $created[1]->getReservation());
+    }
+
+    /**
+     * @param array<string> $conditions filled with the conditions of the query
+     */
+    private function createRecordingRepository(array &$conditions, mixed $result): PlannedActivityRepository
+    {
+        $query = $this->createMock(Query::class);
+        $query->method('getResult')->willReturn($result);
+        $query->method('getSingleScalarResult')->willReturn($result);
+
+        $qb = $this->createMock(QueryBuilder::class);
+        foreach (['select', 'from', 'leftJoin', 'addSelect', 'orderBy', 'addOrderBy', 'setParameter'] as $method) {
+            $qb->method($method)->willReturnSelf();
+        }
+        foreach (['where', 'andWhere'] as $method) {
+            $qb->method($method)->willReturnCallback(function (string $condition) use (&$conditions, $qb) {
+                $conditions[] = $condition;
+
+                return $qb;
+            });
+        }
+        $qb->method('getQuery')->willReturn($query);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('createQueryBuilder')->willReturn($qb);
+        $metadata = new ClassMetadata(PlannedActivity::class);
+        $em->method('getClassMetadata')->with(PlannedActivity::class)->willReturn($metadata);
+
+        $registry = $this->createMock(ManagerRegistry::class);
+        $registry->method('getManagerForClass')->willReturn($em);
+
+        return new PlannedActivityRepository($registry);
+    }
+
+    public function testFindByFilterFiltersReservationsAndKeepsArchivedOnes(): void
+    {
+        // archived reservations still hold time, so their plannings stay in every query
+        $conditions = [];
+        $repository = $this->createRecordingRepository($conditions, []);
+
+        $repository->findByFilter([new User()], null, null, [], [], null, ['buffer']);
+
+        $this->assertSame([
+            'p.user IN (:users)',
+            'p.reservation IN (:reservations)',
+        ], $conditions);
+    }
+
+    public function testOverlapOfAReservationIsTheSameReservation(): void
+    {
+        $conditions = [];
+        $activity = (new PlannedActivity())->setUser(new User())->setReservation('buffer')->setBegin(new \DateTime('2026-11-02'))->setEnd(new \DateTime('2026-11-03'));
+
+        $this->assertSame(1, $this->createRecordingRepository($conditions, 1)->countOverlapping($activity));
+        $this->assertSame(['p.user = :user', 'p.begin <= :end', 'p.end >= :begin', 'p.tentative = :tentative', 'p.reservation = :reservation'], $conditions);
+    }
 }

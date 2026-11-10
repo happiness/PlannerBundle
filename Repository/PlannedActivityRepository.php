@@ -15,6 +15,7 @@ use App\Entity\Customer;
 use App\Entity\Project;
 use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\Persistence\ManagerRegistry;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 
@@ -121,6 +122,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $splitActivity->setTitle($activity->getTitle());
         $splitActivity->setHoursPerDay($activity->getHoursPerDay());
         $splitActivity->setTimeOff($activity->isTimeOff());
+        $splitActivity->setReservation($activity->getReservation());
         $splitActivity->setColor($activity->getColor());
         $splitActivity->setComment($activity->getComment());
         $splitActivity->setTentative($activity->isTentative());
@@ -132,9 +134,9 @@ class PlannedActivityRepository extends ServiceEntityRepository
     }
 
     /**
-     * Other activities of the same user and customer/project sharing at least one day with this one, confirmed or
-     * tentative like it (confirmed and tentative work on the same project may well sit side by side). Legacy
-     * activities without a customer, and time off, are not checked: they have nothing to compare.
+     * Other activities of the same user and customer/project, or the same reservation, sharing at least one day with
+     * this one, confirmed or tentative like it (confirmed and tentative work on the same project may well sit side
+     * by side). Legacy activities without a customer, and time off, are not checked: they have nothing to compare.
      */
     public function countOverlapping(PlannedActivity $activity): int
     {
@@ -152,27 +154,30 @@ class PlannedActivityRepository extends ServiceEntityRepository
      */
     private function countOverlappingFor(PlannedActivity $activity, \DateTimeInterface $begin, \DateTimeInterface $end, array $excludeIds): int
     {
-        if ($activity->getUser() === null || $activity->getCustomer() === null) {
+        if ($activity->getUser() === null || ($activity->getCustomer() === null && $activity->getReservation() === null)) {
             return 0;
         }
 
         $qb = $this->createQueryBuilder('p');
         $qb->select('COUNT(p.id)')
             ->where('p.user = :user')
-            ->andWhere('p.customer = :customer')
             ->andWhere('p.begin <= :end')
             ->andWhere('p.end >= :begin')
             ->andWhere('p.tentative = :tentative')
             ->setParameter('user', $activity->getUser())
             ->setParameter('tentative', $activity->isTentative())
-            ->setParameter('customer', $activity->getCustomer())
             ->setParameter('begin', $begin->format('Y-m-d'))
             ->setParameter('end', $end->format('Y-m-d'));
 
-        if ($activity->getProject() === null) {
-            $qb->andWhere('p.project IS NULL');
+        if ($activity->getReservation() !== null) {
+            $qb->andWhere('p.reservation = :reservation')->setParameter('reservation', $activity->getReservation());
         } else {
-            $qb->andWhere('p.project = :project')->setParameter('project', $activity->getProject());
+            $qb->andWhere('p.customer = :customer')->setParameter('customer', $activity->getCustomer());
+            if ($activity->getProject() === null) {
+                $qb->andWhere('p.project IS NULL');
+            } else {
+                $qb->andWhere('p.project = :project')->setParameter('project', $activity->getProject());
+            }
         }
 
         if ($excludeIds !== []) {
@@ -243,6 +248,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $copy->setTitle($activity->getTitle());
         $copy->setHoursPerDay($activity->getHoursPerDay());
         $copy->setTimeOff($activity->isTimeOff());
+        $copy->setReservation($activity->getReservation());
         $copy->setColor($activity->getColor());
         $copy->setComment($activity->getComment());
         $copy->setTentative($activity->isTentative());
@@ -327,6 +333,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
             $future->setTitle($activity->getTitle());
             $future->setHoursPerDay($activity->getHoursPerDay());
             $future->setTimeOff($activity->isTimeOff());
+            $future->setReservation($activity->getReservation());
             $future->setColor($activity->getColor());
             $future->setComment($activity->getComment());
             $future->setTentative($activity->isTentative());
@@ -387,6 +394,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
             $recurring->setTitle($activity->getTitle());
             $recurring->setHoursPerDay($activity->getHoursPerDay());
             $recurring->setTimeOff($activity->isTimeOff());
+            $recurring->setReservation($activity->getReservation());
             $recurring->setColor($activity->getColor());
             $recurring->setComment($activity->getComment());
             $recurring->setTentative($activity->isTentative());
@@ -450,6 +458,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
      * @param array<Customer> $customers
      * @param array<Project> $projects
      * @param bool|null $tentative true for tentative activities only, false for confirmed ones only, null for both
+     * @param array<string> $reservations reservation keys
      * @return array<PlannedActivity>
      */
     public function findByFilter(
@@ -458,7 +467,8 @@ class PlannedActivityRepository extends ServiceEntityRepository
         ?\DateTimeInterface $end = null,
         array $customers = [],
         array $projects = [],
-        ?bool $tentative = null
+        ?bool $tentative = null,
+        array $reservations = []
     ): array {
         if ($users === []) {
             return [];
@@ -492,6 +502,10 @@ class PlannedActivityRepository extends ServiceEntityRepository
 
         if ($tentative !== null) {
             $qb->andWhere('p.tentative = :tentative')->setParameter('tentative', $tentative);
+        }
+
+        if ($reservations !== []) {
+            $qb->andWhere('p.reservation IN (:reservations)')->setParameter('reservations', array_map('strval', $reservations), ArrayParameterType::STRING);
         }
 
         /** @var array<PlannedActivity> $result */

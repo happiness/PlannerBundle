@@ -26,6 +26,7 @@ use KimaiPlugin\PlannerBundle\Planner\TentativeConfirmer;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
+use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
 use KimaiPlugin\PlannerBundle\Voter\PlannedActivityVoter;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -49,7 +50,8 @@ final class WeeklyPlannerController extends AbstractController
         private readonly PlannedActivityRepository $repository,
         private readonly WeeklyPlannerService $plannerService,
         private readonly UserRepository $userRepository,
-        private readonly PlannerUserProvider $userProvider
+        private readonly PlannerUserProvider $userProvider,
+        private readonly ?PlanningReservations $reservations = null
     ) {
     }
 
@@ -150,6 +152,9 @@ final class WeeklyPlannerController extends AbstractController
         if ($request->query->getBoolean('off')) {
             $activity->setTimeOff(true);
             $activity->setHoursPerDay(null);
+        } elseif ($this->reservations !== null && $this->reservations->isSelectable($request->query->getString('reservation'))) {
+            // like a customer/project row, a reservation's row pre-selects the reservation
+            $activity->setReservation($request->query->getString('reservation'));
         } else {
             $this->prefillCustomerAndProject($activity, $request);
         }
@@ -294,9 +299,18 @@ final class WeeklyPlannerController extends AbstractController
             $activity->setUser($user);
         }
 
-        // time off has no customer or project, it only moves in time and between users
+        // time off has no customer, project or reservation, it only moves in time and between users;
+        // dropped on a reservation's row, other planning becomes that reservation
+        $reservation = $request->request->getString('reservation');
+        if ($reservation !== '' && !$activity->isTimeOff()) {
+            if ($this->reservations === null || !$this->reservations->isSelectable($reservation)) {
+                return new JsonResponse([], Response::HTTP_BAD_REQUEST);
+            }
+            $activity->setReservation($reservation);
+        }
+
         $customerId = $request->request->getInt('customer');
-        if ($customerId > 0 && !$activity->isTimeOff()) {
+        if ($customerId > 0 && $reservation === '' && !$activity->isTimeOff()) {
             $customer = $this->repository->findCustomer($customerId);
             $projectId = $request->request->getInt('project');
             $project = $projectId > 0 ? $this->repository->findProject($projectId) : null;
@@ -306,6 +320,7 @@ final class WeeklyPlannerController extends AbstractController
                 throw $this->createAccessDeniedException();
             }
 
+            $activity->setReservation(null);
             $activity->setCustomer($customer);
             $activity->setProject($project);
         }
@@ -323,7 +338,7 @@ final class WeeklyPlannerController extends AbstractController
         // a drag or stretch onto the same customer/project is a slip far more often than a plan: the dialog and the
         // API, where planning twice is typed on purpose, have no such rule
         if ($this->repository->countOverlapping($activity) > 0) {
-            return new JsonResponse(['message' => $translator->trans('planner.overlapping', [], 'validators')], Response::HTTP_UNPROCESSABLE_ENTITY);
+            return new JsonResponse(['message' => $translator->trans($activity->isReservation() ? 'planner.overlapping_reservation' : 'planner.overlapping', [], 'validators')], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         try {

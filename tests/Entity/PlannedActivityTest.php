@@ -265,4 +265,79 @@ class PlannedActivityTest extends TestCase
         (new PlannedActivity())->setTimeOff(true)->setHoursPerDay(null)->validateRequiredFields($context);
         (new PlannedActivity())->setCustomer(new Customer('ACME'))->validateRequiredFields($context);
     }
+
+    public function testReservationDropsCustomerProjectTimeOffAndTentative(): void
+    {
+        $customer = new Customer('ACME');
+        $project = new Project();
+        $project->setCustomer($customer);
+
+        $activity = (new PlannedActivity())->setCustomer($customer)->setProject($project)->setTentative(true)->setTitle('Legacy');
+        $activity->setReservation('buffer');
+
+        $this->assertSame('buffer', $activity->getReservation());
+        $this->assertTrue($activity->isReservation());
+        $this->assertNull($activity->getCustomer());
+        $this->assertNull($activity->getProject());
+        $this->assertNull($activity->getTitle());
+        $this->assertFalse($activity->isTentative());
+        $this->assertSame('buffer', $activity->getName());
+
+        // never tentative, also when set afterwards
+        $activity->setTentative(true);
+        $this->assertFalse($activity->isTentative());
+
+        $activity->setTimeOff(true);
+        $this->assertNull($activity->getReservation());
+        $this->assertTrue($activity->isTimeOff());
+
+        $activity->setReservation('lead');
+        $this->assertFalse($activity->isTimeOff());
+
+        // an empty key is no reservation and keeps what is there
+        $work = (new PlannedActivity())->setCustomer($customer)->setReservation('');
+        $this->assertNull($work->getReservation());
+        $this->assertSame($customer, $work->getCustomer());
+    }
+
+    public function testReservationNeedsNoCustomerButHours(): void
+    {
+        $paths = [];
+        $builder = $this->createMock(ConstraintViolationBuilderInterface::class);
+        $builder->method('atPath')->willReturnCallback(function (string $path) use ($builder, &$paths) {
+            $paths[] = $path;
+
+            return $builder;
+        });
+        $builder->method('setTranslationDomain')->willReturnSelf();
+
+        $context = $this->createMock(ExecutionContextInterface::class);
+        $context->method('buildViolation')->willReturn($builder);
+
+        (new PlannedActivity())->setReservation('buffer')->validateRequiredFields($context);
+        $this->assertSame([], $paths);
+
+        (new PlannedActivity())->setReservation('buffer')->setHoursPerDay(null)->validateRequiredFields($context);
+        $this->assertSame(['hoursPerDay'], $paths);
+    }
+
+    public function testOnlyTheSameReservationIsJoinable(): void
+    {
+        $user = new User();
+        $first = (new PlannedActivity())->setUser($user)->setReservation('buffer')->setBegin(new \DateTime('2026-11-02'))->setEnd(new \DateTime('2026-11-03'));
+        $same = (new PlannedActivity())->setUser($user)->setReservation('buffer')->setBegin(new \DateTime('2026-11-04'))->setEnd(new \DateTime('2026-11-05'));
+        $other = (new PlannedActivity())->setUser($user)->setReservation('lead')->setBegin(new \DateTime('2026-11-04'))->setEnd(new \DateTime('2026-11-05'));
+
+        $this->assertTrue($first->isJoinableWith($same));
+        $this->assertFalse($first->isJoinableWith($other));
+    }
+
+    public function testReservationTakesTheReservationsColour(): void
+    {
+        $activity = new PlannedActivity();
+        $activity->setColor('#ff0000');
+        $activity->setReservation('buffer');
+
+        $this->assertNull($activity->getColor());
+    }
 }

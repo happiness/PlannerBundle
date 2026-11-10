@@ -83,6 +83,7 @@ var/plugins/PlannerBundle/
 │   ├── Version20261019000000.php      # customer_id/project_id columns, title becomes nullable
 │   ├── Version20261102000000.php      # kimai2_planner_calendar_tokens (calendar feed tokens)
 │   ├── Version20261102120000.php      # tentative flag
+│   ├── Version20261110000000.php      # reservation key (reserved time)
 │   └── Version20261110180000.php      # calendar feed tokens: hashed flag and the user's choice on comments
 ├── Planner/
 │   ├── PlannerUserProvider.php        # Resolves which users' plans the current user may see (web + API)
@@ -94,6 +95,13 @@ var/plugins/PlannerBundle/
 │   ├── WeeklyPlannerWeek.php          # One user's capacity figures for one calendar week of the displayed range
 │   ├── WeeklyPlannerGroup.php         # One user's activities for one customer/project; builds merged day segments (one sub-row in the grid)
 │   └── WeeklyPlannerDay.php           # Daily metrics (planned hours, actual hours, contract hours, status)
+├── Reservation/
+│   ├── PlanningReservationProviderInterface.php # Which reservations (reserved time) exist; decorate it to offer some
+│   ├── NoPlanningReservations.php     # Default provider: none, the planner works as without the feature
+│   ├── PlanningReservation.php        # One reservation: key (stored on the planning), name, colour, archived
+│   └── PlanningReservations.php       # The provider's reservations, asked once per request, with the lookups the planner needs
+├── Twig/
+│   └── PlannerReservationExtension.php # planner_reservation(key) and planner_reservations() for the templates
 ├── Repository/
 │   └── PlannedActivityRepository.php  # PlannedActivity queries (date ranges, user filtering)
 ├── Resources/
@@ -157,7 +165,7 @@ var/plugins/PlannerBundle/
 8. **Move and Resize**:
    - Activities with the edit permission carry `data-planner-move-url`/`-begin`/`-end`; a left/right handle (`data-planner-handle`) is rendered only where the activity really begins/ends. The JS maps the pointer to a day through the `th[data-planner-day]` headers (merged cells do not map to one day) and to a row through `tr.planner-row-details`.
    - `POST /planner/activity/{id}/move` (CSRF token `planner_move`) takes `begin`, `end` and optionally `user`, `customer`, `project`. The voter is checked before and after the changes, so planning cannot be moved to someone the user may not plan for. Hours per day are never changed. Only the single activity is moved, also when it is recurring.
-   - Overlaps are only refused where they are a slip: the move action (move and resize) returns `planner.overlapping` (validators domain) with a 422 when `PlannedActivityRepository::countOverlapping()` finds another activity of the same user and customer/project, with the same tentative status, on a shared day. The dialog and the API have no such rule: planning twice is typed there on purpose, such as 2 extra hours on one day of a week already planned. Existing overlaps are visible instead: `WeeklyPlannerGroup::isPlannedTwiceOn()` marks such days in the grid (`.planner-twice`, confirmed and tentative counted apart). Time off and legacy activities without a customer are never compared. `isJoinableWith()` refuses two instances of a seven-day weekly series, which also sit side by side.
+   - Overlaps are only refused where they are a slip: the move action (move and resize) returns `planner.overlapping` (validators domain; `planner.overlapping_reservation` for reserved time) with a 422 when `PlannedActivityRepository::countOverlapping()` finds another activity of the same user and customer/project, with the same tentative status, on a shared day. The dialog and the API have no such rule: planning twice is typed there on purpose, such as 2 extra hours on one day of a week already planned. Existing overlaps are visible instead: `WeeklyPlannerGroup::isPlannedTwiceOn()` marks such days in the grid (`.planner-twice`, confirmed and tentative counted apart). Time off and legacy activities without a customer are never compared. `isJoinableWith()` refuses two instances of a seven-day weekly series, which also sit side by side.
    - Split and join (same token): `POST /planner/activity/{id}/split` with `date` (the first day of the second part) copies everything but the dates into a new activity, same recurrence group included, and saves both in one flush. `POST /planner/activity/{id}/join/{other}` merges `other` back when `PlannedActivity::isJoinableWith()` holds (it starts the day after, and user, customer, project, title, hours, time off, tentative, colour, comment and recurrence group are equal); it needs edit on the first and delete on the second. Bars carry `data-planner-split-url` (more than one day) and `data-planner-join-url`/`-day` (from `WeeklyPlannerGroup::getJoinableAfter()`, on the segment where the activity ends). The JS shows a fixed-position marker (scissors or link) when the pointer is within a few pixels of such a border; split and join undo each other, so neither asks for confirmation.
 9. **Public Holidays**:
    - `WeeklyPlannerService` asks the optional `HolidayProviderInterface` for each user's holidays in the range; a holiday sets that day's expected hours to 0 and is attached to the `WeeklyPlannerDay` (`getHoliday()`), so capacity, `isWorkingDay()` and everything built on them treat it as a day off.
@@ -173,7 +181,12 @@ var/plugins/PlannerBundle/
    - With hashing on, `token` holds the SHA-256 of the token and `hashed` is set; `findFeed()` looks up both forms and hashes a plain token it finds. Plain tokens are also hashed in one statement (`CalendarFeedTokens::HASH_PLAIN_TOKENS_SQL`, MySQL `SHA2()`) by `Version20261110180000::postUp()` unless hashing is switched off, and by `CalendarFeedHashingListener` (a Doctrine entity listener on core's `Configuration`, since Kimai dispatches no event when settings are saved) whenever the setting is saved as on. A token stored hashed is only known in the request that creates it: the settings controller passes it to the next page view once through the session. `include_comments` is the user's own choice (`null` follows the organisation), kept only when it differs from the organisation's.
    - The feed answers 404 for an unknown token, a disabled user and a user whose roles lack `view_planner` or `calendar_feed_planner` (`RolePermissionManager::hasRolePermission()`; there is no security token on this request, so voters cannot be used).
    - Events are all-day (`DTEND` is the exclusive day after `end`), `TRANSP:TRANSPARENT`, UID `planner-activity-{id}@{host}`. Labels use the feed owner's language (`User::getLanguage()`), not the request's. A feed with no planning has no events, which Google and Outlook accept.
-11. **Isolated Database Migrations**:
+11. **Reserved Time**:
+   - `PlannedActivity::$reservation` holds a provider's key (string, 64 at most) instead of a customer and project. `setReservation()` drops customer, project, title, tentative and time off; `setTimeOff(true)` drops the reservation. The entity requires a customer unless it is time off or a reservation, and never knows names: those come from `PlanningReservations`.
+   - The form adds the `reservation` choice only when there are selectable reservations or the planning already has one (kept as a choice even when archived or unknown, so it stays editable). It is mapped after customer and project and before `timeOff`, and the POST_SUBMIT listener re-applies it, like time off. JS hides `.planner-project-field` (customer, project, colour, tentative, suggestions) while one is chosen.
+   - Groups key reservations as `reservation:<key>`; `WeeklyPlannerUserRow::getGroups()` sorts time off, then customers and projects, then reservations in provider order (unknown keys last). Rows of known reservations that are not archived carry `data-reservation`, which click/drag-create (`reservation` query parameter) and move (`reservation` POST field, 400 unless selectable) use.
+   - Archived reservations are only no longer offered (`getSelectable()`): their plannings stay in every query and keep counting, as do plannings of a key nobody returns. Moving or stretching onto the same reservation is refused like a project (`countOverlapping()` compares user and reservation); copies, splits, joins and "all future" edits carry the key.
+12. **Isolated Database Migrations**:
    - Always run and test migrations using the bundle's dedicated configuration file:
      `bin/console doctrine:migrations:migrate --configuration=var/plugins/PlannerBundle/Migrations/doctrine_migrations.yaml --no-interaction`
 
