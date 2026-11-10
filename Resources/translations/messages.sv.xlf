@@ -190,6 +190,18 @@
                 <source>planner.toggle_activities</source>
                 <target>Visa/dölj aktiviteter</target>
             </trans-unit>
+            <trans-unit id="planner.time_off">
+                <source>planner.time_off</source>
+                <target>Ledig</target>
+            </trans-unit>
+            <trans-unit id="planner.time_off_help">
+                <source>planner.time_off_help</source>
+                <target>Inte tillgänglig för planering. Lämna timmarna tomma för hela dagen.</target>
+            </trans-unit>
+            <trans-unit id="planner.whole_day">
+                <source>planner.whole_day</source>
+                <target>Hela dagen</target>
+            </trans-unit>
             <trans-unit id="planner.suggestions">
                 <source>planner.suggestions</source>
                 <target>Ofta använda</target>
@@ -273,6 +285,18 @@
             <trans-unit id="planner.over_hours">
                 <source>planner.over_hours</source>
                 <target>%hours% tim över</target>
+            </trans-unit>
+            <trans-unit id="planner.day_hours">
+                <source>planner.day_hours</source>
+                <target>%planned% av %expected% tim planerade, %actual% tim rapporterade</target>
+            </trans-unit>
+            <trans-unit id="planner.week_hours">
+                <source>planner.week_hours</source>
+                <target>%planned%/%expected% tim (%actual% tim)</target>
+            </trans-unit>
+            <trans-unit id="planner.day_time_off">
+                <source>planner.day_time_off</source>
+                <target>Ledig: %hours% tim</target>
             </trans-unit>
         </body>
     </file>
