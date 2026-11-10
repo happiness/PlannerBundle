@@ -26,7 +26,7 @@ use Symfony\Component\Routing\Attribute\Route;
  *
  * Its route sits outside the "/{_locale}/" prefix, so Kimai's access control rule that asks for
  * ROLE_USER there does not cover it: the secret token in the URL is the only credential. Unknown
- * tokens, disabled users and users who lost calendar_feed_planner all get the same 404.
+ * tokens, disabled users and users who lost view_planner or calendar_feed_planner all get the same 404.
  */
 #[AsController]
 final class CalendarFeedController
@@ -50,7 +50,8 @@ final class CalendarFeedController
     {
         $feed = $this->tokens->findFeed($token);
         $user = $feed?->getUser();
-        if ($user === null || !$user->isEnabled() || !$this->permissions->hasRolePermission($user, 'calendar_feed_planner')) {
+        // the feed is the planner seen from outside: it needs the planner and the feed permission
+        if ($user === null || !$user->isEnabled() || !$this->permissions->hasRolePermission($user, 'view_planner') || !$this->permissions->hasRolePermission($user, 'calendar_feed_planner')) {
             throw new NotFoundHttpException();
         }
 

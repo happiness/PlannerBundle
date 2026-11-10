@@ -26,6 +26,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * choose whether it carries comments when the organisation lets them.
  */
 #[Route(path: '/planner/calendar')]
+#[IsGranted('view_planner')]
 #[IsGranted('calendar_feed_planner')]
 final class CalendarFeedSettingsController extends AbstractController
 {
@@ -79,11 +80,16 @@ final class CalendarFeedSettingsController extends AbstractController
             return $this->redirectToRoute('planner_calendar');
         }
 
-        if ($action !== 'save') {
+        if ($action === 'reset') {
             $token = $this->tokens->resetToken($user);
             if ($request->hasSession()) {
                 $request->getSession()->set(self::SESSION_NEW_TOKEN, $token);
             }
+        }
+
+        if (!\in_array($action, ['reset', 'save'], true)) {
+            // a form without a known button changes nothing, it never renews the address by accident
+            return $this->redirectToRoute('planner_calendar');
         }
 
         if ($this->settings->mayUsersChooseComments()) {

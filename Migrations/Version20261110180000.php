@@ -13,6 +13,8 @@ namespace KimaiPlugin\PlannerBundle\Migrations;
 
 use App\Doctrine\AbstractMigration;
 use Doctrine\DBAL\Schema\Schema;
+use KimaiPlugin\PlannerBundle\Calendar\CalendarFeedSettings;
+use KimaiPlugin\PlannerBundle\Calendar\CalendarFeedTokens;
 
 final class Version20261110180000 extends AbstractMigration
 {
@@ -25,11 +27,27 @@ final class Version20261110180000 extends AbstractMigration
     {
         $table = $schema->getTable('kimai2_planner_calendar_tokens');
         if (!$table->hasColumn('hashed')) {
-            // existing tokens are plain; they are hashed the next time their feed is fetched, if the setting asks for it
             $table->addColumn('hashed', 'boolean', ['notnull' => true, 'default' => false]);
         }
         if (!$table->hasColumn('include_comments')) {
             $table->addColumn('include_comments', 'boolean', ['notnull' => false, 'default' => null]);
+        }
+    }
+
+    /**
+     * Hashing is on unless an admin switched it off, so the tokens that exist are hashed right away rather than
+     * waiting for a fetch that may never come (an abandoned subscription stays readable in every backup).
+     */
+    public function postUp(Schema $schema): void
+    {
+        // nothing to do on a dry run, the column is not there
+        if (!\array_key_exists('hashed', $this->connection->createSchemaManager()->listTableColumns('kimai2_planner_calendar_tokens'))) {
+            return;
+        }
+
+        $setting = $this->connection->fetchOne('SELECT value FROM kimai2_configuration WHERE name = ?', [CalendarFeedSettings::SETTING_HASH_TOKENS]);
+        if ($setting !== '0') {
+            $this->connection->executeStatement(CalendarFeedTokens::HASH_PLAIN_TOKENS_SQL);
         }
     }
 

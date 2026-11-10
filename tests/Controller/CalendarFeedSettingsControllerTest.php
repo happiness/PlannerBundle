@@ -200,11 +200,22 @@ class CalendarFeedSettingsControllerTest extends TestCase
         $this->createController($tokens)->update($this->post('save', 'valid', ['include_comments' => '1']));
     }
 
-    public function testRequiresTheFeedPermission(): void
+    public function testAnUnknownActionChangesNothing(): void
+    {
+        $tokens = $this->createMock(CalendarFeedTokens::class);
+        $tokens->expects($this->never())->method('resetToken');
+        $tokens->expects($this->never())->method('removeToken');
+        $tokens->expects($this->never())->method('setIncludeComments');
+
+        $controller = $this->createController($tokens, true, null, true);
+        $controller->update($this->post(''));
+        $controller->update($this->post('renew'));
+    }
+
+    public function testRequiresThePlannerAndTheFeedPermission(): void
     {
         $attributes = (new \ReflectionClass(CalendarFeedSettingsController::class))->getAttributes(\Symfony\Component\Security\Http\Attribute\IsGranted::class);
 
-        $this->assertCount(1, $attributes);
-        $this->assertSame('calendar_feed_planner', $attributes[0]->getArguments()[0]);
+        $this->assertSame(['view_planner', 'calendar_feed_planner'], array_map(static fn (\ReflectionAttribute $attribute): mixed => $attribute->getArguments()[0], $attributes));
     }
 }

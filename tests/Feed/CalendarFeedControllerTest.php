@@ -25,7 +25,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class CalendarFeedControllerTest extends TestCase
 {
-    private function createController(?User $user, bool $mayUseFeed = true, ?PlannedActivityRepository $repository = null, ?CalendarFeedBuilder $builder = null, ?bool $userChoice = null): CalendarFeedController
+    private function createController(?User $user, bool $mayUseFeed = true, ?PlannedActivityRepository $repository = null, ?CalendarFeedBuilder $builder = null, ?bool $userChoice = null, bool $mayPlan = true): CalendarFeedController
     {
         $feed = null;
         if ($user !== null) {
@@ -46,7 +46,7 @@ class CalendarFeedControllerTest extends TestCase
 
         $service = $this->createStub(PermissionService::class);
         $service->method('getPermissions')->willReturn([]);
-        $permissions = new RolePermissionManager($service, ['ROLE_USER' => ['view_planner' => true, 'calendar_feed_planner' => $mayUseFeed]], ['view_planner' => true, 'calendar_feed_planner' => true]);
+        $permissions = new RolePermissionManager($service, ['ROLE_USER' => ['view_planner' => $mayPlan, 'calendar_feed_planner' => $mayUseFeed]], ['view_planner' => true, 'calendar_feed_planner' => true]);
 
         return new CalendarFeedController($tokens, $settings, $builder, $repository ?? $this->createStub(PlannedActivityRepository::class), $permissions);
     }
@@ -98,6 +98,16 @@ class CalendarFeedControllerTest extends TestCase
 
         $this->expectException(NotFoundHttpException::class);
         $this->createController($user, false)->feed(str_repeat('a', 64));
+    }
+
+    public function testUserWithoutPlannerPermission(): void
+    {
+        // a role that lost the planner keeps no feed, even with calendar_feed_planner still granted
+        $user = new User();
+        $user->setEnabled(true);
+
+        $this->expectException(NotFoundHttpException::class);
+        $this->createController($user, true, null, null, null, false)->feed(str_repeat('a', 64));
     }
 
     public function testTheUsersCommentChoiceReachesTheBuilder(): void

@@ -22,12 +22,16 @@ use KimaiPlugin\PlannerBundle\Entity\CalendarFeedToken;
  * With "Store feed addresses hashed" on (the default) only the token's SHA-256 hash is kept, so a
  * leaked database backup reveals no working feed URL; the URL can then only be shown right after
  * it is created. With it off the token is kept as it is, so the settings page can show it again.
- * Plain tokens from before the setting was on are hashed the next time their feed is fetched.
+ * Plain tokens left from while the setting was off are hashed all at once when it is switched on
+ * (and by the migration that introduced hashing), and the next time their feed is fetched.
  *
  * @final not final for mocking in tests
  */
 class CalendarFeedTokens
 {
+    /** MySQL's SHA2() gives the same lowercase hex as hash('sha256'), so hashed rows match findFeed() */
+    public const HASH_PLAIN_TOKENS_SQL = 'UPDATE kimai2_planner_calendar_tokens SET token = SHA2(token, 256), hashed = 1 WHERE hashed = 0';
+
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly CalendarFeedSettings $settings
