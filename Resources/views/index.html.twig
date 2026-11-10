@@ -183,7 +183,11 @@
                                                     {# explains the order while sorting by free hours #}
                                                     {% if query.orderedByFreeHours %}
                                                         {% set freeHours = row.freeHours %}
-                                                        <div class="small {{ freeHours < 0 ? 'text-danger' : 'text-muted' }} planner-free-hours">{{ (freeHours < 0 ? 'planner.over_hours' : 'planner.free_hours')|trans({'%hours%': freeHours|abs}) }}</div>
+                                                        {# tentative work is not subtracted, so it is named next to the free hours #}
+                                                        <div class="small {{ freeHours < 0 ? 'text-danger' : 'text-muted' }} planner-free-hours">
+                                                            {{- (freeHours < 0 ? 'planner.over_hours' : 'planner.free_hours')|trans({'%hours%': freeHours|abs}) -}}
+                                                            {%- if row.totalTentativeHours > 0 %} ({{ 'planner.tentative_hours_short'|trans({'%hours%': row.totalTentativeHours}) }}){% endif -%}
+                                                        </div>
                                                     {% endif %}
                                                 </div>
                                                 <button type="button" class="btn btn-sm btn-icon btn-ghost-secondary planner-user-toggle m-2 p-0" aria-expanded="false" title="{{ 'planner.toggle_activities'|trans }}">
@@ -249,10 +253,21 @@
                                             {% if day.timeOffHours > 0 %}
                                                 {% set dayHours = dayHours ~ ', ' ~ 'planner.day_time_off'|trans({'%hours%': day.timeOffHours}) %}
                                             {% endif %}
+                                            {# tentative work is a dashed band on top of the confirmed fill, it never changes the colour;
+                                               on a full day it overlaps the top of the fill, so overbooking if it is confirmed stays visible #}
+                                            {% set dayTentative = 0 %}
+                                            {% if day.tentativeHours > 0 %}
+                                                {% set dayHours = dayHours ~ ', ' ~ 'planner.tentative_hours'|trans({'%hours%': day.tentativeHours}) %}
+                                                {% if day.capacityHours > 0 %}
+                                                    {% set dayTentative = min(max((day.tentativeHours / day.capacityHours * 100)|round, 15), 100) %}
+                                                    {% set dayTentativeBottom = min(dayFill, 100 - dayTentative) %}
+                                                {% endif %}
+                                            {% endif %}
                                             {% if day.holiday %}
                                                 {% set dayHours = day.holiday.name ~ ' (' ~ day.holiday.calendarName ~ ')' ~ (day.plannedHours > 0 ? ', ' ~ dayHours : '') %}
                                             {% endif %}
-                                            <td class="planner-day-summary text-center border-top-0 {{ dayClass }}{% if day.holiday %} planner-holiday{% endif %}{% if loop.index0 % 7 == 0 %} border-start{% endif %}{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %}" style="--planner-day-fill: {{ dayFill }}%;" title="{{ dayHours }}"{% if day.holiday %} data-toggle="tooltip"{% endif %}>
+                                            <td class="planner-day-summary text-center border-top-0 {{ dayClass }}{% if day.holiday %} planner-holiday{% endif %}{% if loop.index0 % 7 == 0 %} border-start{% endif %}{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %}" style="--planner-day-fill: {{ dayFill }}%;{% if dayTentative > 0 %} --planner-day-tentative: {{ dayTentative }}%; --planner-day-tentative-bottom: {{ dayTentativeBottom }}%;{% endif %}" title="{{ dayHours }}"{% if day.holiday %} data-toggle="tooltip"{% endif %}>
+                                                {% if dayTentative > 0 %}<span class="planner-day-tentative"></span>{% endif %}
                                                 {% if day.holiday %}
                                                     {# the name is cut off to fit the column, the tooltip has it in full #}
                                                     <div class="planner-holiday-name text-truncate">{{ day.holiday.name }}</div>
@@ -264,6 +279,8 @@
                                                     <div class="planner-day-pct">{{ day.plannedPercentage }}%</div>
                                                 {% elseif day.plannedHours > 0 %}
                                                     <div class="planner-day-pct">{{ day.plannedHours }}h</div>
+                                                {% elseif day.tentativeHours > 0 %}
+                                                    <div class="planner-day-pct planner-tentative-hours">+{{ day.tentativeHours }}h</div>
                                                 {% else %}
                                                     <div class="planner-day-pct">&ndash;</div>
                                                 {% endif %}
@@ -600,20 +617,39 @@
             line-height: 1.2;
             white-space: nowrap;
             background-image: linear-gradient(to top, var(--planner-day-color) var(--planner-day-fill, 0%), transparent var(--planner-day-fill, 0%));
+            position: relative;
+        }
+        /* tentative work: an empty, dashed placeholder right on top of the planned fill, in the fill's own colour */
+        .planner-day-tentative {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: var(--planner-day-tentative-bottom, 0%);
+            height: var(--planner-day-tentative, 0%);
+            border: 1px dashed var(--planner-day-line, #94a3b8);
+            border-bottom: 0;
+            pointer-events: none;
+        }
+        /* the figures stay above the placeholder */
+        td.planner-day-summary > div {
+            position: relative;
         }
         .planner-day-pct {
             font-weight: 600;
         }
         td.planner-day-success {
             --planner-day-color: rgba(95, 166, 117, 0.35);
+            --planner-day-line: rgba(95, 166, 117, 0.9);
             color: #2f6b42;
         }
         td.planner-day-warning {
             --planner-day-color: rgba(240, 173, 78, 0.4);
+            --planner-day-line: rgba(240, 173, 78, 0.95);
             color: #8a5a12;
         }
         td.planner-day-danger {
             --planner-day-color: rgba(219, 92, 92, 0.4);
+            --planner-day-line: rgba(219, 92, 92, 0.9);
             color: #a32626;
         }
         td.planner-day-muted {
