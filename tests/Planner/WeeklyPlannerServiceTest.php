@@ -21,6 +21,8 @@ use Doctrine\ORM\Query;
 use Doctrine\ORM\Query\Expr;
 use Doctrine\ORM\QueryBuilder;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Holiday\HolidayProviderInterface;
+use KimaiPlugin\PlannerBundle\Holiday\PublicHoliday;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
@@ -219,5 +221,46 @@ class WeeklyPlannerServiceTest extends TestCase
         $this->assertSame('2026-09-07', $data->getStart()->format('Y-m-d'));
         $this->assertSame('Sunday', $data->getEnd()->format('l'));
         $this->assertSame('23:59:59', $data->getEnd()->format('H:i:s'));
+    }
+
+    public function testPublicHolidaysHaveNoExpectedHours(): void
+    {
+        $user = new User();
+        $ref = new \ReflectionProperty(User::class, 'id');
+        $ref->setValue($user, 42);
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->method('findPlannedActivitiesForUsersAndRange')->willReturn([]);
+
+        $calculator = $this->createMock(WorkingTimeCalculator::class);
+        $calculator->method('getWorkHoursForDay')->willReturnCallback(static fn (\DateTimeInterface $day): int => (int) $day->format('N') <= 5 ? 28800 : 0);
+
+        $mode = $this->createMock(WorkingTimeMode::class);
+        $mode->method('getCalculator')->willReturn($calculator);
+
+        $wtService = $this->createMock(WorkingTimeService::class);
+        $wtService->method('getContractMode')->willReturn($mode);
+
+        $christmas = new PublicHoliday(new \DateTimeImmutable('2026-12-25'), 'Christmas Day', 'SE', 'Sweden', 'official');
+        $holidays = $this->createMock(HolidayProviderInterface::class);
+        $holidays->expects($this->once())
+            ->method('getHolidays')
+            ->with($user, new \DateTimeImmutable('2026-12-21 00:00:00'), new \DateTimeImmutable('2026-12-27 23:59:59'))
+            ->willReturn(['2026-12-25' => $christmas]);
+
+        $service = new WeeklyPlannerService($repo, $wtService, $this->createStatisticService(), $holidays);
+        $row = $service->getPlannerData([$user], new \DateTimeImmutable('2026-12-23'))->getRowForUser($user);
+        $this->assertNotNull($row);
+
+        $friday = $row->getDay(new \DateTimeImmutable('2026-12-25'));
+        $this->assertNotNull($friday);
+        $this->assertSame($christmas, $friday->getHoliday());
+        $this->assertSame(0.0, $friday->getExpectedHours());
+        $this->assertFalse($friday->isWorkingDay());
+
+        $thursday = $row->getDay(new \DateTimeImmutable('2026-12-24'));
+        $this->assertNotNull($thursday);
+        $this->assertFalse($thursday->isHoliday());
+        $this->assertSame(8.0, $thursday->getExpectedHours());
     }
 }

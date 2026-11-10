@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace KimaiPlugin\PlannerBundle\Planner;
 
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Holiday\PublicHoliday;
 
 final class WeeklyPlannerDay
 {
@@ -23,7 +24,8 @@ final class WeeklyPlannerDay
     public function __construct(
         private readonly \DateTimeImmutable $date,
         private readonly float $expectedHours = 0.0,
-        private readonly float $actualHours = 0.0
+        private readonly float $actualHours = 0.0,
+        private readonly ?PublicHoliday $holiday = null
     ) {
     }
 
@@ -40,6 +42,19 @@ final class WeeklyPlannerDay
     public function getActualHours(): float
     {
         return $this->actualHours;
+    }
+
+    /**
+     * The public holiday the user has off on this day, its expected hours are 0.
+     */
+    public function getHoliday(): ?PublicHoliday
+    {
+        return $this->holiday;
+    }
+
+    public function isHoliday(): bool
+    {
+        return $this->holiday !== null;
     }
 
     public function addActivity(PlannedActivity $activity): void

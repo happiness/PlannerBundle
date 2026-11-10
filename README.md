@@ -10,6 +10,7 @@
 - **Capacity & Workload Balancing**:
   - Automatically calculates expected capacity from each user's working time contracts.
   - Highlights over-allocated, under-allocated, and balanced days with clear visual badges.
+- **Public Holidays**: Each user's public holidays count as days off, named in their day cell (see [Public holidays](#public-holidays)).
 - **Actual vs Planned Hours**: Directly compares planned allocations against actual recorded timesheet hours.
 - **Lightweight Scheduling**: Plan time blocks for a customer (and optionally a project) with daily hours, date ranges, comments, and color badges.
 - **Time Off**: Mark a user as not available with the "Time off" switch in the planning dialog, or by dragging in the user's "Time off" row. Time off has no customer or project and is not counted as planned work: its hours are taken off the day's capacity, so 4 hours off on an 8 hour day leaves 4 hours to plan. Leave the hours empty to take the whole day off, whatever the user's contract expects for that day. Why someone is away stays with the absence they record in Kimai.
@@ -146,6 +147,27 @@ All endpoints require an API token and the `view_planner` permission; write oper
 | `PATCH` | `/api/planner/activities/{id}` | Update any subset of fields; `edit_mode: "future"` also updates later activities of a recurring series, moving their dates by as many days as this one moved |
 | `DELETE` | `/api/planner/activities/{id}` | Delete; `?mode=future` also deletes later activities of a recurring series |
 | `POST` | `/api/planner/activities/confirm-tentative` | Confirm the tentative activities of a project ending today or later. Body: `project` (required). Returns the IDs of the `confirmed` activities and of those `skipped` because you may see but not edit them; activities you may not see are neither confirmed nor returned |
+| `GET` | `/api/planner/holidays` | Public holidays users have off. Required: `begin`, `end` (`Y-m-d`, at most 366 days). Optional: `users[]` (default: everyone you may see). Returns `user`, `date`, `name`, `calendar`, `calendarName`, `type` per day |
+
+## Public holidays
+
+Public holidays are days off in the planner, just like days without contract hours: they have no capacity, and the cell under the user's week shows the holiday's name (the tooltip adds which calendar it comes from).
+
+- **Organisation default**: pick a calendar under *System > Settings > Weekly Planner*. Nobody has public holidays until one is chosen, so installing or updating the plugin changes nothing.
+- **Per user**: a user's preferences can pick another calendar, or "No public holidays", for teams spread over several countries. Only those who may edit the user's work contract (`contract` permission) can change it.
+- **Which days**: official and bank holidays are always days off. Some days are not public holidays but most organisations have them off anyway, such as Christmas Eve, Midsummer Eve and New Year's Eve in Sweden. Tick those under *Also days off* in the same settings; a ticked day applies to every calendar that has it.
+
+The holidays come from [Yasumi](https://github.com/azuyalabs/yasumi), which ships with Kimai core, so no network access or extra package is needed. It covers about 50 countries and many of their regions.
+
+The planner relies on Kimai core keeping Yasumi: a plugin cannot declare Composer dependencies of its own, so it uses the copy Kimai's `composer.json` requires (`azuyalabs/yasumi`, `^2.6` at the time of writing). Kimai itself doesn't call it, so check that it is still required before updating Kimai; if a release ever dropped it, the planner's holidays would need it back, or another provider (below).
+
+To take holidays from somewhere else, decorate `KimaiPlugin\PlannerBundle\Holiday\HolidayProviderInterface` in your own plugin:
+
+```yaml
+services:
+    App\MyHolidays:
+        decorates: KimaiPlugin\PlannerBundle\Holiday\HolidayProviderInterface
+```
 
 Time off is returned with `"timeOff": true`, `customer` and `project` set to `null`, and `hoursPerDay` set to `null` when it covers the whole day, so clients must not assume either is always present.
 
