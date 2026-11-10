@@ -46,6 +46,26 @@ final class WeeklyPlannerUserRow
     }
 
     /**
+     * The days of a bar that do not count for the activity: days off it crosses (see WeeklyPlannerDay::counts()), as
+     * positions from \$from, so the grid can mark them inside a bar that spans several days.
+     *
+     * @return array<int> zero-based positions within \$span days from \$from
+     */
+    public function getUncountedDays(PlannedActivity $activity, \DateTimeInterface $from, int $span): array
+    {
+        $start = \DateTimeImmutable::createFromInterface($from);
+        $uncounted = [];
+        for ($i = 0; $i < $span; ++$i) {
+            $day = $this->getDay($start->modify(\sprintf('+%d day', $i)));
+            if ($day !== null && !$day->counts($activity)) {
+                $uncounted[] = $i;
+            }
+        }
+
+        return $uncounted;
+    }
+
+    /**
      * @return array<string, WeeklyPlannerDay>
      */
     public function getDays(): array

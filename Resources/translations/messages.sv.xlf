@@ -458,6 +458,10 @@
                 <source>planner.day_time_off</source>
                 <target>Ledig: %hours% tim</target>
             </trans-unit>
+            <trans-unit id="planner.days_off_not_counted">
+                <source>planner.days_off_not_counted</source>
+                <target>lediga dagar räknas inte</target>
+            </trans-unit>
             <trans-unit id="planner.reservation">
                 <source>planner.reservation</source>
                 <target>Reserverad tid</target>

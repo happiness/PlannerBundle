@@ -458,6 +458,10 @@
                 <source>planner.day_time_off</source>
                 <target>Time off: %hours% hrs</target>
             </trans-unit>
+            <trans-unit id="planner.days_off_not_counted">
+                <source>planner.days_off_not_counted</source>
+                <target>days off not counted</target>
+            </trans-unit>
             <trans-unit id="planner.reservation">
                 <source>planner.reservation</source>
                 <target>Reserved time</target>
