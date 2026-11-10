@@ -164,4 +164,43 @@ class PlannedActivityEditFormTest extends TypeTestCase
         $this->dispatchOwnListener(FormEvents::POST_SUBMIT, $work, $work);
         $this->assertSame($customer, $work->getCustomer());
     }
+
+    public function testProjectWithoutCustomerBringsItsCustomer(): void
+    {
+        $customer = new Customer('Customer');
+        $project = new Project();
+        $project->setCustomer($customer);
+
+        $activity = new PlannedActivity();
+        $activity->setProject($project);
+
+        PlannedActivityEditForm::fillCustomerFromProject(new FormEvent($this->createMock(FormInterface::class), $activity));
+
+        $this->assertSame($customer, $activity->getCustomer());
+    }
+
+    public function testChosenCustomerIsKept(): void
+    {
+        $project = new Project();
+        $project->setCustomer(new Customer('Project customer'));
+        $chosen = new Customer('Chosen customer');
+
+        $activity = new PlannedActivity();
+        $activity->setCustomer($chosen);
+        $activity->setProject($project);
+
+        PlannedActivityEditForm::fillCustomerFromProject(new FormEvent($this->createMock(FormInterface::class), $activity));
+
+        // a mismatch is left for validateProjectBelongsToCustomer() to report, not silently replaced
+        $this->assertSame($chosen, $activity->getCustomer());
+    }
+
+    public function testNoProjectLeavesCustomerEmpty(): void
+    {
+        $activity = new PlannedActivity();
+
+        PlannedActivityEditForm::fillCustomerFromProject(new FormEvent($this->createMock(FormInterface::class), $activity));
+
+        $this->assertNull($activity->getCustomer());
+    }
 }

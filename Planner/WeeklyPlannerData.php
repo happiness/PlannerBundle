@@ -70,6 +70,14 @@ final class WeeklyPlannerData
         return $this->rows;
     }
 
+    /**
+     * Puts the users with the most free hours from today on first; users with the same free hours keep their order.
+     */
+    public function sortByFreeHours(?\DateTimeInterface $today = null): void
+    {
+        uasort($this->rows, static fn (WeeklyPlannerUserRow $a, WeeklyPlannerUserRow $b): int => $b->getFreeHours($today) <=> $a->getFreeHours($today));
+    }
+
     public function getRowForUser(User $user): ?WeeklyPlannerUserRow
     {
         $userId = $user->getId();

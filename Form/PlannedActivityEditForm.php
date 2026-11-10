@@ -174,6 +174,25 @@ class PlannedActivityEditForm extends AbstractType
                 $activity->setTimeOff(true);
             }
         }, 10);
+
+        $builder->addEventListener(FormEvents::SUBMIT, [self::class, 'fillCustomerFromProject']);
+    }
+
+    /**
+     * A project belongs to exactly one customer, so a project chosen without a customer brings its own. Runs after the
+     * fields are mapped and before validation, which still requires a customer when no project is given either.
+     */
+    public static function fillCustomerFromProject(FormEvent $event): void
+    {
+        $activity = $event->getData();
+        if (!$activity instanceof PlannedActivity || $activity->getCustomer() !== null) {
+            return;
+        }
+
+        $customer = $activity->getProject()?->getCustomer();
+        if ($customer !== null) {
+            $activity->setCustomer($customer);
+        }
     }
 
     public function configureOptions(OptionsResolver $resolver): void
