@@ -92,7 +92,7 @@
             </trans-unit>
             <trans-unit id="planner.days_off_question">
                 <source>planner.days_off_question</source>
-                <target>%name% doesn't usually work on some of these days. Plan work anyway?</target>
+                <target>%name% doesn't usually work on these days. Plan work anyway?</target>
             </trans-unit>
             <trans-unit id="planner.add_activity">
                 <source>planner.add_activity</source>
