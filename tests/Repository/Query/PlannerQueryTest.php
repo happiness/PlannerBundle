@@ -28,8 +28,28 @@ class PlannerQueryTest extends TestCase
         self::assertSame([], $sut->getUsers());
         self::assertFalse($sut->hasTeams());
         self::assertFalse($sut->hasUsers());
+        self::assertSame(PlannerQuery::PLANNING_ALL, $sut->getPlanning());
         self::assertFalse($sut->isOrderedByFreeHours());
         self::assertSame(0, $sut->countFilter());
+    }
+
+    public function testPlanningFilter(): void
+    {
+        $sut = new PlannerQuery();
+
+        $sut->setPlanning(PlannerQuery::PLANNING_TENTATIVE);
+        self::assertSame(PlannerQuery::PLANNING_TENTATIVE, $sut->getPlanning());
+        self::assertSame(1, $sut->countFilter());
+
+        $sut->setPlanning(PlannerQuery::PLANNING_CONFIRMED);
+        self::assertSame(PlannerQuery::PLANNING_CONFIRMED, $sut->getPlanning());
+
+        // unknown or empty values fall back to showing everything
+        $sut->setPlanning('maybe');
+        self::assertSame(PlannerQuery::PLANNING_ALL, $sut->getPlanning());
+        $sut->setPlanning(PlannerQuery::PLANNING_TENTATIVE);
+        $sut->setPlanning(null);
+        self::assertSame(PlannerQuery::PLANNING_ALL, $sut->getPlanning());
     }
 
     public function testOrderByFreeHours(): void
@@ -98,6 +118,7 @@ class PlannerQueryTest extends TestCase
 
         $query1->setUsers([$user]);
         $query1->setSearchTeams([$team]);
+        $query1->setPlanning(PlannerQuery::PLANNING_TENTATIVE);
         $query1->setOrderBy(PlannerQuery::ORDER_BY_FREE_HOURS);
 
         $query2 = new PlannerQuery();
@@ -105,6 +126,7 @@ class PlannerQueryTest extends TestCase
 
         self::assertSame([$user], array_values($query2->getUsers()));
         self::assertSame([$team], array_values($query2->getSearchTeams()));
+        self::assertSame(PlannerQuery::PLANNING_TENTATIVE, $query2->getPlanning());
         self::assertTrue($query2->isOrderedByFreeHours());
     }
 }

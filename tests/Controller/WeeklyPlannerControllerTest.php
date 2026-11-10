@@ -20,6 +20,8 @@ use App\Repository\UserRepository;
 use KimaiPlugin\PlannerBundle\Controller\WeeklyPlannerController;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
+use KimaiPlugin\PlannerBundle\Planner\TentativeConfirmation;
+use KimaiPlugin\PlannerBundle\Planner\TentativeConfirmer;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerData;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
@@ -1800,5 +1802,101 @@ class WeeklyPlannerControllerTest extends TestCase
 
         $this->assertSame(422, $response->getStatusCode());
         $this->assertStringContainsString('Invalid dates', (string) $response->getContent());
+    }
+
+    /**
+     * @param array<string, object> $services
+     */
+    private function runConfirmTentative(bool $submitted, bool $projectAccess, TentativeConfirmer $confirmer, array $services = []): Response
+    {
+        $controller = new WeeklyPlannerController(
+            $this->createMock(PlannedActivityRepository::class),
+            $this->createMock(WeeklyPlannerService::class),
+            $this->createMock(UserRepository::class),
+            $this->createMock(PlannerUserProvider::class)
+        );
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturnCallback(static fn (string $attribute): bool => $attribute !== 'access' || $projectAccess);
+
+        $router = $this->createMock(RouterInterface::class);
+        $router->method('generate')->willReturnCallback(static fn (string $route, array $params = []): string => $route . '?' . http_build_query($params));
+
+        $form = $this->createMock(FormInterface::class);
+        $form->method('isSubmitted')->willReturn($submitted);
+        $form->method('isValid')->willReturn(true);
+        $form->method('createView')->willReturn(new FormView());
+
+        $formBuilder = $this->createMock(\Symfony\Component\Form\FormBuilderInterface::class);
+        $formBuilder->method('setAction')->willReturnSelf();
+        $formBuilder->method('setMethod')->willReturnSelf();
+        $formBuilder->method('getForm')->willReturn($form);
+
+        $formFactory = $this->createMock(FormFactoryInterface::class);
+        $formFactory->method('createBuilder')->willReturn($formBuilder);
+
+        $flashBag = new \Symfony\Component\HttpFoundation\Session\Flash\FlashBag();
+        $session = $this->createMock(\Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface::class);
+        $session->method('getFlashBag')->willReturn($flashBag);
+        $request = new Request(['date' => '2026-11-04']);
+        $request->setSession($session);
+        $requestStack = new \Symfony\Component\HttpFoundation\RequestStack();
+        $requestStack->push($request);
+
+        $services = array_merge([
+            'security.authorization_checker' => $authChecker,
+            'router' => $router,
+            'form.factory' => $formFactory,
+            'request_stack' => $requestStack,
+        ], $services);
+
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnCallback(static fn (string $id): bool => isset($services[$id]));
+        $container->method('get')->willReturnCallback(static fn (string $id): ?object => $services[$id] ?? null);
+        $controller->setContainer($container);
+
+        $project = new Project();
+        (new \ReflectionProperty(Project::class, 'id'))->setValue($project, 7);
+
+        return $controller->confirmTentative($project, $request, $confirmer);
+    }
+
+    public function testConfirmTentativeRendersTheQuestion(): void
+    {
+        $confirmation = new TentativeConfirmation(new Project(), [new PlannedActivity()]);
+        $confirmer = $this->createMock(TentativeConfirmer::class);
+        $confirmer->method('prepare')->willReturn($confirmation);
+        $confirmer->expects($this->never())->method('confirm');
+
+        $twig = $this->createMock(Environment::class);
+        $twig->expects($this->once())->method('render')
+            ->with('@Planner/confirm_tentative.html.twig', $this->callback(static fn (array $context): bool => $context['confirmation'] === $confirmation && $context['date'] === '2026-11-04'))
+            ->willReturn('<html>confirm</html>');
+
+        $response = $this->runConfirmTentative(false, true, $confirmer, ['twig' => $twig]);
+
+        $this->assertSame('<html>confirm</html>', $response->getContent());
+    }
+
+    public function testConfirmTentativeConfirmsAndReturnsToTheWeek(): void
+    {
+        $confirmation = new TentativeConfirmation(new Project(), [new PlannedActivity()]);
+        $confirmer = $this->createMock(TentativeConfirmer::class);
+        $confirmer->method('prepare')->willReturn($confirmation);
+        $confirmer->expects($this->once())->method('confirm')->with($confirmation);
+
+        $response = $this->runConfirmTentative(true, true, $confirmer);
+
+        $this->assertTrue($response->isRedirect('planner_week?date=2026-11-04'));
+    }
+
+    public function testConfirmTentativeRequiresProjectAccess(): void
+    {
+        $confirmer = $this->createMock(TentativeConfirmer::class);
+        $confirmer->expects($this->never())->method('prepare');
+
+        $this->expectException(AccessDeniedException::class);
+
+        $this->runConfirmTentative(true, false, $confirmer);
     }
 }

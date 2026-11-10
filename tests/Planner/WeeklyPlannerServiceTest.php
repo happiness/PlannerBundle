@@ -25,6 +25,7 @@ use KimaiPlugin\PlannerBundle\Holiday\HolidayProviderInterface;
 use KimaiPlugin\PlannerBundle\Holiday\PublicHoliday;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
+use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
 use PHPUnit\Framework\TestCase;
 use Psr\EventDispatcher\EventDispatcherInterface;
 
@@ -134,6 +135,61 @@ class WeeklyPlannerServiceTest extends TestCase
         $thursdayDay = $row->getDay($thursday);
         $this->assertNotNull($thursdayDay);
         $this->assertSame(0.0, $thursdayDay->getPlannedHours());
+    }
+
+    /**
+     * @return array<string, array{string, array<int>, array<string>}>
+     */
+    public static function planningFilters(): array
+    {
+        return [
+            'all' => [PlannerQuery::PLANNING_ALL, [42, 43], ['confirmed', 'tentative']],
+            'confirmed only' => [PlannerQuery::PLANNING_CONFIRMED, [42, 43], ['confirmed']],
+            'tentative only hides users without tentative work' => [PlannerQuery::PLANNING_TENTATIVE, [42], ['tentative']],
+        ];
+    }
+
+    /**
+     * @param array<int> $expectedUsers
+     * @param array<string> $expectedComments
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('planningFilters')]
+    public function testPlanningFilterHidesActivitiesButCapacityCountsAll(string $planning, array $expectedUsers, array $expectedComments): void
+    {
+        $ref = new \ReflectionProperty(User::class, 'id');
+        $user = new User();
+        $ref->setValue($user, 42);
+        $other = new User();
+        $ref->setValue($other, 43);
+
+        $confirmed = (new PlannedActivity())->setUser($user)->setHoursPerDay(4.0)->setComment('confirmed')
+            ->setBegin(new \DateTime('2026-09-07'))->setEnd(new \DateTime('2026-09-07'));
+        $tentative = (new PlannedActivity())->setUser($user)->setHoursPerDay(2.0)->setComment('tentative')->setTentative(true)
+            ->setBegin(new \DateTime('2026-09-07'))->setEnd(new \DateTime('2026-09-07'));
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->method('findPlannedActivitiesForUsersAndRange')->willReturn([$confirmed, $tentative]);
+
+        $calculator = $this->createMock(WorkingTimeCalculator::class);
+        $calculator->method('getWorkHoursForDay')->willReturn(28800);
+        $mode = $this->createMock(WorkingTimeMode::class);
+        $mode->method('getCalculator')->willReturn($calculator);
+        $wtService = $this->createMock(WorkingTimeService::class);
+        $wtService->method('getContractMode')->willReturn($mode);
+
+        $service = new WeeklyPlannerService($repo, $wtService, $this->createStatisticService());
+        $data = $service->getPlannerData([$user, $other], new \DateTimeImmutable('2026-09-08'), 1, $planning);
+
+        $this->assertSame($expectedUsers, array_keys($data->getRows()));
+
+        $row = $data->getRowForUser($user);
+        $this->assertNotNull($row);
+        $this->assertSame($expectedComments, array_map(static fn (PlannedActivity $activity): ?string => $activity->getComment(), $row->getUniqueActivities()));
+
+        $monday = $row->getDay(new \DateTimeImmutable('2026-09-07'));
+        $this->assertNotNull($monday);
+        $this->assertSame(4.0, $monday->getPlannedHours());
+        $this->assertSame(2.0, $monday->getTentativeHours());
     }
 
     /**

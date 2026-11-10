@@ -70,9 +70,12 @@ var/plugins/PlannerBundle/
 │   ├── doctrine_migrations.yaml       # Plugin migration configuration
 │   ├── Version20260909000000.php      # Initial planner schema (kimai2_planned_activities table)
 │   ├── Version20260914000000.php      # Schema updates (recurring activities support)
-│   └── Version20261019000000.php      # customer_id/project_id columns, title becomes nullable
+│   ├── Version20261019000000.php      # customer_id/project_id columns, title becomes nullable
+│   └── Version20261102120000.php      # tentative flag
 ├── Planner/
 │   ├── PlannerUserProvider.php        # Resolves which users' plans the current user may see (web + API)
+│   ├── TentativeConfirmer.php         # "Confirm all for this project": ongoing/future tentative plans the user may edit (web + API)
+│   ├── TentativeConfirmation.php      # What a confirmation changes: activities, skipped ones, people and period
 │   ├── WeeklyPlannerService.php       # Domain service aggregating week data, user rows, capacity & actuals
 │   ├── WeeklyPlannerData.php          # Value object representing complete week grid
 │   ├── WeeklyPlannerUserRow.php       # Per-user row containing daily breakdowns & contract summary
@@ -91,6 +94,7 @@ var/plugins/PlannerBundle/
 │   └── views/
 │       ├── index.html.twig            # Main weekly planner matrix view & toolbar
 │       ├── form.html.twig             # Modal form template for planned activities
+│       ├── confirm_tentative.html.twig # Modal question before confirming a project's tentative planning
 │       └── delete.html.twig           # Modal deletion confirmation template
 ├── tests/                             # Comprehensive PHPUnit test suite mirroring src/
 │   ├── Controller/
@@ -124,7 +128,7 @@ var/plugins/PlannerBundle/
 4. **Customer/Project Link & Legacy Rows**:
    - `customer_id` is nullable **in the database only** because rows created before the link existed have none; `PlannedActivity` validates `customer` as `NotNull`, so every save through the form or API requires one. `project` is optional and must belong to the customer.
    - `title` is a legacy column (nullable, no longer in the form). Use `getName()`: project name, else customer name, else legacy title.
-   - Time off (`time_off`) is the exception: `validateRequiredFields()` asks for neither customer nor hours, and `setTimeOff(true)` drops customer, project and title. `hours_per_day` is nullable for it: `null` means the whole contract day (`WeeklyPlannerDay::getHoursOf()`). Time off never counts as planned; `WeeklyPlannerDay::getCapacityHours()` is the contract hours minus time off, and every percentage and allocation state (day, week, user row) is measured against capacity, not contract hours. Time off is one group (`WeeklyPlannerGroup::TIME_OFF_KEY`), listed first, whose row carries `data-planner-off` so dragging in it creates time off (`?off=1`); moving time off ignores the target row's customer/project.
+   - Time off (`time_off`) is the exception: `validateRequiredFields()` asks for neither customer nor hours, and `setTimeOff(true)` drops customer, project, title and tentative (the switch hides with the other work fields). `hours_per_day` is nullable for it: `null` means the whole contract day (`WeeklyPlannerDay::getHoursOf()`). Time off never counts as planned; `WeeklyPlannerDay::getCapacityHours()` is the contract hours minus time off, and every percentage and allocation state (day, week, user row) is measured against capacity, not contract hours. Time off is one group (`WeeklyPlannerGroup::TIME_OFF_KEY`), listed first, whose row carries `data-planner-off` so dragging in it creates time off (`?off=1`); moving time off ignores the target row's customer/project.
    - Plugins are not loaded in Kimai's `test` environment, so plugin tests are unit tests (mocks / `TypeTestCase`); there is no HTTP-level API test. Core files must not be touched, which rules out registering the plugin for tests.
    - The API doc bundle cannot dump the plugin's form models from the CLI (core forms using `UserType` fail the same way); review the generated docs in the logged-in `/api/doc` UI after changing API attributes.
 5. **Grid Layout (Forecast style)**:

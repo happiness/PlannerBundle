@@ -57,6 +57,21 @@ class WeeklyPlannerWeekTest extends TestCase
         $this->assertFalse($over->isBalanced());
     }
 
+    public function testTentativeTotalsAndPercentage(): void
+    {
+        $day = $this->createDay('2026-10-19', 8.0, 0.0, 4.0);
+        $day->addActivity((new PlannedActivity())->setHoursPerDay(6.0)->setTentative(true));
+        $week = new WeeklyPlannerWeek([$day, $this->createDay('2026-10-20', 8.0, 0.0, 8.0)]);
+
+        $this->assertSame(12.0, $week->getTotalPlannedHours());
+        $this->assertSame(6.0, $week->getTotalTentativeHours());
+        $this->assertSame(75, $week->getPlannedPercentage());
+        $this->assertSame(38, $week->getTentativePercentage());
+        $this->assertFalse($week->isOverAllocated());
+
+        $this->assertSame(0, (new WeeklyPlannerWeek([$this->createDay('2026-10-24', 0.0, 0.0, 0.0)]))->getTentativePercentage());
+    }
+
     public function testOverAllocationAndNoCapacity(): void
     {
         $over = new WeeklyPlannerWeek([$this->createDay('2026-10-19', 8.0, 0.0, 10.0)]);

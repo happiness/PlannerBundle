@@ -22,6 +22,7 @@ use KimaiPlugin\PlannerBundle\Form\PlannedActivityEditForm;
 use KimaiPlugin\PlannerBundle\Form\Toolbar\PlannerToolbarForm;
 use KimaiPlugin\PlannerBundle\Planner\CommonProjectService;
 use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
+use KimaiPlugin\PlannerBundle\Planner\TentativeConfirmer;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
@@ -422,6 +423,56 @@ final class WeeklyPlannerController extends AbstractController
     }
 
     /**
+     * Confirms the ongoing and future tentative work of a project for everybody the current user may edit, after asking.
+     */
+    #[Route(path: '/project/{id}/confirm-tentative', name: 'planner_confirm_tentative', requirements: ['id' => '\d+'], methods: ['GET', 'POST'])]
+    #[IsGranted('edit_planner')]
+    public function confirmTentative(Project $project, Request $request, TentativeConfirmer $confirmer): Response
+    {
+        if (!$this->isGranted('access', $project)) {
+            throw $this->createAccessDeniedException();
+        }
+
+        $date = $request->query->getString('date');
+        try {
+            $date = (new \DateTimeImmutable($date === '' ? 'today' : $date))->format('Y-m-d');
+        } catch (\Exception) {
+            $date = (new \DateTimeImmutable('today'))->format('Y-m-d');
+        }
+
+        $confirmation = $confirmer->prepare($project);
+
+        $form = $this->createFormBuilder(null, [
+            'csrf_token_id' => 'planner_confirm_tentative',
+            'attr' => [
+                'data-form-event' => 'kimai.plannerActivityUpdate',
+            ],
+        ])
+            ->setAction($this->generateUrl('planner_confirm_tentative', ['id' => $project->getId(), 'date' => $date]))
+            ->setMethod('POST')
+            ->getForm();
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            try {
+                $confirmer->confirm($confirmation);
+                $this->flashSuccess('action.update.success');
+            } catch (\Exception $ex) {
+                $this->flashUpdateException($ex);
+            }
+
+            return $this->redirectToRoute('planner_week', ['date' => $date]);
+        }
+
+        return $this->render('@Planner/confirm_tentative.html.twig', [
+            'form' => $form->createView(),
+            'confirmation' => $confirmation,
+            'date' => $date,
+        ]);
+    }
+
+    /**
      * @phpstan-impure the voter looks at the activity, which is changed between two checks
      */
     private function canEdit(PlannedActivity $activity): bool
@@ -507,7 +558,7 @@ final class WeeklyPlannerController extends AbstractController
 
         $users = $this->userProvider->getVisibleUsers($currentUser, $query);
 
-        $plannerData = $this->plannerService->getPlannerData($users, $selectedDate, $weeks);
+        $plannerData = $this->plannerService->getPlannerData($users, $selectedDate, $weeks, $query->getPlanning());
         if ($query->isOrderedByFreeHours()) {
             $plannerData->sortByFreeHours();
         }

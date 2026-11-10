@@ -35,6 +35,25 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $entityManager->flush();
     }
 
+    /**
+     * Confirms tentative activities in one flush.
+     *
+     * @param array<PlannedActivity> $activities
+     */
+    public function confirmPlannedActivities(array $activities): void
+    {
+        if ($activities === []) {
+            return;
+        }
+
+        $entityManager = $this->getEntityManager();
+        foreach ($activities as $activity) {
+            $activity->setTentative(false);
+            $entityManager->persist($activity);
+        }
+        $entityManager->flush();
+    }
+
     public function findCustomer(int $id): ?Customer
     {
         return $this->getEntityManager()->find(Customer::class, $id);
@@ -104,6 +123,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $splitActivity->setTimeOff($activity->isTimeOff());
         $splitActivity->setColor($activity->getColor());
         $splitActivity->setComment($activity->getComment());
+        $splitActivity->setTentative($activity->isTentative());
         $splitActivity->setRecurrenceGroup($activity->getRecurrenceGroup());
         $splitActivity->setBegin(new \DateTime($secondBegin->format('Y-m-d')));
         $splitActivity->setEnd(new \DateTime($originalEnd->format('Y-m-d')));
@@ -189,6 +209,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
             $future->setTimeOff($activity->isTimeOff());
             $future->setColor($activity->getColor());
             $future->setComment($activity->getComment());
+            $future->setTentative($activity->isTentative());
             $entityManager->persist($future);
         }
         $entityManager->flush();
@@ -248,6 +269,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
             $recurring->setTimeOff($activity->isTimeOff());
             $recurring->setColor($activity->getColor());
             $recurring->setComment($activity->getComment());
+            $recurring->setTentative($activity->isTentative());
             $recurring->setRecurrenceGroup($activity->getRecurrenceGroup());
 
             $recBegin = (clone $begin)->modify(\sprintf('+%d week', $i));
@@ -307,6 +329,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
      * @param array<User> $users
      * @param array<Customer> $customers
      * @param array<Project> $projects
+     * @param bool|null $tentative true for tentative activities only, false for confirmed ones only, null for both
      * @return array<PlannedActivity>
      */
     public function findByFilter(
@@ -314,7 +337,8 @@ class PlannedActivityRepository extends ServiceEntityRepository
         ?\DateTimeInterface $begin = null,
         ?\DateTimeInterface $end = null,
         array $customers = [],
-        array $projects = []
+        array $projects = [],
+        ?bool $tentative = null
     ): array {
         if ($users === []) {
             return [];
@@ -345,6 +369,35 @@ class PlannedActivityRepository extends ServiceEntityRepository
         if ($projects !== []) {
             $qb->andWhere('p.project IN (:projects)')->setParameter('projects', $projects);
         }
+
+        if ($tentative !== null) {
+            $qb->andWhere('p.tentative = :tentative')->setParameter('tentative', $tentative);
+        }
+
+        /** @var array<PlannedActivity> $result */
+        $result = $qb->getQuery()->getResult();
+
+        return $result;
+    }
+
+    /**
+     * Tentative activities of a project that end on or after the given day, of every user.
+     *
+     * @return array<PlannedActivity>
+     */
+    public function findTentativeForProject(Project $project, \DateTimeInterface $from): array
+    {
+        $qb = $this->createQueryBuilder('p');
+        $qb->leftJoin('p.user', 'u')
+            ->addSelect('u')
+            ->where('p.project = :project')
+            ->andWhere('p.tentative = :tentative')
+            ->andWhere('p.end >= :from')
+            ->orderBy('p.begin', 'ASC')
+            ->addOrderBy('p.id', 'ASC')
+            ->setParameter('project', $project)
+            ->setParameter('tentative', true)
+            ->setParameter('from', $from->format('Y-m-d'));
 
         /** @var array<PlannedActivity> $result */
         $result = $qb->getQuery()->getResult();

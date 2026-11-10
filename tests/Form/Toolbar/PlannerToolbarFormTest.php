@@ -58,6 +58,9 @@ class PlannerToolbarFormTest extends TestCase
         self::assertFalse($fields['users']['options']['required']);
         self::assertTrue($fields['teams']['options']['multiple']);
         self::assertFalse($fields['teams']['options']['required']);
+        self::assertArrayHasKey('planning', $fields);
+        self::assertSame(ChoiceType::class, $fields['planning']['type']);
+        self::assertSame([PlannerQuery::PLANNING_ALL, PlannerQuery::PLANNING_CONFIRMED, PlannerQuery::PLANNING_TENTATIVE], array_values($fields['planning']['options']['choices']));
         self::assertArrayHasKey('orderBy', $fields);
         self::assertSame(ChoiceType::class, $fields['orderBy']['type']);
         self::assertSame([PlannerQuery::ORDER_BY_NAME, PlannerQuery::ORDER_BY_FREE_HOURS], array_values($fields['orderBy']['options']['choices']));

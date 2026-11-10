@@ -114,6 +114,19 @@ final class WeeklyPlannerData
         return $total;
     }
 
+    public function getTotalTentativeHoursForDay(\DateTimeInterface $date): float
+    {
+        $total = 0.0;
+        foreach ($this->rows as $row) {
+            $day = $row->getDay($date);
+            if ($day !== null) {
+                $total += $day->getTentativeHours();
+            }
+        }
+
+        return $total;
+    }
+
     public function getTotalActualHoursForDay(\DateTimeInterface $date): float
     {
         $total = 0.0;
@@ -155,6 +168,16 @@ final class WeeklyPlannerData
         $total = 0.0;
         foreach ($this->rows as $row) {
             $total += $row->getTotalPlannedHours();
+        }
+
+        return $total;
+    }
+
+    public function getTotalTentativeHours(): float
+    {
+        $total = 0.0;
+        foreach ($this->rows as $row) {
+            $total += $row->getTotalTentativeHours();
         }
 
         return $total;

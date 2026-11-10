@@ -40,6 +40,7 @@ class WeeklyPlannerDataTest extends TestCase
         $act1 = new PlannedActivity();
         $act1->setHoursPerDay(4.0);
         $d1->addActivity($act1);
+        $d1->addActivity((new PlannedActivity())->setHoursPerDay(3.0)->setTentative(true));
         $row1->addDay($d1);
 
         $data->addRow($row1);
@@ -49,10 +50,13 @@ class WeeklyPlannerDataTest extends TestCase
         $this->assertSame(8.0, $data->getTotalExpectedHoursForDay($start));
         $this->assertSame(4.0, $data->getTotalPlannedHoursForDay($start));
         $this->assertSame(6.0, $data->getTotalActualHoursForDay($start));
+        $this->assertSame(3.0, $data->getTotalTentativeHoursForDay($start));
+        $this->assertSame(0.0, $data->getTotalTentativeHoursForDay($end));
 
         $this->assertSame(8.0, $data->getTotalExpectedHours());
         $this->assertSame(4.0, $data->getTotalPlannedHours());
         $this->assertSame(6.0, $data->getTotalActualHours());
+        $this->assertSame(3.0, $data->getTotalTentativeHours());
     }
 
     public function testSortByFreeHoursKeepsTheOrderOfEqualRows(): void

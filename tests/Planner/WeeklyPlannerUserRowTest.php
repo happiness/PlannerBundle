@@ -59,6 +59,13 @@ class WeeklyPlannerUserRowTest extends TestCase
         $this->assertFalse($row->isOverAllocated());
         $this->assertFalse($row->isBalanced());
 
+        $this->assertSame(0.0, $row->getTotalTentativeHours());
+
+        $tentative = (new PlannedActivity())->setHoursPerDay(2.0)->setTentative(true);
+        $day2->addActivity($tentative);
+        $this->assertSame(2.0, $row->getTotalTentativeHours());
+        $this->assertSame(12.0, $row->getTotalPlannedHours());
+
         $past = new \DateTimeImmutable('2026-01-01');
         $this->assertSame(4.0, $row->getFreeHours($past));
         // the 4 free hours of the first day have passed
