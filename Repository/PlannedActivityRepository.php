@@ -144,27 +144,32 @@ class PlannedActivityRepository extends ServiceEntityRepository
      */
     private function countOverlappingFor(PlannedActivity $activity, \DateTimeInterface $begin, \DateTimeInterface $end, array $excludeIds): int
     {
-        if ($activity->getUser() === null || $activity->getCustomer() === null) {
+        $reservation = $activity->getReservation();
+        if ($activity->getUser() === null || ($activity->getCustomer() === null && $reservation === null)) {
             return 0;
         }
 
         $qb = $this->createQueryBuilder('p');
         $qb->select('COUNT(p.id)')
             ->where('p.user = :user')
-            ->andWhere('p.customer = :customer')
             ->andWhere('p.begin <= :end')
             ->andWhere('p.end >= :begin')
             ->andWhere('p.tentative = :tentative')
             ->setParameter('user', $activity->getUser())
             ->setParameter('tentative', $activity->isTentative())
-            ->setParameter('customer', $activity->getCustomer())
             ->setParameter('begin', $begin->format('Y-m-d'))
             ->setParameter('end', $end->format('Y-m-d'));
 
-        if ($activity->getProject() === null) {
-            $qb->andWhere('p.project IS NULL');
+        // the same reservation, or the same customer/project
+        if ($reservation !== null) {
+            $qb->andWhere('p.reservation = :reservation')->setParameter('reservation', $reservation);
         } else {
-            $qb->andWhere('p.project = :project')->setParameter('project', $activity->getProject());
+            $qb->andWhere('p.customer = :customer')->setParameter('customer', $activity->getCustomer());
+            if ($activity->getProject() === null) {
+                $qb->andWhere('p.project IS NULL');
+            } else {
+                $qb->andWhere('p.project = :project')->setParameter('project', $activity->getProject());
+            }
         }
 
         if ($excludeIds !== []) {
@@ -176,7 +181,8 @@ class PlannedActivityRepository extends ServiceEntityRepository
 
     /**
      * Splits a multi-day activity in two: the original ends the day before $secondBegin, a copy with
-     * everything else (see createCopy()) covers $secondBegin to the old end.
+     * everything else (see PlannedActivity::copyPlanningTo()) and the same recurrence group covers $secondBegin to the
+     * old end.
      * Both are written in one flush, so a failure leaves the activity as it was.
      *
      * @return PlannedActivity|null the new second part, null when $secondBegin is not a day after the begin within the range
@@ -190,7 +196,8 @@ class PlannedActivityRepository extends ServiceEntityRepository
             return null;
         }
 
-        $second = $this->createCopy($activity);
+        $second = $activity->copyPlanningTo(new PlannedActivity());
+        $second->setRecurrenceGroup($activity->getRecurrenceGroup());
         $second->setBegin(new \DateTime($day));
         $second->setEnd(new \DateTime($end->format('Y-m-d')));
 
@@ -221,26 +228,6 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $entityManager->flush();
 
         return true;
-    }
-
-    /**
-     * Everything but the dates, which the caller sets.
-     */
-    private function createCopy(PlannedActivity $activity): PlannedActivity
-    {
-        $copy = new PlannedActivity();
-        $copy->setUser($activity->getUser());
-        $copy->setCustomer($activity->getCustomer());
-        $copy->setProject($activity->getProject());
-        $copy->setTitle($activity->getTitle());
-        $copy->setHoursPerDay($activity->getHoursPerDay());
-        $copy->setTimeOff($activity->isTimeOff());
-        $copy->setColor($activity->getColor());
-        $copy->setComment($activity->getComment());
-        $copy->setTentative($activity->isTentative());
-        $copy->setRecurrenceGroup($activity->getRecurrenceGroup());
-
-        return $copy;
     }
 
     public function deleteRecurringActivities(string $recurrenceGroup): void

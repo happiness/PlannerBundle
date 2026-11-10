@@ -475,6 +475,7 @@ class PlannedActivity
         return $this->user === $next->getUser()
             && $this->customer === $next->getCustomer()
             && $this->project === $next->getProject()
+            && $this->reservation === $next->getReservation()
             && $this->title === $next->getTitle()
             && $this->hoursPerDay === $next->getHoursPerDay()
             && $this->timeOff === $next->isTimeOff()

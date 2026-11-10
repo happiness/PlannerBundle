@@ -351,4 +351,21 @@ class PlannedActivityTest extends TestCase
         $this->assertTrue($copy->isTentative());
         $this->assertSame('#123456', $copy->getColor());
     }
+
+    public function testOnlyTheSameReservationIsJoinable(): void
+    {
+        $user = new User();
+        $buffer = (new Reservation())->setName('Buffer');
+        $make = static fn (string $begin, string $end, Reservation $reservation): PlannedActivity => (new PlannedActivity())
+            ->setUser($user)
+            ->setReservation($reservation)
+            ->setHoursPerDay(1.0)
+            ->setBegin(new \DateTime($begin))
+            ->setEnd(new \DateTime($end));
+
+        $first = $make('2026-11-02', '2026-11-03', $buffer);
+
+        $this->assertTrue($first->isJoinableWith($make('2026-11-04', '2026-11-05', $buffer)));
+        $this->assertFalse($first->isJoinableWith($make('2026-11-04', '2026-11-05', (new Reservation())->setName('Lead'))));
+    }
 }

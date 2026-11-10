@@ -1749,7 +1749,7 @@ class WeeklyPlannerControllerTest extends TestCase
     private function runSplitActivity(PlannedActivity $activity, array $post, ?PlannedActivityRepository $repo = null, bool $validToken = true, bool $granted = true): JsonResponse
     {
         $repo ??= $this->createMock(PlannedActivityRepository::class);
-        $controller = new WeeklyPlannerController($repo, $this->createMock(WeeklyPlannerService::class), $this->createMock(UserRepository::class), $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo, $this->createMock(WeeklyPlannerService::class), $this->createMock(UserRepository::class), $this->createMock(PlannerUserProvider::class), $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturn($granted);
@@ -1810,7 +1810,7 @@ class WeeklyPlannerControllerTest extends TestCase
 
     private function runJoinActivity(PlannedActivity $activity, int $other, ?PlannedActivityRepository $repo, bool $validToken = true, ?callable $isGranted = null): JsonResponse
     {
-        $controller = new WeeklyPlannerController($repo ?? $this->createMock(PlannedActivityRepository::class), $this->createMock(WeeklyPlannerService::class), $this->createMock(UserRepository::class), $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo ?? $this->createMock(PlannedActivityRepository::class), $this->createMock(WeeklyPlannerService::class), $this->createMock(UserRepository::class), $this->createMock(PlannerUserProvider::class), $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturnCallback($isGranted ?? static fn (): bool => true);
@@ -2094,5 +2094,20 @@ class WeeklyPlannerControllerTest extends TestCase
         // an archived reservation is not offered
         $response = $this->runMoveActivity($activity, ['begin' => '2026-10-19', 'end' => '2026-10-20', 'reservation' => '4'], $repo, null, true, null, 0, $reservations);
         $this->assertSame(400, $response->getStatusCode());
+    }
+
+    public function testMoveOntoTheSameReservationIsRefused(): void
+    {
+        $activity = $this->createMovableActivity();
+        $activity->setReservation((new Reservation())->setName('Agency buffer'));
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->method('countOverlapping')->willReturn(1);
+        $repo->expects($this->never())->method('savePlannedActivity');
+
+        $response = $this->runMoveActivity($activity, ['begin' => '2026-10-21', 'end' => '2026-10-23'], $repo);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertSame(['message' => 'planner.overlapping_reservation'], json_decode((string) $response->getContent(), true));
     }
 }

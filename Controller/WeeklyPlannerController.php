@@ -340,7 +340,7 @@ final class WeeklyPlannerController extends AbstractController
         // a drag or stretch onto the same customer/project is a slip far more often than a plan: the dialog and the
         // API, where planning twice is typed on purpose, have no such rule
         if ($this->repository->countOverlapping($activity) > 0) {
-            return new JsonResponse(['message' => $translator->trans('planner.overlapping', [], 'validators')], Response::HTTP_UNPROCESSABLE_ENTITY);
+            return new JsonResponse(['message' => $translator->trans($activity->getReservation() !== null ? 'planner.overlapping_reservation' : 'planner.overlapping', [], 'validators')], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         try {

@@ -186,7 +186,7 @@ Reserved time holds hours in someone's planning for something that is not a cust
 - **Archiving** stops offering it for new planning. Plannings it already has stay in the planner and keep counting, so nobody looks free while their time is held; delete or shorten them to free the time. Restoring offers it again.
 - **Deleting** is only possible while nothing is planned on it. The foreign key refuses the rest, which is what archiving is for.
 - **Planning it**: the dialog shows a "Reserved time" field above the customer when there is at least one. Choosing one hides customer, project, colour and tentative. Each reservation gets its own row under every person, below the projects; clicking or dragging in that row plans it, and dropping other planning there turns it into that reservation (dropping it on a project's row turns it back).
-- **Counting**: like project work, in every gauge and in "Most free hours". It is never tentative, and time off replaces it.
+- **Counting**: like project work, in every gauge and in "Most free hours", and like project work it takes no hours on a day off unless all its days are days off. It is never tentative, and time off replaces it. Moving or stretching it onto the same reservation on one of the person's days is refused, as for projects.
 - **API**: activities carry `reservation` (the reservation, or `null`), create and update take a reservation ID, and `GET /api/planner/activities` filters by `reservations[]`.
 
 ## Calendar feed
