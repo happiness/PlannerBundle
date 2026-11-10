@@ -313,11 +313,15 @@
                                                             {% set joinable = null %}
                                                         {% endif %}
                                                         {% set activityHours = activity.wholeDay ? 'planner.whole_day'|trans : activity.hoursPerDay ~ 'h' %}
+                                                        {% set activityLabel = (activity.tentative ? 'planner.tentative'|trans ~ ': ' : '') ~ (activity.timeOff ? 'planner.time_off'|trans : activity.name) ~ ' (' ~ activityHours ~ ')' %}
+                                                        {% set activityNote = activity.hasComment ? activity.comment|u.truncate(1024, '...') : null %}
                                                         <a href="{{ path('planner_activity_edit', {'id': activity.id, 'date': date|date('Y-m-d')}) }}"
                                                            class="planner-activity position-relative z-2 d-flex justify-content-between align-items-center px-2 py-1 rounded text-decoration-none modal-ajax-form shadow-sm{% if not loop.first %} mt-1{% endif %}{% if canMove %} planner-movable{% endif %}{% if activity.timeOff %} planner-activity-off{% endif %}{% if activity.tentative %} planner-tentative{% endif %}"
                                                            {% if not activity.timeOff %}style="background-color: {{ activity.colorSafe }}; color: {{ activity.colorSafe|font_contrast }};"{% endif %}
                                                            {% if canMove %}data-planner-move-url="{{ path('planner_activity_move', {'id': activity.id}) }}" data-planner-begin="{{ activity.begin|date('Y-m-d') }}" data-planner-end="{{ activity.end|date('Y-m-d') }}"{% if activity.daysCount > 1 %} data-planner-split-url="{{ path('planner_activity_split', {'id': activity.id}) }}"{% endif %}{% if joinable is not null %} data-planner-join-url="{{ path('planner_activity_join', {'id': activity.id, 'other': joinable.id}) }}" data-planner-join-day="{{ joinable.begin|date('Y-m-d') }}"{% endif %}{% endif %}
-                                                           title="{% if activity.tentative %}{{ 'planner.tentative'|trans }}: {% endif %}{{ activity.timeOff ? 'planner.time_off'|trans : activity.name }} ({{ activityHours }}){% if activity.hasComment %}: {{ activity.comment|u.truncate(1024, '...') }}{% endif %}">
+                                                           {# shown by the planner's own tooltip below, quicker than a title and with the note on its own lines #}
+                                                           data-planner-tip="{{ activityLabel }}"{% if activityNote is not null %} data-planner-note="{{ activityNote }}"{% endif %}
+                                                           aria-label="{{ activityLabel }}{% if activityNote is not null %}: {{ activityNote }}{% endif %}">
                                                             {% if canMove and activity.begin|date('Y-m-d') == date|date('Y-m-d') %}<span class="planner-handle planner-handle-start" data-planner-handle="start"></span>{% endif %}
                                                             <span class="text-truncate small">{% if activity.hasComment %}{{ icon('comment') }} {% endif %}{{ activityHours }}</span>
                                                             {% if canMove and activity.end|date('Y-m-d') == segmentEnd|date('Y-m-d') %}<span class="planner-handle planner-handle-end" data-planner-handle="end"></span>{% endif %}
@@ -682,6 +686,20 @@
         }
         tr.planner-row-details.is-expanded {
             display: table-row;
+        }
+        /* the bars' tooltip: Bootstrap's own look, wider and left aligned, so a note reads like text */
+        .planner-tooltip {
+            position: fixed;
+            pointer-events: none;
+        }
+        .planner-tooltip .tooltip-inner {
+            max-width: 320px;
+            text-align: left;
+        }
+        .planner-tooltip-note {
+            margin-top: 2px;
+            white-space: pre-line;
+            overflow-wrap: anywhere;
         }
     </style>
 {% endblock %}
@@ -1394,6 +1412,111 @@
             // the marker is positioned on the viewport
             window.addEventListener('scroll', removeHint, true);
             document.addEventListener('kimai.reloadPage', removeHint);
+        })();
+
+        // A tooltip for the planned bars: what is planned, and the note on its own lines. Kimai's Bootstrap tooltips
+        // are only set up on the first page load, and the planner reloads its content after every change, so this one
+        // is delegated from the document and uses Bootstrap's markup for the same look.
+        (function () {
+            const BAR = '.planner-activity[data-planner-tip]';
+            const DELAY = 150;
+            let bar = null;
+            let tip = null;
+            let timer = null;
+
+            function busy() {
+                return document.body.classList.contains('planner-dragging') || document.body.classList.contains('planner-moving');
+            }
+
+            function hide() {
+                clearTimeout(timer);
+                timer = null;
+                bar = null;
+                if (tip !== null) {
+                    tip.remove();
+                    tip = null;
+                }
+            }
+
+            function show() {
+                if (bar === null || !bar.isConnected || busy()) {
+                    return;
+                }
+                tip = document.createElement('div');
+                tip.className = 'tooltip planner-tooltip show';
+                tip.setAttribute('role', 'tooltip');
+                const arrow = document.createElement('div');
+                arrow.className = 'tooltip-arrow';
+                const inner = document.createElement('div');
+                inner.className = 'tooltip-inner';
+                const label = document.createElement('div');
+                label.className = 'fw-bold';
+                label.textContent = bar.dataset.plannerTip;
+                inner.appendChild(label);
+                if (bar.dataset.plannerNote) {
+                    const note = document.createElement('div');
+                    note.className = 'planner-tooltip-note';
+                    note.textContent = bar.dataset.plannerNote;
+                    inner.appendChild(note);
+                }
+                tip.append(arrow, inner);
+                document.body.appendChild(tip);
+
+                // above the bar, or below it when there is no room; kept inside the viewport
+                const rect = bar.getBoundingClientRect();
+                const width = tip.offsetWidth;
+                const height = tip.offsetHeight;
+                const margin = 4;
+                const center = rect.left + rect.width / 2;
+                const left = Math.max(margin, Math.min(center - width / 2, document.documentElement.clientWidth - width - margin));
+                // Bootstrap draws the arrow outside the box, so it needs its own room between the bar and the tooltip
+                tip.classList.add('bs-tooltip-top');
+                const gap = arrow.offsetHeight;
+                const above = rect.top - height - gap >= margin;
+                if (!above) {
+                    tip.classList.replace('bs-tooltip-top', 'bs-tooltip-bottom');
+                }
+                tip.style.left = left + 'px';
+                tip.style.top = (above ? rect.top - height - gap : rect.bottom + gap) + 'px';
+                arrow.style.left = Math.max(4, Math.min(center - left - arrow.offsetWidth / 2, width - arrow.offsetWidth - 4)) + 'px';
+            }
+
+            function schedule(target) {
+                hide();
+                if (busy()) {
+                    return;
+                }
+                bar = target;
+                timer = setTimeout(show, DELAY);
+            }
+
+            document.addEventListener('mouseover', function (e) {
+                const target = e.target.closest ? e.target.closest(BAR) : null;
+                if (target !== bar) {
+                    target !== null ? schedule(target) : hide();
+                }
+            });
+            document.addEventListener('mouseout', function (e) {
+                if (bar !== null && !(e.relatedTarget instanceof Node && bar.contains(e.relatedTarget))) {
+                    hide();
+                }
+            });
+            document.addEventListener('focusin', function (e) {
+                const target = e.target.closest ? e.target.closest(BAR) : null;
+                if (target !== null) {
+                    schedule(target);
+                }
+            });
+            document.addEventListener('focusout', hide);
+            // out of the way as soon as a bar is moved, stretched or clicked
+            document.addEventListener('mousedown', hide, true);
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') {
+                    hide();
+                }
+            });
+            window.addEventListener('scroll', hide, true);
+            document.addEventListener('kimai.reloadPage', hide);
         })();
     </script>
 {% endblock %}
