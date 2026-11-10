@@ -16,6 +16,7 @@ use App\Form\Type\UserType;
 use KimaiPlugin\PlannerBundle\Form\Toolbar\PlannerToolbarForm;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
@@ -57,5 +58,8 @@ class PlannerToolbarFormTest extends TestCase
         self::assertFalse($fields['users']['options']['required']);
         self::assertTrue($fields['teams']['options']['multiple']);
         self::assertFalse($fields['teams']['options']['required']);
+        self::assertArrayHasKey('orderBy', $fields);
+        self::assertSame(ChoiceType::class, $fields['orderBy']['type']);
+        self::assertSame([PlannerQuery::ORDER_BY_NAME, PlannerQuery::ORDER_BY_FREE_HOURS], array_values($fields['orderBy']['options']['choices']));
     }
 }
