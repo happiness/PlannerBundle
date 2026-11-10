@@ -21,9 +21,6 @@ use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
-use KimaiPlugin\PlannerBundle\Reservation\PlanningReservation;
-use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
-use KimaiPlugin\PlannerBundle\Tests\Reservation\PlanningReservationsTest;
 use PHPUnit\Framework\TestCase;
 
 class PlannedActivityRepositoryTest extends TestCase
@@ -120,6 +117,7 @@ class PlannedActivityRepositoryTest extends TestCase
         $activity->setHoursPerDay(6.0);
         $activity->setColor('#00ff00');
         $activity->setComment('Middle split comment');
+        $activity->setTentative(true);
         $activity->setRecurrenceGroup('rec-group-1');
         $activity->setBegin(new \DateTime('2026-09-14'));
         $activity->setEnd(new \DateTime('2026-09-16'));
@@ -147,6 +145,7 @@ class PlannedActivityRepositoryTest extends TestCase
         $this->assertSame('#00ff00', $split->getColor());
         $this->assertSame('Middle split comment', $split->getComment());
         $this->assertSame('rec-group-1', $split->getRecurrenceGroup());
+        $this->assertTrue($split->isTentative());
         $this->assertSame('2026-09-16', $split->getBegin()?->format('Y-m-d'));
         $this->assertSame('2026-09-16', $split->getEnd()?->format('Y-m-d'));
     }
@@ -282,6 +281,7 @@ class PlannedActivityRepositoryTest extends TestCase
         $currentActivity->setHoursPerDay(7.5);
         $currentActivity->setColor('#123456');
         $currentActivity->setComment('Updated comment');
+        $currentActivity->setTentative(true);
         $currentActivity->setRecurrenceGroup('rec-group-1');
         $currentActivity->setBegin(new \DateTime('2026-09-14'));
 
@@ -329,6 +329,8 @@ class PlannedActivityRepositoryTest extends TestCase
         $this->assertSame(7.5, $futureActivity2->getHoursPerDay());
         $this->assertSame('#123456', $futureActivity2->getColor());
         $this->assertSame('Updated comment', $futureActivity2->getComment());
+        $this->assertTrue($futureActivity1->isTentative());
+        $this->assertTrue($futureActivity2->isTentative());
     }
 
     public function testUpdateFutureRecurringActivitiesKeepsDatesWithoutPreviousDates(): void
@@ -497,6 +499,7 @@ class PlannedActivityRepositoryTest extends TestCase
         $activity->setHoursPerDay(4.5);
         $activity->setColor('#ff0000');
         $activity->setComment('Weekly meeting');
+        $activity->setTentative(true);
         $activity->setBegin(new \DateTime('2026-09-07'));
         $activity->setEnd(new \DateTime('2026-09-09'));
 
@@ -529,9 +532,30 @@ class PlannedActivityRepositoryTest extends TestCase
         $this->assertSame(4.5, $created[1]->getHoursPerDay());
         $this->assertSame('#ff0000', $created[1]->getColor());
         $this->assertSame('Weekly meeting', $created[1]->getComment());
+        $this->assertTrue($created[0]->isTentative());
+        $this->assertTrue($created[1]->isTentative());
         $this->assertSame($activity->getRecurrenceGroup(), $created[1]->getRecurrenceGroup());
         $this->assertSame('2026-09-21', $created[1]->getBegin()?->format('Y-m-d'));
         $this->assertSame('2026-09-23', $created[1]->getEnd()?->format('Y-m-d'));
+    }
+
+    public function testCreateRecurringActivitiesKeepsTimeOff(): void
+    {
+        $activity = (new PlannedActivity())
+            ->setUser(new User())
+            ->setTimeOff(true)
+            ->setHoursPerDay(null)
+            ->setBegin(new \DateTime('2026-11-06'))
+            ->setEnd(new \DateTime('2026-11-06'));
+
+        $repository = $this->createRepository($this->createMock(EntityManagerInterface::class));
+        $created = $repository->createRecurringActivities($activity, 1);
+
+        $this->assertCount(1, $created);
+        $this->assertTrue($created[0]->isTimeOff());
+        $this->assertNull($created[0]->getHoursPerDay());
+        $this->assertNull($created[0]->getCustomer());
+        $this->assertSame('2026-11-13', $created[0]->getBegin()?->format('Y-m-d'));
     }
 
     public function testFindByFilterWithoutUsersReturnsEmptyArray(): void
@@ -565,7 +589,7 @@ class PlannedActivityRepositoryTest extends TestCase
         $repository = $this->createRepository($em);
 
         $project = new Project();
-        $result = $repository->findByFilter([new User()], new \DateTime('2026-10-01'), new \DateTime('2026-10-31'), [new Customer('ACME')], [$project]);
+        $result = $repository->findByFilter([new User()], new \DateTime('2026-10-01'), new \DateTime('2026-10-31'), [new Customer('ACME')], [$project], true);
 
         $this->assertSame([$activity], $result);
         $this->assertSame([
@@ -573,7 +597,69 @@ class PlannedActivityRepositoryTest extends TestCase
             'p.begin <= :end',
             'p.customer IN (:customers)',
             'p.project IN (:projects)',
+            'p.tentative = :tentative',
         ], $conditions);
+    }
+
+    public function testFindTentativeForProject(): void
+    {
+        $activity = new PlannedActivity();
+        $project = new Project();
+
+        $query = $this->createMock(Query::class);
+        $query->method('getResult')->willReturn([$activity]);
+
+        $conditions = [];
+        $parameters = [];
+        $qb = $this->createMock(QueryBuilder::class);
+        foreach (['select', 'from', 'leftJoin', 'addSelect', 'orderBy', 'addOrderBy'] as $method) {
+            $qb->method($method)->willReturnSelf();
+        }
+        foreach (['where', 'andWhere'] as $method) {
+            $qb->method($method)->willReturnCallback(function (string $condition) use (&$conditions, $qb) {
+                $conditions[] = $condition;
+
+                return $qb;
+            });
+        }
+        $qb->method('setParameter')->willReturnCallback(function (string $name, mixed $value) use (&$parameters, $qb) {
+            $parameters[$name] = $value;
+
+            return $qb;
+        });
+        $qb->method('getQuery')->willReturn($query);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('createQueryBuilder')->willReturn($qb);
+        $repository = $this->createRepository($em);
+
+        $this->assertSame([$activity], $repository->findTentativeForProject($project, new \DateTimeImmutable('2026-11-02')));
+        $this->assertSame(['p.project = :project', 'p.tentative = :tentative', 'p.end >= :from'], $conditions);
+        $this->assertSame(['project' => $project, 'tentative' => true, 'from' => '2026-11-02'], $parameters);
+    }
+
+    public function testConfirmPlannedActivities(): void
+    {
+        $first = (new PlannedActivity())->setTentative(true);
+        $second = (new PlannedActivity())->setTentative(true);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->exactly(2))->method('persist');
+        $em->expects($this->once())->method('flush');
+
+        $repository = $this->createRepository($em);
+        $repository->confirmPlannedActivities([$first, $second]);
+
+        $this->assertFalse($first->isTentative());
+        $this->assertFalse($second->isTentative());
+    }
+
+    public function testConfirmPlannedActivitiesWithoutActivitiesDoesNotFlush(): void
+    {
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('flush');
+
+        $this->createRepository($em)->confirmPlannedActivities([]);
     }
 
     public function testFindCustomerAndProjectDelegateToEntityManager(): void
@@ -592,103 +678,5 @@ class PlannedActivityRepositoryTest extends TestCase
         $this->assertSame($customer, $repository->findCustomer(3));
         $this->assertSame($project, $repository->findProject(7));
         $this->assertNull($repository->findProject(8));
-    }
-
-    public function testRemovingADayInTheMiddleKeepsTheReservation(): void
-    {
-        $activity = (new PlannedActivity())
-            ->setUser(new User())
-            ->setReservation('buffer')
-            ->setHoursPerDay(1.0)
-            ->setBegin(new \DateTime('2026-11-02'))
-            ->setEnd(new \DateTime('2026-11-06'));
-
-        $persisted = [];
-        $em = $this->createMock(EntityManagerInterface::class);
-        $em->method('persist')->willReturnCallback(function ($entity) use (&$persisted) {
-            $persisted[] = $entity;
-        });
-
-        $this->createRepository($em)->removeDayFromActivity($activity, new \DateTime('2026-11-04'));
-
-        $second = end($persisted);
-        $this->assertNotSame($activity, $second);
-        $this->assertSame('buffer', $second->getReservation());
-        $this->assertNull($second->getCustomer());
-    }
-
-    public function testCreateRecurringActivitiesKeepsTheReservation(): void
-    {
-        $activity = (new PlannedActivity())
-            ->setUser(new User())
-            ->setReservation('buffer')
-            ->setRecurrenceGroup('group')
-            ->setBegin(new \DateTime('2026-11-02'))
-            ->setEnd(new \DateTime('2026-11-02'));
-
-        $em = $this->createMock(EntityManagerInterface::class);
-        $created = $this->createRepository($em)->createRecurringActivities($activity, 2);
-
-        $this->assertCount(2, $created);
-        $this->assertSame('buffer', $created[1]->getReservation());
-    }
-
-    /**
-     * @param array<string> $conditions filled with the conditions of the query
-     */
-    private function createRecordingRepository(array &$conditions, ?PlanningReservations $reservations = null): PlannedActivityRepository
-    {
-        $query = $this->createMock(Query::class);
-        $query->method('getResult')->willReturn([]);
-
-        $qb = $this->createMock(QueryBuilder::class);
-        foreach (['select', 'from', 'leftJoin', 'addSelect', 'orderBy', 'addOrderBy', 'setParameter'] as $method) {
-            $qb->method($method)->willReturnSelf();
-        }
-        foreach (['where', 'andWhere'] as $method) {
-            $qb->method($method)->willReturnCallback(function (string $condition) use (&$conditions, $qb) {
-                $conditions[] = $condition;
-
-                return $qb;
-            });
-        }
-        $qb->method('getQuery')->willReturn($query);
-
-        $em = $this->createMock(EntityManagerInterface::class);
-        $em->method('createQueryBuilder')->willReturn($qb);
-        $metadata = new ClassMetadata(PlannedActivity::class);
-        $em->method('getClassMetadata')->with(PlannedActivity::class)->willReturn($metadata);
-
-        $registry = $this->createMock(ManagerRegistry::class);
-        $registry->method('getManagerForClass')->willReturn($em);
-
-        return new PlannedActivityRepository($registry, $reservations);
-    }
-
-    public function testFindByFilterFiltersReservationsAndLeavesHiddenOnesOut(): void
-    {
-        $conditions = [];
-        $reservations = PlanningReservationsTest::create([new PlanningReservation('buffer', 'Buffer'), new PlanningReservation('old', 'Old', null, true)]);
-
-        $this->createRecordingRepository($conditions, $reservations)->findByFilter([new User()], null, null, [], [], ['buffer']);
-
-        $this->assertSame([
-            'p.user IN (:users)',
-            'p.reservation IN (:reservations)',
-            'p.reservation IS NULL OR p.reservation NOT IN (:hiddenReservations)',
-        ], $conditions);
-    }
-
-    public function testThePlannerLeavesHiddenReservationsOut(): void
-    {
-        $conditions = [];
-        $reservations = PlanningReservationsTest::create([new PlanningReservation('old', 'Old', null, true)]);
-        $this->createRecordingRepository($conditions, $reservations)->findPlannedActivitiesForUsersAndRange([new User()], new \DateTime('2026-11-02'), new \DateTime('2026-11-08'));
-        $this->assertContains('p.reservation IS NULL OR p.reservation NOT IN (:hiddenReservations)', $conditions);
-
-        // nothing hidden, nothing to leave out
-        $conditions = [];
-        $this->createRecordingRepository($conditions)->findPlannedActivitiesForUsersAndRange([new User()], new \DateTime('2026-11-02'), new \DateTime('2026-11-08'));
-        $this->assertNotContains('p.reservation IS NULL OR p.reservation NOT IN (:hiddenReservations)', $conditions);
     }
 }

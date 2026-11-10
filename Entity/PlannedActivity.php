@@ -28,7 +28,6 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 #[ORM\Index(columns: ['recurrence_group'], name: 'IDX_PLANNED_ACTIVITY_RECURRENCE')]
 #[ORM\Index(columns: ['customer_id'], name: 'IDX_PLANNED_ACTIVITY_CUSTOMER')]
 #[ORM\Index(columns: ['project_id'], name: 'IDX_PLANNED_ACTIVITY_PROJECT')]
-#[ORM\Index(columns: ['reservation'], name: 'IDX_PLANNED_ACTIVITY_RESERVATION')]
 #[ORM\Entity(repositoryClass: PlannedActivityRepository::class)]
 #[ORM\ChangeTrackingPolicy('DEFERRED_EXPLICIT')]
 #[Serializer\ExclusionPolicy('all')]
@@ -64,8 +63,8 @@ class PlannedActivity
     private ?\DateTime $end = null;
 
     /**
-     * Nullable in the database because rows created before customers were introduced have none, and neither have
-     * reservations; the validation requires a customer for every other activity saved through the form or the API.
+     * Nullable in the database because rows created before customers were introduced have none and time off has none;
+     * the validation requires a customer for every other activity saved through the form or the API.
      */
     #[ORM\ManyToOne(targetEntity: Customer::class)]
     #[ORM\JoinColumn(name: 'customer_id', nullable: true, onDelete: 'CASCADE')]
@@ -86,13 +85,23 @@ class PlannedActivity
     #[Assert\Length(max: 255)]
     private ?string $title = null;
 
-    #[ORM\Column(name: 'hours_per_day', type: Types::FLOAT, nullable: false)]
-    #[Assert\NotNull]
+    /**
+     * Only time off may leave it empty, which means the whole working day of the user's contract.
+     */
+    #[ORM\Column(name: 'hours_per_day', type: Types::FLOAT, nullable: true)]
     #[Assert\Positive]
     #[Assert\LessThanOrEqual(24.0)]
     #[Serializer\Expose]
     #[Serializer\Groups(['Default'])]
-    private float $hoursPerDay = 8.0;
+    private ?float $hoursPerDay = 8.0;
+
+    /**
+     * The user is not available: no customer or project, and the hours are taken off the day's capacity instead of being planned.
+     */
+    #[ORM\Column(name: 'time_off', type: Types::BOOLEAN, nullable: false, options: ['default' => false])]
+    #[Serializer\Expose]
+    #[Serializer\Groups(['Default'])]
+    private bool $timeOff = false;
 
     #[ORM\Column(name: 'comment', type: Types::TEXT, nullable: true)]
     #[Serializer\Expose]
@@ -105,14 +114,12 @@ class PlannedActivity
     private ?string $recurrenceGroup = null;
 
     /**
-     * Key of a reservation (see PlanningReservationProviderInterface): time held for something that is not a customer
-     * or project, planned and counted like project work.
+     * Work that is not confirmed yet (e.g. a deal that is not signed), shown faded and counted apart from confirmed capacity.
      */
-    #[ORM\Column(name: 'reservation', type: Types::STRING, length: 64, nullable: true)]
-    #[Assert\Length(max: 64)]
+    #[ORM\Column(name: 'tentative', type: Types::BOOLEAN, nullable: false, options: ['default' => false])]
     #[Serializer\Expose]
     #[Serializer\Groups(['Default'])]
-    private ?string $reservation = null;
+    private bool $tentative = false;
 
     public function __construct()
     {
@@ -213,15 +220,26 @@ class PlannedActivity
             return $this->customer->getName();
         }
 
-        return $this->title ?? $this->reservation;
+        return $this->title;
     }
 
     #[Assert\Callback]
     public function validateRequiredFields(ExecutionContextInterface $context): void
     {
-        if ($this->customer === null && $this->reservation === null) {
+        if ($this->timeOff) {
+            return;
+        }
+
+        if ($this->customer === null) {
             $context->buildViolation('This value should not be null.')
                 ->atPath('customer')
+                ->setTranslationDomain('validators')
+                ->addViolation();
+        }
+
+        if ($this->hoursPerDay === null) {
+            $context->buildViolation('This value should not be null.')
+                ->atPath('hoursPerDay')
                 ->setTranslationDomain('validators')
                 ->addViolation();
         }
@@ -242,44 +260,43 @@ class PlannedActivity
         }
     }
 
-    public function getHoursPerDay(): float
+    public function getHoursPerDay(): ?float
     {
         return $this->hoursPerDay;
     }
 
-    public function setHoursPerDay(float $hoursPerDay): self
+    public function setHoursPerDay(?float $hoursPerDay): self
     {
         $this->hoursPerDay = $hoursPerDay;
 
         return $this;
     }
 
-    public function getReservation(): ?string
+    public function isTimeOff(): bool
     {
-        return $this->reservation;
-    }
-
-    public function isReservation(): bool
-    {
-        return $this->reservation !== null;
+        return $this->timeOff;
     }
 
     /**
-     * A reservation is not customer work: setting one drops customer, project and title, and the colour, since its bars
-     * take the reservation's colour.
+     * Time off belongs to no customer or project and is never tentative, switching it on drops them.
      */
-    public function setReservation(?string $reservation): self
+    public function setTimeOff(bool $timeOff): self
     {
-        $this->reservation = $reservation === '' ? null : $reservation;
+        $this->timeOff = $timeOff;
 
-        if ($this->reservation !== null) {
+        if ($timeOff) {
             $this->customer = null;
             $this->project = null;
             $this->title = null;
-            $this->color = null;
+            $this->tentative = false;
         }
 
         return $this;
+    }
+
+    public function isWholeDay(): bool
+    {
+        return $this->timeOff && $this->hoursPerDay === null;
     }
 
     public function getComment(): ?string
@@ -316,6 +333,18 @@ class PlannedActivity
         return $this->recurrenceGroup !== null && $this->recurrenceGroup !== '';
     }
 
+    public function isTentative(): bool
+    {
+        return $this->tentative;
+    }
+
+    public function setTentative(bool $tentative): self
+    {
+        $this->tentative = $tentative;
+
+        return $this;
+    }
+
     public function coversDate(\DateTimeInterface $date): bool
     {
         if ($this->begin === null || $this->end === null) {
@@ -342,6 +371,6 @@ class PlannedActivity
 
     public function getTotalHours(): float
     {
-        return $this->getDaysCount() * $this->hoursPerDay;
+        return $this->getDaysCount() * ($this->hoursPerDay ?? 0.0);
     }
 }

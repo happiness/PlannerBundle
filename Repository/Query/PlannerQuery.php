@@ -20,14 +20,56 @@ final class PlannerQuery extends BaseQuery
 {
     use UsersTrait;
 
+    public const PLANNING_ALL = 'all';
+    public const PLANNING_CONFIRMED = 'confirmed';
+    public const PLANNING_TENTATIVE = 'tentative';
+    public const PLANNING_CHOICES = [self::PLANNING_ALL, self::PLANNING_CONFIRMED, self::PLANNING_TENTATIVE];
+
+    private string $planning = self::PLANNING_ALL;
+
+    public const ORDER_BY_NAME = 'username';
+    public const ORDER_BY_FREE_HOURS = 'free';
+    public const ORDER_BY_CHOICES = [self::ORDER_BY_NAME, self::ORDER_BY_FREE_HOURS];
+
     public function __construct()
     {
         $this->setDefaults([
             'order' => self::ORDER_ASC,
-            'orderBy' => 'username',
+            'orderBy' => self::ORDER_BY_NAME,
             'teams' => [],
             'users' => [],
+            'planning' => self::PLANNING_ALL,
         ]);
+    }
+
+    /**
+     * Which planned activities are shown: all, confirmed only or tentative only. The capacity figures always count all.
+     */
+    public function getPlanning(): string
+    {
+        return $this->planning;
+    }
+
+    public function setPlanning(?string $planning): self
+    {
+        $this->planning = \in_array($planning, self::PLANNING_CHOICES, true) ? $planning : self::PLANNING_ALL;
+
+        return $this;
+    }
+
+    /**
+     * Users are listed by name, or with the most free hours of the shown weeks first.
+     */
+    public function setOrderBy(?string $orderBy): self
+    {
+        parent::setOrderBy(\in_array($orderBy, self::ORDER_BY_CHOICES, true) ? $orderBy : self::ORDER_BY_NAME);
+
+        return $this;
+    }
+
+    public function isOrderedByFreeHours(): bool
+    {
+        return $this->getOrderBy() === self::ORDER_BY_FREE_HOURS;
     }
 
     /**
@@ -66,6 +108,7 @@ final class PlannerQuery extends BaseQuery
 
         if ($query instanceof PlannerQuery) {
             $this->setUsers($query->getUsers());
+            $this->setPlanning($query->getPlanning());
         }
     }
 }

@@ -70,6 +70,14 @@ final class WeeklyPlannerData
         return $this->rows;
     }
 
+    /**
+     * Puts the users with the most free hours from today on first; users with the same free hours keep their order.
+     */
+    public function sortByFreeHours(?\DateTimeInterface $today = null): void
+    {
+        uasort($this->rows, static fn (WeeklyPlannerUserRow $a, WeeklyPlannerUserRow $b): int => $b->getFreeHours($today) <=> $a->getFreeHours($today));
+    }
+
     public function getRowForUser(User $user): ?WeeklyPlannerUserRow
     {
         $userId = $user->getId();
@@ -106,6 +114,19 @@ final class WeeklyPlannerData
         return $total;
     }
 
+    public function getTotalTentativeHoursForDay(\DateTimeInterface $date): float
+    {
+        $total = 0.0;
+        foreach ($this->rows as $row) {
+            $day = $row->getDay($date);
+            if ($day !== null) {
+                $total += $day->getTentativeHours();
+            }
+        }
+
+        return $total;
+    }
+
     public function getTotalActualHoursForDay(\DateTimeInterface $date): float
     {
         $total = 0.0;
@@ -129,11 +150,34 @@ final class WeeklyPlannerData
         return $total;
     }
 
+    /**
+     * Contract hours minus time off, for all users.
+     */
+    public function getTotalCapacityHours(): float
+    {
+        $total = 0.0;
+        foreach ($this->rows as $row) {
+            $total += $row->getTotalCapacityHours();
+        }
+
+        return $total;
+    }
+
     public function getTotalPlannedHours(): float
     {
         $total = 0.0;
         foreach ($this->rows as $row) {
             $total += $row->getTotalPlannedHours();
+        }
+
+        return $total;
+    }
+
+    public function getTotalTentativeHours(): float
+    {
+        $total = 0.0;
+        foreach ($this->rows as $row) {
+            $total += $row->getTotalTentativeHours();
         }
 
         return $total;

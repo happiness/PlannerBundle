@@ -13,7 +13,6 @@ namespace KimaiPlugin\PlannerBundle\Planner;
 
 use App\Entity\User;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
-use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
 
 final class WeeklyPlannerUserRow
 {
@@ -27,7 +26,7 @@ final class WeeklyPlannerUserRow
      */
     private array $uniqueActivities = [];
 
-    public function __construct(private readonly User $user, private readonly ?PlanningReservations $reservations = null)
+    public function __construct(private readonly User $user)
     {
     }
 
@@ -83,9 +82,7 @@ final class WeeklyPlannerUserRow
     }
 
     /**
-     * Activities grouped by customer/project, ordered by customer and project name, with the reservations last, in
-     * the provider's order (unknown keys last, by key): they hold standing time, which matters less at a glance than
-     * the project work.
+     * Activities grouped by customer/project, ordered by customer and project name, with time off first.
      *
      * @return array<WeeklyPlannerGroup>
      */
@@ -94,17 +91,11 @@ final class WeeklyPlannerUserRow
         $groups = [];
         foreach ($this->uniqueActivities as $activity) {
             $key = WeeklyPlannerGroup::keyFor($activity);
-            $groups[$key] ??= WeeklyPlannerGroup::createFor($activity, $this->reservations?->get($activity->getReservation()));
+            $groups[$key] ??= WeeklyPlannerGroup::createFor($activity);
             $groups[$key]->addActivity($activity);
         }
 
-        $order = function (WeeklyPlannerGroup $group): array {
-            $kind = $group->isReservation() ? 1 : 0;
-            $position = $group->isReservation() ? ($this->reservations?->getPosition((string) $group->getReservationKey()) ?? \PHP_INT_MAX) : 0;
-
-            return [$kind, $position, $group->getCustomerName(), $group->getProjectName() ?? ''];
-        };
-        uasort($groups, static fn (WeeklyPlannerGroup $a, WeeklyPlannerGroup $b): int => $order($a) <=> $order($b));
+        uasort($groups, static fn (WeeklyPlannerGroup $a, WeeklyPlannerGroup $b): int => [!$a->isTimeOff(), $a->getCustomerName(), $a->getProjectName() ?? ''] <=> [!$b->isTimeOff(), $b->getCustomerName(), $b->getProjectName() ?? '']);
 
         return array_values($groups);
     }
@@ -119,14 +110,27 @@ final class WeeklyPlannerUserRow
         return $total;
     }
 
+    /**
+     * Contract hours minus time off.
+     */
+    public function getTotalCapacityHours(): float
+    {
+        $total = 0.0;
+        foreach ($this->days as $day) {
+            $total += $day->getCapacityHours();
+        }
+
+        return $total;
+    }
+
     public function getPlannedPercentage(): int
     {
-        $expected = $this->getTotalExpectedHours();
-        if ($expected <= 0.0) {
+        $capacity = $this->getTotalCapacityHours();
+        if ($capacity <= 0.0) {
             return 0;
         }
 
-        return (int) round(($this->getTotalPlannedHours() / $expected) * 100);
+        return (int) round(($this->getTotalPlannedHours() / $capacity) * 100);
     }
 
     public function getTotalPlannedHours(): float
@@ -134,6 +138,16 @@ final class WeeklyPlannerUserRow
         $total = 0.0;
         foreach ($this->days as $day) {
             $total += $day->getPlannedHours();
+        }
+
+        return $total;
+    }
+
+    public function getTotalTentativeHours(): float
+    {
+        $total = 0.0;
+        foreach ($this->days as $day) {
+            $total += $day->getTentativeHours();
         }
 
         return $total;
@@ -149,18 +163,36 @@ final class WeeklyPlannerUserRow
         return $total;
     }
 
+    /**
+     * Capacity left (contract hours minus time off) after the planning from today on, negative when overbooked. Days
+     * that have passed are not free any more, so they don't count, and neither does time off.
+     */
+    public function getFreeHours(?\DateTimeInterface $today = null): float
+    {
+        $from = ($today ?? new \DateTimeImmutable('today'))->format('Y-m-d');
+
+        $total = 0.0;
+        foreach ($this->days as $date => $day) {
+            if ($date >= $from) {
+                $total += $day->getCapacityHours() - $day->getPlannedHours();
+            }
+        }
+
+        return round($total, 2);
+    }
+
     public function isOverAllocated(): bool
     {
-        return $this->getTotalPlannedHours() > $this->getTotalExpectedHours();
+        return $this->getTotalPlannedHours() > $this->getTotalCapacityHours();
     }
 
     public function isUnderAllocated(): bool
     {
-        return $this->getTotalPlannedHours() < $this->getTotalExpectedHours();
+        return $this->getTotalPlannedHours() < $this->getTotalCapacityHours();
     }
 
     public function isBalanced(): bool
     {
-        return abs($this->getTotalPlannedHours() - $this->getTotalExpectedHours()) < 0.001;
+        return abs($this->getTotalPlannedHours() - $this->getTotalCapacityHours()) < 0.001;
     }
 }

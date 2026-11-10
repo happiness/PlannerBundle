@@ -17,8 +17,8 @@ use App\Form\Type\ColorPickerType;
 use App\Form\Type\CustomerType;
 use App\Form\Type\DatePickerType;
 use App\Form\Type\UserType;
+use App\Form\Type\YesNoType;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
-use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
@@ -37,10 +37,6 @@ use Symfony\Component\Validator\Constraints\LessThanOrEqual;
 class PlannedActivityEditForm extends AbstractType
 {
     use FormTrait;
-
-    public function __construct(private readonly ?PlanningReservations $reservations = null)
-    {
-    }
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
@@ -63,8 +59,7 @@ class PlannedActivityEditForm extends AbstractType
 
         $builder->add('customer', CustomerType::class, [
             'label' => 'customer',
-            // a reservation takes the place of customer and project, the entity validates everything else
-            'required' => $activity?->getReservation() === null,
+            'required' => !$activity?->isTimeOff(),
             'placeholder' => '',
             'query_builder_for_user' => true,
             'customers' => $activity?->getCustomer(),
@@ -80,22 +75,12 @@ class PlannedActivityEditForm extends AbstractType
             'activity_enabled' => false,
         ]);
 
-        // after customer and project: choosing a reservation drops them while the data is mapped
-        $reservations = $this->getReservationChoices($activity?->getReservation());
-        if ($reservations !== []) {
-            $builder->add('reservation', ChoiceType::class, [
-                'label' => 'planner.reservation',
-                'help' => 'planner.reservation_help',
-                'required' => false,
-                'placeholder' => '',
-                'choices' => $reservations,
-                'choice_translation_domain' => false,
-                'documentation' => [
-                    'type' => 'string',
-                    'description' => 'Key of a reservation (time held for something that is not a customer or project), instead of customer and project (default: none)',
-                ],
-            ]);
-        }
+        // after customer and project: switching time off on drops them while the data is mapped
+        $builder->add('timeOff', YesNoType::class, [
+            'label' => 'planner.time_off',
+            'help' => 'planner.time_off_help',
+            'required' => false,
+        ]);
 
         $builder
             ->add('begin', DatePickerType::class, [
@@ -108,7 +93,8 @@ class PlannedActivityEditForm extends AbstractType
             ])
             ->add('hoursPerDay', NumberType::class, [
                 'label' => 'planner.hours_per_day',
-                'required' => true,
+                // time off may leave it empty for the whole day, the entity validates everything else
+                'required' => !$activity?->isTimeOff(),
                 'html5' => true,
                 'scale' => 2,
                 'attr' => [
@@ -121,6 +107,13 @@ class PlannedActivityEditForm extends AbstractType
                 'label' => 'label.color',
                 'required' => false,
                 'empty_data' => null,
+            ])
+            ->add('tentative', YesNoType::class, [
+                'label' => 'planner.tentative',
+                'help' => 'planner.tentative_help',
+                'documentation' => [
+                    'description' => 'If true, the work is not confirmed yet and counts apart from the confirmed capacity (default: false)',
+                ],
             ]);
 
         if ($includeRecurrence) {
@@ -163,40 +156,50 @@ class PlannedActivityEditForm extends AbstractType
             ],
         ]);
 
-        // the reservation is only written when it changes, so a customer or project submitted for an existing
-        // reservation would stick: drop them before the validation listener (priority 0) runs
+        // switching to time off without sending hours (the API) takes the whole day, like the dialog does
+        $builder->addEventListener(FormEvents::PRE_SUBMIT, static function (FormEvent $event): void {
+            $data = $event->getData();
+            $activity = $event->getForm()->getData();
+            if (!\is_array($data) || !\array_key_exists('timeOff', $data) || \array_key_exists('hoursPerDay', $data)) {
+                return;
+            }
+            if (\in_array($data['timeOff'], [null, false, '', '0', 0, 'false'], true)) {
+                return;
+            }
+            if ($activity instanceof PlannedActivity && $activity->isTimeOff()) {
+                return;
+            }
+            $data['hoursPerDay'] = '';
+            $event->setData($data);
+        });
+
+        // the flag is only written when it changes, so a customer or project submitted for existing time off
+        // would stick: drop them before the validation listener (priority 0) runs
         $builder->addEventListener(FormEvents::POST_SUBMIT, static function (FormEvent $event): void {
             $activity = $event->getData();
-            if ($activity instanceof PlannedActivity && $activity->isReservation()) {
-                $activity->setReservation($activity->getReservation());
+            if ($activity instanceof PlannedActivity && $activity->isTimeOff()) {
+                $activity->setTimeOff(true);
             }
         }, 10);
+
+        $builder->addEventListener(FormEvents::SUBMIT, [self::class, 'fillCustomerFromProject']);
     }
 
     /**
-     * The reservations that can be chosen, plus the one already set, also when it is not offered any more: the planning
-     * stays editable without being moved to something else.
-     *
-     * @return array<string, string> name => key
+     * A project belongs to exactly one customer, so a project chosen without a customer brings its own. Runs after the
+     * fields are mapped and before validation, which still requires a customer when no project is given either.
      */
-    private function getReservationChoices(?string $current): array
+    public static function fillCustomerFromProject(FormEvent $event): void
     {
-        $names = [];
-        foreach ($this->reservations?->getSelectable() ?? [] as $reservation) {
-            $names[$reservation->key] = $reservation->name;
+        $activity = $event->getData();
+        if (!$activity instanceof PlannedActivity || $activity->getCustomer() !== null) {
+            return;
         }
 
-        if ($current !== null && !\array_key_exists($current, $names)) {
-            $names[$current] = $this->reservations?->get($current)?->name ?? $current;
+        $customer = $activity->getProject()?->getCustomer();
+        if ($customer !== null) {
+            $activity->setCustomer($customer);
         }
-
-        // choices are keyed by label, two reservations of the same name must not swallow each other
-        $choices = [];
-        foreach ($names as $key => $name) {
-            $choices[\array_key_exists($name, $choices) ? $name . ' (' . $key . ')' : $name] = (string) $key;
-        }
-
-        return $choices;
     }
 
     public function configureOptions(OptionsResolver $resolver): void

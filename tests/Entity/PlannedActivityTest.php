@@ -27,6 +27,10 @@ class PlannedActivityTest extends TestCase
 
         $this->assertNull($activity->getId());
 
+        $this->assertFalse($activity->isTentative());
+        $this->assertSame($activity, $activity->setTentative(true));
+        $this->assertTrue($activity->isTentative());
+
         $user = new User();
         $this->assertSame($activity, $activity->setUser($user));
         $this->assertSame($user, $activity->getUser());
@@ -147,30 +151,39 @@ class PlannedActivityTest extends TestCase
         (new PlannedActivity())->validateProjectBelongsToCustomer($context);
     }
 
-    public function testReservationDropsCustomerAndProject(): void
+    public function testTimeOffDropsCustomerAndProject(): void
     {
         $customer = new Customer('ACME');
         $project = new Project();
         $project->setCustomer($customer);
 
-        $activity = (new PlannedActivity())->setCustomer($customer)->setProject($project)->setTitle('Legacy');
-        $activity->setReservation('buffer');
+        $activity = (new PlannedActivity())->setCustomer($customer)->setProject($project)->setTitle('Legacy')->setTentative(true);
+        $this->assertFalse($activity->isTimeOff());
 
-        $this->assertSame('buffer', $activity->getReservation());
-        $this->assertTrue($activity->isReservation());
+        $activity->setTimeOff(true);
+
+        $this->assertTrue($activity->isTimeOff());
         $this->assertNull($activity->getCustomer());
         $this->assertNull($activity->getProject());
         $this->assertNull($activity->getTitle());
-        $this->assertSame('buffer', $activity->getName());
-
-        // an empty key is no reservation and keeps what is there
-        $work = (new PlannedActivity())->setCustomer($customer)->setReservation('');
-        $this->assertNull($work->getReservation());
-        $this->assertFalse($work->isReservation());
-        $this->assertSame($customer, $work->getCustomer());
+        // time off is never tentative
+        $this->assertFalse($activity->isTentative());
+        $this->assertNull($activity->getName());
     }
 
-    public function testWorkNeedsACustomerAndAReservationDoesNot(): void
+    public function testOnlyTimeOffWithoutHoursIsAWholeDay(): void
+    {
+        $activity = (new PlannedActivity())->setTimeOff(true)->setHoursPerDay(null);
+        $this->assertTrue($activity->isWholeDay());
+        $this->assertSame(0.0, $activity->getTotalHours());
+
+        $activity->setHoursPerDay(4.0);
+        $this->assertFalse($activity->isWholeDay());
+
+        $this->assertFalse((new PlannedActivity())->setHoursPerDay(null)->isWholeDay());
+    }
+
+    public function testWorkNeedsCustomerAndHours(): void
     {
         $paths = [];
         $builder = $this->createMock(ConstraintViolationBuilderInterface::class);
@@ -184,20 +197,17 @@ class PlannedActivityTest extends TestCase
         $context = $this->createMock(ExecutionContextInterface::class);
         $context->method('buildViolation')->willReturn($builder);
 
-        (new PlannedActivity())->setReservation('buffer')->validateRequiredFields($context);
-        (new PlannedActivity())->setCustomer(new Customer('ACME'))->validateRequiredFields($context);
-        $this->assertSame([], $paths);
+        (new PlannedActivity())->setHoursPerDay(null)->validateRequiredFields($context);
 
-        (new PlannedActivity())->validateRequiredFields($context);
-        $this->assertSame(['customer'], $paths);
+        $this->assertSame(['customer', 'hoursPerDay'], $paths);
     }
 
-    public function testReservationTakesTheReservationsColour(): void
+    public function testTimeOffNeedsNeitherCustomerNorHours(): void
     {
-        $activity = new PlannedActivity();
-        $activity->setColor('#ff0000');
-        $activity->setReservation('buffer');
+        $context = $this->createMock(ExecutionContextInterface::class);
+        $context->expects($this->never())->method('buildViolation');
 
-        $this->assertNull($activity->getColor());
+        (new PlannedActivity())->setTimeOff(true)->setHoursPerDay(null)->validateRequiredFields($context);
+        (new PlannedActivity())->setCustomer(new Customer('ACME'))->validateRequiredFields($context);
     }
 }

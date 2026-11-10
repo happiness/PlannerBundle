@@ -22,10 +22,10 @@ use KimaiPlugin\PlannerBundle\Form\PlannedActivityEditForm;
 use KimaiPlugin\PlannerBundle\Form\Toolbar\PlannerToolbarForm;
 use KimaiPlugin\PlannerBundle\Planner\CommonProjectService;
 use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
+use KimaiPlugin\PlannerBundle\Planner\TentativeConfirmer;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
-use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
 use KimaiPlugin\PlannerBundle\Voter\PlannedActivityVoter;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -48,8 +48,7 @@ final class WeeklyPlannerController extends AbstractController
         private readonly PlannedActivityRepository $repository,
         private readonly WeeklyPlannerService $plannerService,
         private readonly UserRepository $userRepository,
-        private readonly PlannerUserProvider $userProvider,
-        private readonly ?PlanningReservations $reservations = null
+        private readonly PlannerUserProvider $userProvider
     ) {
     }
 
@@ -146,9 +145,10 @@ final class WeeklyPlannerController extends AbstractController
             }
         }
 
-        // like a customer/project row, a reservation's row pre-selects the reservation
-        if ($this->reservations !== null && $this->reservations->isSelectable($request->query->getString('reservation'))) {
-            $activity->setReservation($request->query->getString('reservation'));
+        // dragging in the time off row of a user creates time off, for the whole day unless hours are entered
+        if ($request->query->getBoolean('off')) {
+            $activity->setTimeOff(true);
+            $activity->setHoursPerDay(null);
         } else {
             $this->prefillCustomerAndProject($activity, $request);
         }
@@ -293,17 +293,9 @@ final class WeeklyPlannerController extends AbstractController
             $activity->setUser($user);
         }
 
-        // dropped on a reservation's row, the planning becomes that reservation
-        $reservation = $request->request->getString('reservation');
-        if ($reservation !== '') {
-            if ($this->reservations === null || !$this->reservations->isSelectable($reservation)) {
-                return new JsonResponse([], Response::HTTP_BAD_REQUEST);
-            }
-            $activity->setReservation($reservation);
-        }
-
+        // time off has no customer or project, it only moves in time and between users
         $customerId = $request->request->getInt('customer');
-        if ($customerId > 0 && $reservation === '') {
+        if ($customerId > 0 && !$activity->isTimeOff()) {
             $customer = $this->repository->findCustomer($customerId);
             $projectId = $request->request->getInt('project');
             $project = $projectId > 0 ? $this->repository->findProject($projectId) : null;
@@ -313,7 +305,6 @@ final class WeeklyPlannerController extends AbstractController
                 throw $this->createAccessDeniedException();
             }
 
-            $activity->setReservation(null);
             $activity->setCustomer($customer);
             $activity->setProject($project);
         }
@@ -432,6 +423,56 @@ final class WeeklyPlannerController extends AbstractController
     }
 
     /**
+     * Confirms the ongoing and future tentative work of a project for everybody the current user may edit, after asking.
+     */
+    #[Route(path: '/project/{id}/confirm-tentative', name: 'planner_confirm_tentative', requirements: ['id' => '\d+'], methods: ['GET', 'POST'])]
+    #[IsGranted('edit_planner')]
+    public function confirmTentative(Project $project, Request $request, TentativeConfirmer $confirmer): Response
+    {
+        if (!$this->isGranted('access', $project)) {
+            throw $this->createAccessDeniedException();
+        }
+
+        $date = $request->query->getString('date');
+        try {
+            $date = (new \DateTimeImmutable($date === '' ? 'today' : $date))->format('Y-m-d');
+        } catch (\Exception) {
+            $date = (new \DateTimeImmutable('today'))->format('Y-m-d');
+        }
+
+        $confirmation = $confirmer->prepare($project);
+
+        $form = $this->createFormBuilder(null, [
+            'csrf_token_id' => 'planner_confirm_tentative',
+            'attr' => [
+                'data-form-event' => 'kimai.plannerActivityUpdate',
+            ],
+        ])
+            ->setAction($this->generateUrl('planner_confirm_tentative', ['id' => $project->getId(), 'date' => $date]))
+            ->setMethod('POST')
+            ->getForm();
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            try {
+                $confirmer->confirm($confirmation);
+                $this->flashSuccess('action.update.success');
+            } catch (\Exception $ex) {
+                $this->flashUpdateException($ex);
+            }
+
+            return $this->redirectToRoute('planner_week', ['date' => $date]);
+        }
+
+        return $this->render('@Planner/confirm_tentative.html.twig', [
+            'form' => $form->createView(),
+            'confirmation' => $confirmation,
+            'date' => $date,
+        ]);
+    }
+
+    /**
      * @phpstan-impure the voter looks at the activity, which is changed between two checks
      */
     private function canEdit(PlannedActivity $activity): bool
@@ -517,7 +558,10 @@ final class WeeklyPlannerController extends AbstractController
 
         $users = $this->userProvider->getVisibleUsers($currentUser, $query);
 
-        $plannerData = $this->plannerService->getPlannerData($users, $selectedDate, $weeks);
+        $plannerData = $this->plannerService->getPlannerData($users, $selectedDate, $weeks, $query->getPlanning());
+        if ($query->isOrderedByFreeHours()) {
+            $plannerData->sortByFreeHours();
+        }
 
         $page = new PageSetup('planner.title');
         $page->setHelp('planner.html');
@@ -526,6 +570,9 @@ final class WeeklyPlannerController extends AbstractController
         $currentWeekMonday = $selectedDate->modify('this week monday 00:00:00');
         $prevWeek = $currentWeekMonday->modify('-1 week')->format('Y-m-d');
         $nextWeek = $currentWeekMonday->modify('+1 week')->format('Y-m-d');
+        // the double arrows move by the number of weeks shown, so the next period starts where this one ends
+        $prevPeriod = $currentWeekMonday->modify('-' . $weeks . ' weeks')->format('Y-m-d');
+        $nextPeriod = $currentWeekMonday->modify('+' . $weeks . ' weeks')->format('Y-m-d');
         $todayWeek = (new \DateTimeImmutable('today'))->modify('this week monday')->format('Y-m-d');
 
         return $this->render('@Planner/index.html.twig', [
@@ -537,6 +584,8 @@ final class WeeklyPlannerController extends AbstractController
             'currentWeek' => $currentWeekMonday,
             'prevWeek' => $prevWeek,
             'nextWeek' => $nextWeek,
+            'prevPeriod' => $prevPeriod,
+            'nextPeriod' => $nextPeriod,
             'todayWeek' => $todayWeek,
             'weeks' => $weeks,
             'weekOptions' => self::WEEK_OPTIONS,

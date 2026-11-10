@@ -14,11 +14,11 @@ namespace KimaiPlugin\PlannerBundle\Migrations;
 use App\Doctrine\AbstractMigration;
 use Doctrine\DBAL\Schema\Schema;
 
-final class Version20261110000000 extends AbstractMigration
+final class Version20261102120000 extends AbstractMigration
 {
     public function getDescription(): string
     {
-        return 'Plan reservations: time held for something that is not a customer or project';
+        return 'Mark planned activities as tentative';
     }
 
     public function up(Schema $schema): void
@@ -29,9 +29,8 @@ final class Version20261110000000 extends AbstractMigration
 
         $table = $schema->getTable('kimai2_planned_activities');
 
-        if (!$table->hasColumn('reservation')) {
-            $table->addColumn('reservation', 'string', ['length' => 64, 'notnull' => false]);
-            $table->addIndex(['reservation'], 'IDX_PLANNED_ACTIVITY_RESERVATION');
+        if (!$table->hasColumn('tentative')) {
+            $table->addColumn('tentative', 'boolean', ['notnull' => true, 'default' => false]);
         }
     }
 
@@ -43,11 +42,8 @@ final class Version20261110000000 extends AbstractMigration
 
         $table = $schema->getTable('kimai2_planned_activities');
 
-        if ($table->hasColumn('reservation')) {
-            if ($table->hasIndex('IDX_PLANNED_ACTIVITY_RESERVATION')) {
-                $table->dropIndex('IDX_PLANNED_ACTIVITY_RESERVATION');
-            }
-            $table->dropColumn('reservation');
+        if ($table->hasColumn('tentative')) {
+            $table->dropColumn('tentative');
         }
     }
 }

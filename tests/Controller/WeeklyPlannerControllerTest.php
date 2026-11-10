@@ -20,6 +20,8 @@ use App\Repository\UserRepository;
 use KimaiPlugin\PlannerBundle\Controller\WeeklyPlannerController;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
+use KimaiPlugin\PlannerBundle\Planner\TentativeConfirmation;
+use KimaiPlugin\PlannerBundle\Planner\TentativeConfirmer;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerData;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
@@ -146,6 +148,9 @@ class WeeklyPlannerControllerTest extends TestCase
                     $this->assertSame('34', $context['currentWeek']->format('W'));
                     $this->assertSame('2026-08-10', $context['prevWeek']);
                     $this->assertSame('2026-08-24', $context['nextWeek']);
+                    // four weeks shown by default: a period back and forth is four weeks
+                    $this->assertSame('2026-07-20', $context['prevPeriod']);
+                    $this->assertSame('2026-09-14', $context['nextPeriod']);
 
                     $expectedToday = (new \DateTimeImmutable('today'))->modify('this week monday')->format('Y-m-d');
                     $this->assertSame($expectedToday, $context['todayWeek']);
@@ -1224,6 +1229,9 @@ class WeeklyPlannerControllerTest extends TestCase
             ->with('@Planner/index.html.twig', $this->callback(function (array $context) use ($expectedWeeks): bool {
                 $this->assertSame($expectedWeeks, $context['weeks']);
                 $this->assertSame([1, 2, 4, 8], $context['weekOptions']);
+                $monday = $context['currentWeek'];
+                $this->assertSame($monday->modify('-' . $expectedWeeks . ' weeks')->format('Y-m-d'), $context['prevPeriod']);
+                $this->assertSame($monday->modify('+' . $expectedWeeks . ' weeks')->format('Y-m-d'), $context['nextPeriod']);
 
                 return true;
             }))
@@ -1347,6 +1355,87 @@ class WeeklyPlannerControllerTest extends TestCase
         $controller->setContainer($container);
 
         $this->assertInstanceOf(Response::class, $controller->index());
+    }
+
+    /**
+     * @return array<string, array{string, array<int>}>
+     */
+    public static function orderScenarios(): array
+    {
+        return [
+            'by name keeps the order of the users' => [PlannerQuery::ORDER_BY_NAME, [1, 2, 3]],
+            'by free hours puts the most free hours first' => [PlannerQuery::ORDER_BY_FREE_HOURS, [3, 1, 2]],
+        ];
+    }
+
+    /**
+     * @param array<int> $expectedOrder
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('orderScenarios')]
+    public function testRowsAreOrderedAsTheSearchAsks(string $orderBy, array $expectedOrder): void
+    {
+        $user = new User();
+        $ref = new \ReflectionProperty(User::class, 'id');
+        $ref->setValue($user, 1);
+
+        // a week to come, since days that have passed have no free hours
+        $monday = new \DateTimeImmutable('monday next week');
+        $data = new WeeklyPlannerData($monday, $monday->modify('+6 days'));
+        // user => [expected, planned] on Monday: 2 free, overbooked by 2, 8 free
+        foreach ([1 => [8.0, 6.0], 2 => [8.0, 10.0], 3 => [8.0, 0.0]] as $id => [$expected, $planned]) {
+            $rowUser = new User();
+            $ref->setValue($rowUser, $id);
+            $row = new \KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerUserRow($rowUser);
+            $day = new \KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerDay($monday, $expected);
+            $day->addActivity((new PlannedActivity())->setHoursPerDay($planned));
+            $row->addDay($day);
+            $data->addRow($row);
+        }
+
+        $plannerService = $this->createMock(WeeklyPlannerService::class);
+        $plannerService->method('getPlannerData')->willReturn($data);
+
+        $controller = new WeeklyPlannerController(
+            $this->createMock(PlannedActivityRepository::class),
+            $plannerService,
+            $this->createMock(UserRepository::class),
+            $this->createMock(PlannerUserProvider::class)
+        );
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturn(false);
+        $tokenStorage = $this->createMock(TokenStorageInterface::class);
+        $tokenStorage->method('getToken')->willReturn(new UsernamePasswordToken($user, 'main', $user->getRoles()));
+
+        $twig = $this->createMock(Environment::class);
+        $twig->expects($this->once())
+            ->method('render')
+            ->with('@Planner/index.html.twig', $this->callback(function (array $context) use ($expectedOrder): bool {
+                $this->assertSame($expectedOrder, array_keys($context['plannerData']->getRows()));
+
+                return true;
+            }))
+            ->willReturn('<html></html>');
+
+        $query = new PlannerQuery();
+        $query->setOrderBy($orderBy);
+        $formServices = $this->createFormServices($query);
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnMap([
+            ['security.authorization_checker', true],
+            ['security.token_storage', true],
+            ...$this->formServiceMap('has', $formServices),
+            ['twig', true],
+        ]);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['security.token_storage', $tokenStorage],
+            ...$this->formServiceMap('get', $formServices),
+            ['twig', $twig],
+        ]);
+        $controller->setContainer($container);
+
+        $controller->index();
     }
 
     /**
@@ -1477,6 +1566,19 @@ class WeeklyPlannerControllerTest extends TestCase
         });
     }
 
+    public function testCreateActivityInTheTimeOffRowCreatesTimeOffForTheWholeDay(): void
+    {
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->never())->method('findCustomer');
+        $repo->expects($this->never())->method('findProject');
+
+        $this->runCreateActivity(['date' => '2026-11-06', 'off' => '1', 'customer' => '3', 'project' => '7'], true, $repo, function (PlannedActivity $activity): void {
+            $this->assertTrue($activity->isTimeOff());
+            $this->assertNull($activity->getHoursPerDay());
+            $this->assertNull($activity->getCustomer());
+        });
+    }
+
     public function testCreateActivityDoesNotPrefillInaccessibleCustomerOrProject(): void
     {
         $customer = new Customer('Secret');
@@ -1603,6 +1705,23 @@ class WeeklyPlannerControllerTest extends TestCase
         $this->assertNull($activity->getProject());
     }
 
+    public function testMoveTimeOffIgnoresTheCustomerOfTheTargetRow(): void
+    {
+        $activity = $this->createMovableActivity();
+        $activity->setTimeOff(true);
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->never())->method('findCustomer');
+        $repo->expects($this->once())->method('savePlannedActivity');
+
+        $response = $this->runMoveActivity($activity, ['begin' => '2026-10-21', 'end' => '2026-10-21', 'customer' => '3', 'project' => '7'], $repo);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertTrue($activity->isTimeOff());
+        $this->assertNull($activity->getCustomer());
+        $this->assertSame('2026-10-21', $activity->getBegin()?->format('Y-m-d'));
+    }
+
     public function testMoveActivityRejectsInvalidToken(): void
     {
         $repo = $this->createMock(PlannedActivityRepository::class);
@@ -1683,5 +1802,101 @@ class WeeklyPlannerControllerTest extends TestCase
 
         $this->assertSame(422, $response->getStatusCode());
         $this->assertStringContainsString('Invalid dates', (string) $response->getContent());
+    }
+
+    /**
+     * @param array<string, object> $services
+     */
+    private function runConfirmTentative(bool $submitted, bool $projectAccess, TentativeConfirmer $confirmer, array $services = []): Response
+    {
+        $controller = new WeeklyPlannerController(
+            $this->createMock(PlannedActivityRepository::class),
+            $this->createMock(WeeklyPlannerService::class),
+            $this->createMock(UserRepository::class),
+            $this->createMock(PlannerUserProvider::class)
+        );
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturnCallback(static fn (string $attribute): bool => $attribute !== 'access' || $projectAccess);
+
+        $router = $this->createMock(RouterInterface::class);
+        $router->method('generate')->willReturnCallback(static fn (string $route, array $params = []): string => $route . '?' . http_build_query($params));
+
+        $form = $this->createMock(FormInterface::class);
+        $form->method('isSubmitted')->willReturn($submitted);
+        $form->method('isValid')->willReturn(true);
+        $form->method('createView')->willReturn(new FormView());
+
+        $formBuilder = $this->createMock(\Symfony\Component\Form\FormBuilderInterface::class);
+        $formBuilder->method('setAction')->willReturnSelf();
+        $formBuilder->method('setMethod')->willReturnSelf();
+        $formBuilder->method('getForm')->willReturn($form);
+
+        $formFactory = $this->createMock(FormFactoryInterface::class);
+        $formFactory->method('createBuilder')->willReturn($formBuilder);
+
+        $flashBag = new \Symfony\Component\HttpFoundation\Session\Flash\FlashBag();
+        $session = $this->createMock(\Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface::class);
+        $session->method('getFlashBag')->willReturn($flashBag);
+        $request = new Request(['date' => '2026-11-04']);
+        $request->setSession($session);
+        $requestStack = new \Symfony\Component\HttpFoundation\RequestStack();
+        $requestStack->push($request);
+
+        $services = array_merge([
+            'security.authorization_checker' => $authChecker,
+            'router' => $router,
+            'form.factory' => $formFactory,
+            'request_stack' => $requestStack,
+        ], $services);
+
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnCallback(static fn (string $id): bool => isset($services[$id]));
+        $container->method('get')->willReturnCallback(static fn (string $id): ?object => $services[$id] ?? null);
+        $controller->setContainer($container);
+
+        $project = new Project();
+        (new \ReflectionProperty(Project::class, 'id'))->setValue($project, 7);
+
+        return $controller->confirmTentative($project, $request, $confirmer);
+    }
+
+    public function testConfirmTentativeRendersTheQuestion(): void
+    {
+        $confirmation = new TentativeConfirmation(new Project(), [new PlannedActivity()]);
+        $confirmer = $this->createMock(TentativeConfirmer::class);
+        $confirmer->method('prepare')->willReturn($confirmation);
+        $confirmer->expects($this->never())->method('confirm');
+
+        $twig = $this->createMock(Environment::class);
+        $twig->expects($this->once())->method('render')
+            ->with('@Planner/confirm_tentative.html.twig', $this->callback(static fn (array $context): bool => $context['confirmation'] === $confirmation && $context['date'] === '2026-11-04'))
+            ->willReturn('<html>confirm</html>');
+
+        $response = $this->runConfirmTentative(false, true, $confirmer, ['twig' => $twig]);
+
+        $this->assertSame('<html>confirm</html>', $response->getContent());
+    }
+
+    public function testConfirmTentativeConfirmsAndReturnsToTheWeek(): void
+    {
+        $confirmation = new TentativeConfirmation(new Project(), [new PlannedActivity()]);
+        $confirmer = $this->createMock(TentativeConfirmer::class);
+        $confirmer->method('prepare')->willReturn($confirmation);
+        $confirmer->expects($this->once())->method('confirm')->with($confirmation);
+
+        $response = $this->runConfirmTentative(true, true, $confirmer);
+
+        $this->assertTrue($response->isRedirect('planner_week?date=2026-11-04'));
+    }
+
+    public function testConfirmTentativeRequiresProjectAccess(): void
+    {
+        $confirmer = $this->createMock(TentativeConfirmer::class);
+        $confirmer->expects($this->never())->method('prepare');
+
+        $this->expectException(AccessDeniedException::class);
+
+        $this->runConfirmTentative(true, false, $confirmer);
     }
 }

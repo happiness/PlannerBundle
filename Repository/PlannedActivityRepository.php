@@ -15,18 +15,15 @@ use App\Entity\Customer;
 use App\Entity\Project;
 use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\DBAL\ArrayParameterType;
-use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
-use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
 
 /**
  * @extends ServiceEntityRepository<PlannedActivity>
  */
 class PlannedActivityRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry, private readonly ?PlanningReservations $reservations = null)
+    public function __construct(ManagerRegistry $registry)
     {
         parent::__construct($registry, PlannedActivity::class);
     }
@@ -35,6 +32,25 @@ class PlannedActivityRepository extends ServiceEntityRepository
     {
         $entityManager = $this->getEntityManager();
         $entityManager->persist($activity);
+        $entityManager->flush();
+    }
+
+    /**
+     * Confirms tentative activities in one flush.
+     *
+     * @param array<PlannedActivity> $activities
+     */
+    public function confirmPlannedActivities(array $activities): void
+    {
+        if ($activities === []) {
+            return;
+        }
+
+        $entityManager = $this->getEntityManager();
+        foreach ($activities as $activity) {
+            $activity->setTentative(false);
+            $entityManager->persist($activity);
+        }
         $entityManager->flush();
     }
 
@@ -103,10 +119,11 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $splitActivity->setCustomer($activity->getCustomer());
         $splitActivity->setProject($activity->getProject());
         $splitActivity->setTitle($activity->getTitle());
-        $splitActivity->setReservation($activity->getReservation());
         $splitActivity->setHoursPerDay($activity->getHoursPerDay());
+        $splitActivity->setTimeOff($activity->isTimeOff());
         $splitActivity->setColor($activity->getColor());
         $splitActivity->setComment($activity->getComment());
+        $splitActivity->setTentative($activity->isTentative());
         $splitActivity->setRecurrenceGroup($activity->getRecurrenceGroup());
         $splitActivity->setBegin(new \DateTime($secondBegin->format('Y-m-d')));
         $splitActivity->setEnd(new \DateTime($originalEnd->format('Y-m-d')));
@@ -188,10 +205,11 @@ class PlannedActivityRepository extends ServiceEntityRepository
             $future->setCustomer($activity->getCustomer());
             $future->setProject($activity->getProject());
             $future->setTitle($activity->getTitle());
-            $future->setReservation($activity->getReservation());
             $future->setHoursPerDay($activity->getHoursPerDay());
+            $future->setTimeOff($activity->isTimeOff());
             $future->setColor($activity->getColor());
             $future->setComment($activity->getComment());
+            $future->setTentative($activity->isTentative());
             $entityManager->persist($future);
         }
         $entityManager->flush();
@@ -247,10 +265,11 @@ class PlannedActivityRepository extends ServiceEntityRepository
             $recurring->setCustomer($activity->getCustomer());
             $recurring->setProject($activity->getProject());
             $recurring->setTitle($activity->getTitle());
-            $recurring->setReservation($activity->getReservation());
             $recurring->setHoursPerDay($activity->getHoursPerDay());
+            $recurring->setTimeOff($activity->isTimeOff());
             $recurring->setColor($activity->getColor());
             $recurring->setComment($activity->getComment());
+            $recurring->setTentative($activity->isTentative());
             $recurring->setRecurrenceGroup($activity->getRecurrenceGroup());
 
             $recBegin = (clone $begin)->modify(\sprintf('+%d week', $i));
@@ -291,7 +310,6 @@ class PlannedActivityRepository extends ServiceEntityRepository
             ->setParameter('users', $users)
             ->setParameter('start', $start->format('Y-m-d'))
             ->setParameter('end', $end->format('Y-m-d'));
-        $this->excludeHiddenReservations($qb);
 
         /** @var array<PlannedActivity> $result */
         $result = $qb->getQuery()->getResult();
@@ -311,7 +329,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
      * @param array<User> $users
      * @param array<Customer> $customers
      * @param array<Project> $projects
-     * @param array<string> $reservations reservation keys
+     * @param bool|null $tentative true for tentative activities only, false for confirmed ones only, null for both
      * @return array<PlannedActivity>
      */
     public function findByFilter(
@@ -320,7 +338,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
         ?\DateTimeInterface $end = null,
         array $customers = [],
         array $projects = [],
-        array $reservations = []
+        ?bool $tentative = null
     ): array {
         if ($users === []) {
             return [];
@@ -352,11 +370,9 @@ class PlannedActivityRepository extends ServiceEntityRepository
             $qb->andWhere('p.project IN (:projects)')->setParameter('projects', $projects);
         }
 
-        if ($reservations !== []) {
-            $qb->andWhere('p.reservation IN (:reservations)')->setParameter('reservations', array_map('strval', $reservations), ArrayParameterType::STRING);
+        if ($tentative !== null) {
+            $qb->andWhere('p.tentative = :tentative')->setParameter('tentative', $tentative);
         }
-
-        $this->excludeHiddenReservations($qb);
 
         /** @var array<PlannedActivity> $result */
         $result = $qb->getQuery()->getResult();
@@ -365,14 +381,27 @@ class PlannedActivityRepository extends ServiceEntityRepository
     }
 
     /**
-     * Plannings of a hidden (e.g. archived) reservation are left out of the planner as if they did not exist.
+     * Tentative activities of a project that end on or after the given day, of every user.
+     *
+     * @return array<PlannedActivity>
      */
-    private function excludeHiddenReservations(QueryBuilder $qb): void
+    public function findTentativeForProject(Project $project, \DateTimeInterface $from): array
     {
-        $hidden = $this->reservations?->getHiddenKeys() ?? [];
-        if ($hidden !== []) {
-            $qb->andWhere('p.reservation IS NULL OR p.reservation NOT IN (:hiddenReservations)')
-                ->setParameter('hiddenReservations', $hidden, ArrayParameterType::STRING);
-        }
+        $qb = $this->createQueryBuilder('p');
+        $qb->leftJoin('p.user', 'u')
+            ->addSelect('u')
+            ->where('p.project = :project')
+            ->andWhere('p.tentative = :tentative')
+            ->andWhere('p.end >= :from')
+            ->orderBy('p.begin', 'ASC')
+            ->addOrderBy('p.id', 'ASC')
+            ->setParameter('project', $project)
+            ->setParameter('tentative', true)
+            ->setParameter('from', $from->format('Y-m-d'));
+
+        /** @var array<PlannedActivity> $result */
+        $result = $qb->getQuery()->getResult();
+
+        return $result;
     }
 }

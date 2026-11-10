@@ -12,21 +12,14 @@ declare(strict_types=1);
 namespace KimaiPlugin\PlannerBundle\Tests\Form;
 
 use App\Entity\Customer;
+use App\Entity\Project;
 use App\Entity\User;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Form\PlannedActivityEditForm;
-use KimaiPlugin\PlannerBundle\Reservation\PlanningReservation;
-use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
-use KimaiPlugin\PlannerBundle\Tests\Reservation\PlanningReservationsTest;
-use Symfony\Component\Form\AbstractTypeExtension;
-use Symfony\Component\Form\Extension\Core\Type\FormType;
 use Symfony\Component\Form\FormEvent;
 use Symfony\Component\Form\FormEvents;
-use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\FormInterface;
-use Symfony\Component\Form\Forms;
 use Symfony\Component\Form\Test\TypeTestCase;
-use Symfony\Component\OptionsResolver\OptionsResolver;
 
 class PlannedActivityEditFormTest extends TypeTestCase
 {
@@ -49,6 +42,7 @@ class PlannedActivityEditFormTest extends TypeTestCase
         $this->assertTrue($form->has('end'));
         $this->assertTrue($form->has('hoursPerDay'));
         $this->assertTrue($form->has('color'));
+        $this->assertTrue($form->has('tentative'));
         $this->assertTrue($form->has('comment'));
     }
 
@@ -120,63 +114,95 @@ class PlannedActivityEditFormTest extends TypeTestCase
         $this->assertTrue($form->has('comment'));
     }
 
-    public function testReservationIsOfferedOnlyWhenThereAreAny(): void
+    /**
+     * Runs only the listeners this form adds, not the project reload of FormTrait.
+     */
+    private function dispatchOwnListener(string $eventName, PlannedActivity $activity, mixed $data): mixed
     {
-        $form = $this->factory->createBuilder(PlannedActivityEditForm::class, new PlannedActivity(), ['user' => new User()]);
-        $this->assertFalse($form->has('reservation'));
-
-        $reservations = PlanningReservationsTest::create([new PlanningReservation('buffer', 'Agency buffer'), new PlanningReservation('old', 'Old', null, true)]);
-        $builder = $this->createFormFactoryWith($reservations)->createBuilder(PlannedActivityEditForm::class, new PlannedActivity(), ['user' => new User()]);
-        $this->assertTrue($builder->has('reservation'));
-        $this->assertSame(['Agency buffer' => 'buffer'], $builder->get('reservation')->getOption('choices'));
-
-        // the reservation a planning already has stays choosable, also when hidden or unknown
-        $builder = $this->createFormFactoryWith($reservations)->createBuilder(PlannedActivityEditForm::class, (new PlannedActivity())->setReservation('gone'), ['user' => new User()]);
-        $this->assertSame(['Agency buffer' => 'buffer', 'gone' => 'gone'], $builder->get('reservation')->getOption('choices'));
-
-        // without any reservations, a planning that has one still shows it
-        $builder = $this->createFormFactoryWith(PlanningReservationsTest::create([]))->createBuilder(PlannedActivityEditForm::class, (new PlannedActivity())->setReservation('gone'), ['user' => new User()]);
-        $this->assertSame(['gone' => 'gone'], $builder->get('reservation')->getOption('choices'));
-    }
-
-    public function testReservationNeverKeepsASubmittedCustomer(): void
-    {
-        $customer = new Customer('ACME');
-
-        // what the form leaves behind when an existing reservation gets a customer: the unchanged key is not written again
-        $activity = (new PlannedActivity())->setReservation('buffer');
-        $activity->setCustomer($customer);
-
         $builder = $this->factory->createBuilder(PlannedActivityEditForm::class, $activity, ['user' => new User()]);
         $form = $this->createMock(FormInterface::class);
         $form->method('getData')->willReturn($activity);
-        foreach ($builder->getEventDispatcher()->getListeners(FormEvents::POST_SUBMIT) as $listener) {
+        $event = new FormEvent($form, $data);
+
+        foreach ($builder->getEventDispatcher()->getListeners($eventName) as $listener) {
             if ($listener instanceof \Closure && (new \ReflectionFunction($listener))->getClosureScopeClass()?->getName() === PlannedActivityEditForm::class) {
-                $listener(new FormEvent($form, $activity));
+                $listener($event);
             }
         }
 
-        $this->assertSame('buffer', $activity->getReservation());
-        $this->assertNull($activity->getCustomer());
+        return $event->getData();
     }
 
-    private function createFormFactoryWith(PlanningReservations $reservations): FormFactoryInterface
+    public function testSwitchingToTimeOffWithoutHoursTakesTheWholeDay(): void
     {
-        return Forms::createFormFactoryBuilder()
-            ->addExtensions($this->getExtensions())
-            ->addType(new PlannedActivityEditForm($reservations))
-            // the API documentation option, which NelmioApiDocBundle adds in the application
-            ->addTypeExtension(new class() extends AbstractTypeExtension {
-                public function configureOptions(OptionsResolver $resolver): void
-                {
-                    $resolver->setDefined('documentation');
-                }
+        $work = (new PlannedActivity())->setHoursPerDay(6.0);
 
-                public static function getExtendedTypes(): iterable
-                {
-                    return [FormType::class];
-                }
-            })
-            ->getFormFactory();
+        $this->assertSame(['timeOff' => true, 'hoursPerDay' => ''], $this->dispatchOwnListener(FormEvents::PRE_SUBMIT, $work, ['timeOff' => true]));
+        // explicit hours, no switch, switching off, or already time off: left alone
+        $this->assertSame(['timeOff' => true, 'hoursPerDay' => '4'], $this->dispatchOwnListener(FormEvents::PRE_SUBMIT, $work, ['timeOff' => true, 'hoursPerDay' => '4']));
+        $this->assertSame(['comment' => 'x'], $this->dispatchOwnListener(FormEvents::PRE_SUBMIT, $work, ['comment' => 'x']));
+        $this->assertSame(['timeOff' => false], $this->dispatchOwnListener(FormEvents::PRE_SUBMIT, $work, ['timeOff' => false]));
+        $this->assertSame(['timeOff' => true], $this->dispatchOwnListener(FormEvents::PRE_SUBMIT, (new PlannedActivity())->setTimeOff(true), ['timeOff' => true]));
+    }
+
+    public function testTimeOffNeverKeepsASubmittedCustomerProjectOrTentative(): void
+    {
+        $customer = new Customer('ACME');
+        $project = new Project();
+        $project->setCustomer($customer);
+
+        // what the form leaves behind when existing time off gets a customer: the unchanged flag is not written again
+        $activity = (new PlannedActivity())->setTimeOff(true);
+        $activity->setCustomer($customer)->setProject($project)->setTentative(true);
+
+        $this->dispatchOwnListener(FormEvents::POST_SUBMIT, $activity, $activity);
+
+        $this->assertTrue($activity->isTimeOff());
+        $this->assertNull($activity->getCustomer());
+        $this->assertNull($activity->getProject());
+        $this->assertFalse($activity->isTentative());
+
+        $work = (new PlannedActivity())->setCustomer($customer);
+        $this->dispatchOwnListener(FormEvents::POST_SUBMIT, $work, $work);
+        $this->assertSame($customer, $work->getCustomer());
+    }
+
+    public function testProjectWithoutCustomerBringsItsCustomer(): void
+    {
+        $customer = new Customer('Customer');
+        $project = new Project();
+        $project->setCustomer($customer);
+
+        $activity = new PlannedActivity();
+        $activity->setProject($project);
+
+        PlannedActivityEditForm::fillCustomerFromProject(new FormEvent($this->createMock(FormInterface::class), $activity));
+
+        $this->assertSame($customer, $activity->getCustomer());
+    }
+
+    public function testChosenCustomerIsKept(): void
+    {
+        $project = new Project();
+        $project->setCustomer(new Customer('Project customer'));
+        $chosen = new Customer('Chosen customer');
+
+        $activity = new PlannedActivity();
+        $activity->setCustomer($chosen);
+        $activity->setProject($project);
+
+        PlannedActivityEditForm::fillCustomerFromProject(new FormEvent($this->createMock(FormInterface::class), $activity));
+
+        // a mismatch is left for validateProjectBelongsToCustomer() to report, not silently replaced
+        $this->assertSame($chosen, $activity->getCustomer());
+    }
+
+    public function testNoProjectLeavesCustomerEmpty(): void
+    {
+        $activity = new PlannedActivity();
+
+        PlannedActivityEditForm::fillCustomerFromProject(new FormEvent($this->createMock(FormInterface::class), $activity));
+
+        $this->assertNull($activity->getCustomer());
     }
 }
