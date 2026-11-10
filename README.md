@@ -92,6 +92,7 @@ The plugin registers dedicated permissions that integrate seamlessly into Kimai'
 | `delete_planner` | Delete own planned activities | `ROLE_USER`, `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `view_other_planner` | View other team members in the weekly planner | `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `edit_other_planner` | Create, edit, and delete activities for other users | `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
+| `calendar_feed_planner` | Subscribe to your own planning as a calendar feed (see [Calendar feed](#calendar-feed)) | `ROLE_USER`, `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 
 Permissions can be customized anytime via the Kimai UI under **System > Role permissions**.
 
@@ -174,12 +175,18 @@ Time off is returned with `"timeOff": true`, `customer` and `project` set to `nu
 
 ## Calendar feed
 
-Everyone with the `view_planner` permission can subscribe to their own planned work from a calendar app. The "Calendar feed" button above the planner opens a page with a private address to add as a calendar subscription ("From URL" in Google Calendar, "Subscribe from web" in Outlook, "New Calendar Subscription" in Apple Calendar).
+Everyone with the `calendar_feed_planner` permission (every role by default; take it away under *System > Role permissions*) can subscribe to their own planned work from a calendar app. The "Calendar feed" button above the planner opens a page with a private address to add as a calendar subscription ("From URL" in Google Calendar, "Subscribe from web" in Outlook, "New Calendar Subscription" in Apple Calendar).
 
-- Each planned activity is an all-day event over its days, titled with the project (or customer) and the hours per day; the description has customer, project, hours and comment, and the event links back to that week in the planner. Events are marked as free, so planned work never makes you look busy for meetings.
+- Each planned activity is an all-day event over its days, titled with the project (or customer) and the hours per day; the description has customer, project and hours, and the event links back to that week in the planner. Events are marked as free, so planned work never makes you look busy for meetings. Tentative work is titled "Tentative: …" and marked tentative, and time off without hours shows as a whole day.
 - The feed covers 60 days back to a year ahead. Calendar apps refresh subscriptions on their own schedule, Google can take up to a day.
 - Run the plugin's migrations after updating: the addresses are kept in a new table, `kimai2_planner_calendar_tokens`.
-- The address carries a random 64-character token and needs no login, which is how calendar apps can fetch it. Renewing the address on the same page makes the old one stop working; "Switch off" removes it. The feed also stops for users who are deactivated or lose `view_planner`.
+- The address carries a random 64-character token and needs no login, which is how calendar apps can fetch it. Renewing the address on the same page makes the old one stop working; "Switch off" removes it. The feed also stops for users who are deactivated or lose `calendar_feed_planner`.
+
+Three settings under *System > Settings > Weekly Planner* decide what leaves Kimai once someone subscribes:
+
+- **Notes in calendar feeds** (default: leave out). Comments often hold details meant for colleagues only, and the feed hands everything in it to whichever calendar service each person subscribes from. Set it to "Include" to add them to the event description.
+- **Let people choose for their own feed** (default: no). With it on, the feed page gets an "Include notes in my feed" switch that starts from the setting above. Only a choice that differs from the organisation's is kept, so everyone else follows it if it changes.
+- **Store feed addresses hashed** (default: yes). Only a SHA-256 hash of the token is kept, so a leaked database backup reveals no working address. The address is then shown once, right after it is created; whoever loses it renews it and subscribes again. Addresses created while the setting was off are hashed the next time a calendar fetches them, and keep working.
 
 ## Upgrading
 
