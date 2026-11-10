@@ -20,9 +20,10 @@ use App\Repository\UserRepository;
 use KimaiPlugin\PlannerBundle\Controller\WeeklyPlannerController;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
+use KimaiPlugin\PlannerBundle\Planner\TentativeConfirmation;
+use KimaiPlugin\PlannerBundle\Planner\TentativeConfirmer;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerData;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
-use KimaiPlugin\PlannerBundle\Planner\WorkingDayRanges;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
 use PHPUnit\Framework\TestCase;
@@ -147,6 +148,9 @@ class WeeklyPlannerControllerTest extends TestCase
                     $this->assertSame('34', $context['currentWeek']->format('W'));
                     $this->assertSame('2026-08-10', $context['prevWeek']);
                     $this->assertSame('2026-08-24', $context['nextWeek']);
+                    // four weeks shown by default: a period back and forth is four weeks
+                    $this->assertSame('2026-07-20', $context['prevPeriod']);
+                    $this->assertSame('2026-09-14', $context['nextPeriod']);
 
                     $expectedToday = (new \DateTimeImmutable('today'))->modify('this week monday')->format('Y-m-d');
                     $this->assertSame($expectedToday, $context['todayWeek']);
@@ -300,7 +304,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $controller->setContainer($container);
 
         $request = new Request();
-        $response = $controller->createActivity($request, $this->createStub(WorkingDayRanges::class));
+        $response = $controller->createActivity($request);
 
         $this->assertInstanceOf(Response::class, $response);
         $this->assertSame('<html>Form View</html>', $response->getContent());
@@ -368,7 +372,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $controller->setContainer($container);
 
         $request = new Request();
-        $response = $controller->editActivity($activity, $request, $this->createStub(WorkingDayRanges::class));
+        $response = $controller->editActivity($activity, $request);
 
         $this->assertInstanceOf(Response::class, $response);
         $this->assertSame('<html>Edit Form View</html>', $response->getContent());
@@ -381,8 +385,8 @@ class WeeklyPlannerControllerTest extends TestCase
         $ref->setValue($user, 1);
 
         $repo = $this->createMock(PlannedActivityRepository::class);
-        $repo->expects($this->once())->method('savePlannedActivityInRanges')->with($this->isInstanceOf(PlannedActivity::class), [])->willReturnCallback(static fn (PlannedActivity $activity): array => [$activity]);
-        $repo->expects($this->once())->method('createRecurringActivitiesForAll')->with($this->callback(static fn (array $activities): bool => \count($activities) === 1), 3);
+        $repo->expects($this->once())->method('savePlannedActivity');
+        $repo->expects($this->once())->method('createRecurringActivities')->with($this->isInstanceOf(PlannedActivity::class), 3);
 
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
@@ -438,85 +442,10 @@ class WeeklyPlannerControllerTest extends TestCase
 
         $controller->setContainer($container);
 
-        $response = $controller->createActivity($request, $this->createStub(WorkingDayRanges::class));
+        $response = $controller->createActivity($request);
 
         $this->assertInstanceOf(Response::class, $response);
         $this->assertTrue($response->isRedirect('/planner/week/2026-09-07'));
-    }
-
-    public function testCreateActivityOverDaysOffSavesTheWorkingDaysAsOneSeries(): void
-    {
-        $user = new User();
-        $ref = new \ReflectionProperty(User::class, 'id');
-        $ref->setValue($user, 1);
-
-        $repo = $this->createMock(PlannedActivityRepository::class);
-        // Saturday to Tuesday, of which only Monday and Tuesday are working days
-        $ranges = [[new \DateTime('2026-11-09'), new \DateTime('2026-11-10')]];
-        $workingDays = $this->createStub(WorkingDayRanges::class);
-        $workingDays->method('forActivity')->willReturn($ranges);
-        $second = new PlannedActivity();
-        $repo->expects($this->once())->method('savePlannedActivityInRanges')->with($this->isInstanceOf(PlannedActivity::class), $ranges)->willReturnCallback(static fn (PlannedActivity $activity): array => [$activity, $second]);
-        $repo->expects($this->once())->method('createRecurringActivitiesForAll')->with($this->callback(static fn (array $activities): bool => \count($activities) === 2 && $activities[1] === $second), 3);
-
-        $plannerService = $this->createMock(WeeklyPlannerService::class);
-        $userRepo = $this->createMock(UserRepository::class);
-
-        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class));
-
-        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
-        $authChecker->method('isGranted')->willReturn(true);
-
-        $token = new UsernamePasswordToken($user, 'main', $user->getRoles());
-        $tokenStorage = $this->createMock(TokenStorageInterface::class);
-        $tokenStorage->method('getToken')->willReturn($token);
-
-        $router = $this->createMock(RouterInterface::class);
-        // the week planned in, not the week of the first working day
-        $router->method('generate')->willReturnCallback(static fn (string $route, array $params = []): string => $route === 'planner_week' ? '/planner/week/' . $params['date'] : '/planner/activity/create');
-
-        $recurrentField = $this->createMock(FormInterface::class);
-        $recurrentField->method('getData')->willReturn(3);
-
-        $form = $this->createMock(FormInterface::class);
-        $form->method('isSubmitted')->willReturn(true);
-        $form->method('isValid')->willReturn(true);
-        $form->method('has')->with('recurrentWeeks')->willReturn(true);
-        $form->method('get')->with('recurrentWeeks')->willReturn($recurrentField);
-
-        $formFactory = $this->createMock(FormFactoryInterface::class);
-        $formFactory->method('create')->willReturn($form);
-
-        $flashBag = new \Symfony\Component\HttpFoundation\Session\Flash\FlashBag();
-        $session = $this->createMock(\Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface::class);
-        $session->method('getFlashBag')->willReturn($flashBag);
-
-        $requestStack = new \Symfony\Component\HttpFoundation\RequestStack();
-        $request = new Request(['date' => '2026-11-07', 'end' => '2026-11-10']);
-        $request->setSession($session);
-        $requestStack->push($request);
-
-        $container = $this->createMock(ContainerInterface::class);
-        $container->method('has')->willReturnMap([
-            ['security.authorization_checker', true],
-            ['security.token_storage', true],
-            ['router', true],
-            ['form.factory', true],
-            ['request_stack', true],
-        ]);
-        $container->method('get')->willReturnMap([
-            ['security.authorization_checker', $authChecker],
-            ['security.token_storage', $tokenStorage],
-            ['router', $router],
-            ['form.factory', $formFactory],
-            ['request_stack', $requestStack],
-        ]);
-
-        $controller->setContainer($container);
-
-        $response = $controller->createActivity($request, $workingDays);
-
-        $this->assertTrue($response->isRedirect('/planner/week/2026-11-07'));
     }
 
     public function testDeleteNonRecurringActivityWithValidToken(): void
@@ -942,7 +871,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $controller->setContainer($container);
 
         $request = new Request(['date' => '2026-09-15']);
-        $response = $controller->editActivity($activity, $request, $this->createStub(WorkingDayRanges::class));
+        $response = $controller->editActivity($activity, $request);
 
         $this->assertInstanceOf(Response::class, $response);
         $this->assertSame('<html>Edit Form View With Date</html>', $response->getContent());
@@ -1105,7 +1034,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $activity->setRecurrenceGroup('group-rec-1');
 
         $repo = $this->createMock(PlannedActivityRepository::class);
-        $repo->expects($this->once())->method('savePlannedActivityInRanges')->with($activity, []);
+        $repo->expects($this->once())->method('savePlannedActivity')->with($activity);
         $repo->expects($this->never())->method('updateFutureRecurringActivities');
 
         $plannerService = $this->createMock(WeeklyPlannerService::class);
@@ -1162,7 +1091,7 @@ class WeeklyPlannerControllerTest extends TestCase
 
         $controller->setContainer($container);
 
-        $response = $controller->editActivity($activity, $request, $this->createStub(WorkingDayRanges::class));
+        $response = $controller->editActivity($activity, $request);
 
         $this->assertInstanceOf(Response::class, $response);
         $this->assertTrue($response->isRedirect('/planner/week/2026-09-14'));
@@ -1183,7 +1112,13 @@ class WeeklyPlannerControllerTest extends TestCase
 
         $repo = $this->createMock(PlannedActivityRepository::class);
         $repo->expects($this->once())->method('savePlannedActivity')->with($activity);
-        $repo->expects($this->once())->method('updateFutureRecurringActivities')->with($activity);
+        // the dates the activity had before the form changed it, to move the rest of the series alike
+        $previousEnd = $activity->getEnd()?->format('Y-m-d');
+        $repo->expects($this->once())->method('updateFutureRecurringActivities')->with(
+            $activity,
+            $this->callback(fn ($begin) => $begin instanceof \DateTimeInterface && $begin->format('Y-m-d') === '2026-09-14'),
+            $this->callback(fn ($end) => $end?->format('Y-m-d') === $previousEnd)
+        );
 
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
@@ -1239,7 +1174,7 @@ class WeeklyPlannerControllerTest extends TestCase
 
         $controller->setContainer($container);
 
-        $response = $controller->editActivity($activity, $request, $this->createStub(WorkingDayRanges::class));
+        $response = $controller->editActivity($activity, $request);
 
         $this->assertInstanceOf(Response::class, $response);
         $this->assertTrue($response->isRedirect('/planner/week/2026-09-14'));
@@ -1294,6 +1229,9 @@ class WeeklyPlannerControllerTest extends TestCase
             ->with('@Planner/index.html.twig', $this->callback(function (array $context) use ($expectedWeeks): bool {
                 $this->assertSame($expectedWeeks, $context['weeks']);
                 $this->assertSame([1, 2, 4, 8], $context['weekOptions']);
+                $monday = $context['currentWeek'];
+                $this->assertSame($monday->modify('-' . $expectedWeeks . ' weeks')->format('Y-m-d'), $context['prevPeriod']);
+                $this->assertSame($monday->modify('+' . $expectedWeeks . ' weeks')->format('Y-m-d'), $context['nextPeriod']);
 
                 return true;
             }))
@@ -1420,6 +1358,87 @@ class WeeklyPlannerControllerTest extends TestCase
     }
 
     /**
+     * @return array<string, array{string, array<int>}>
+     */
+    public static function orderScenarios(): array
+    {
+        return [
+            'by name keeps the order of the users' => [PlannerQuery::ORDER_BY_NAME, [1, 2, 3]],
+            'by free hours puts the most free hours first' => [PlannerQuery::ORDER_BY_FREE_HOURS, [3, 1, 2]],
+        ];
+    }
+
+    /**
+     * @param array<int> $expectedOrder
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('orderScenarios')]
+    public function testRowsAreOrderedAsTheSearchAsks(string $orderBy, array $expectedOrder): void
+    {
+        $user = new User();
+        $ref = new \ReflectionProperty(User::class, 'id');
+        $ref->setValue($user, 1);
+
+        // a week to come, since days that have passed have no free hours
+        $monday = new \DateTimeImmutable('monday next week');
+        $data = new WeeklyPlannerData($monday, $monday->modify('+6 days'));
+        // user => [expected, planned] on Monday: 2 free, overbooked by 2, 8 free
+        foreach ([1 => [8.0, 6.0], 2 => [8.0, 10.0], 3 => [8.0, 0.0]] as $id => [$expected, $planned]) {
+            $rowUser = new User();
+            $ref->setValue($rowUser, $id);
+            $row = new \KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerUserRow($rowUser);
+            $day = new \KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerDay($monday, $expected);
+            $day->addActivity((new PlannedActivity())->setHoursPerDay($planned));
+            $row->addDay($day);
+            $data->addRow($row);
+        }
+
+        $plannerService = $this->createMock(WeeklyPlannerService::class);
+        $plannerService->method('getPlannerData')->willReturn($data);
+
+        $controller = new WeeklyPlannerController(
+            $this->createMock(PlannedActivityRepository::class),
+            $plannerService,
+            $this->createMock(UserRepository::class),
+            $this->createMock(PlannerUserProvider::class)
+        );
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturn(false);
+        $tokenStorage = $this->createMock(TokenStorageInterface::class);
+        $tokenStorage->method('getToken')->willReturn(new UsernamePasswordToken($user, 'main', $user->getRoles()));
+
+        $twig = $this->createMock(Environment::class);
+        $twig->expects($this->once())
+            ->method('render')
+            ->with('@Planner/index.html.twig', $this->callback(function (array $context) use ($expectedOrder): bool {
+                $this->assertSame($expectedOrder, array_keys($context['plannerData']->getRows()));
+
+                return true;
+            }))
+            ->willReturn('<html></html>');
+
+        $query = new PlannerQuery();
+        $query->setOrderBy($orderBy);
+        $formServices = $this->createFormServices($query);
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnMap([
+            ['security.authorization_checker', true],
+            ['security.token_storage', true],
+            ...$this->formServiceMap('has', $formServices),
+            ['twig', true],
+        ]);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['security.token_storage', $tokenStorage],
+            ...$this->formServiceMap('get', $formServices),
+            ['twig', $twig],
+        ]);
+        $controller->setContainer($container);
+
+        $controller->index();
+    }
+
+    /**
      * @return array{form.factory: FormFactoryInterface, bookmark: BookmarkRepository}
      */
     private function createFormServices(?PlannerQuery $query = null): array
@@ -1498,7 +1517,7 @@ class WeeklyPlannerControllerTest extends TestCase
         ]);
         $controller->setContainer($container);
 
-        $controller->createActivity(new Request($query), $this->createStub(WorkingDayRanges::class));
+        $controller->createActivity(new Request($query));
     }
 
     public function testCreateActivityWithEndParameterSpansSeveralDays(): void
@@ -1547,6 +1566,19 @@ class WeeklyPlannerControllerTest extends TestCase
         });
     }
 
+    public function testCreateActivityInTheTimeOffRowCreatesTimeOffForTheWholeDay(): void
+    {
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->never())->method('findCustomer');
+        $repo->expects($this->never())->method('findProject');
+
+        $this->runCreateActivity(['date' => '2026-11-06', 'off' => '1', 'customer' => '3', 'project' => '7'], true, $repo, function (PlannedActivity $activity): void {
+            $this->assertTrue($activity->isTimeOff());
+            $this->assertNull($activity->getHoursPerDay());
+            $this->assertNull($activity->getCustomer());
+        });
+    }
+
     public function testCreateActivityDoesNotPrefillInaccessibleCustomerOrProject(): void
     {
         $customer = new Customer('Secret');
@@ -1574,8 +1606,7 @@ class WeeklyPlannerControllerTest extends TestCase
         ?UserRepository $userRepo = null,
         bool $validToken = true,
         ?callable $isGranted = null,
-        int $violations = 0,
-        ?WorkingDayRanges $workingDays = null
+        int $violations = 0
     ): JsonResponse {
         $repo ??= $this->createMock(PlannedActivityRepository::class);
         $userRepo ??= $this->createMock(UserRepository::class);
@@ -1603,7 +1634,7 @@ class WeeklyPlannerControllerTest extends TestCase
         ]);
         $controller->setContainer($container);
 
-        return $controller->moveActivity($activity, new Request([], $post), $validator, $workingDays ?? $this->createStub(WorkingDayRanges::class));
+        return $controller->moveActivity($activity, new Request([], $post), $validator);
     }
 
     private function createMovableActivity(): PlannedActivity
@@ -1625,7 +1656,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $activity = $this->createMovableActivity();
 
         $repo = $this->createMock(PlannedActivityRepository::class);
-        $repo->expects($this->once())->method('savePlannedActivityInRanges')->with($activity, []);
+        $repo->expects($this->once())->method('savePlannedActivity')->with($activity);
 
         $response = $this->runMoveActivity($activity, ['begin' => '2026-10-21', 'end' => '2026-10-23'], $repo);
 
@@ -1650,7 +1681,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $repo = $this->createMock(PlannedActivityRepository::class);
         $repo->method('findCustomer')->with(3)->willReturn($customer);
         $repo->method('findProject')->with(7)->willReturn($project);
-        $repo->expects($this->once())->method('savePlannedActivityInRanges');
+        $repo->expects($this->once())->method('savePlannedActivity');
 
         $this->runMoveActivity($activity, ['begin' => '2026-10-19', 'end' => '2026-10-20', 'user' => '2', 'customer' => '3', 'project' => '7'], $repo, $userRepo);
 
@@ -1674,26 +1705,27 @@ class WeeklyPlannerControllerTest extends TestCase
         $this->assertNull($activity->getProject());
     }
 
-    public function testStretchingOverTheWeekendSavesTheWorkingDays(): void
+    public function testMoveTimeOffIgnoresTheCustomerOfTheTargetRow(): void
     {
         $activity = $this->createMovableActivity();
-        // Thursday stretched to the next Monday
-        $ranges = [[new \DateTime('2026-11-05'), new \DateTime('2026-11-06')], [new \DateTime('2026-11-09'), new \DateTime('2026-11-09')]];
-        $workingDays = $this->createMock(WorkingDayRanges::class);
-        $workingDays->expects($this->once())->method('forActivity')->with($activity)->willReturn($ranges);
+        $activity->setTimeOff(true);
 
         $repo = $this->createMock(PlannedActivityRepository::class);
-        $repo->expects($this->once())->method('savePlannedActivityInRanges')->with($activity, $ranges);
+        $repo->expects($this->never())->method('findCustomer');
+        $repo->expects($this->once())->method('savePlannedActivity');
 
-        $response = $this->runMoveActivity($activity, ['begin' => '2026-11-05', 'end' => '2026-11-09'], $repo, null, true, null, 0, $workingDays);
+        $response = $this->runMoveActivity($activity, ['begin' => '2026-10-21', 'end' => '2026-10-21', 'customer' => '3', 'project' => '7'], $repo);
 
         $this->assertSame(200, $response->getStatusCode());
+        $this->assertTrue($activity->isTimeOff());
+        $this->assertNull($activity->getCustomer());
+        $this->assertSame('2026-10-21', $activity->getBegin()?->format('Y-m-d'));
     }
 
     public function testMoveActivityRejectsInvalidToken(): void
     {
         $repo = $this->createMock(PlannedActivityRepository::class);
-        $repo->expects($this->never())->method('savePlannedActivityInRanges');
+        $repo->expects($this->never())->method('savePlannedActivity');
 
         $response = $this->runMoveActivity($this->createMovableActivity(), ['begin' => '2026-10-21', 'end' => '2026-10-22'], $repo, null, false);
 
@@ -1713,7 +1745,7 @@ class WeeklyPlannerControllerTest extends TestCase
     public function testMoveActivityDeniedWithoutEditPermission(): void
     {
         $repo = $this->createMock(PlannedActivityRepository::class);
-        $repo->expects($this->never())->method('savePlannedActivityInRanges');
+        $repo->expects($this->never())->method('savePlannedActivity');
 
         $this->expectException(AccessDeniedException::class);
 
@@ -1729,7 +1761,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $userRepo = $this->createMock(UserRepository::class);
         $userRepo->method('find')->willReturn($newUser);
         $repo = $this->createMock(PlannedActivityRepository::class);
-        $repo->expects($this->never())->method('savePlannedActivityInRanges');
+        $repo->expects($this->never())->method('savePlannedActivity');
 
         $this->expectException(AccessDeniedException::class);
 
@@ -1747,7 +1779,7 @@ class WeeklyPlannerControllerTest extends TestCase
     {
         $repo = $this->createMock(PlannedActivityRepository::class);
         $repo->method('findCustomer')->willReturn(new Customer('Secret'));
-        $repo->expects($this->never())->method('savePlannedActivityInRanges');
+        $repo->expects($this->never())->method('savePlannedActivity');
 
         $this->expectException(AccessDeniedException::class);
 
@@ -1764,11 +1796,107 @@ class WeeklyPlannerControllerTest extends TestCase
     public function testMoveActivityReturnsValidationMessageAndDoesNotSave(): void
     {
         $repo = $this->createMock(PlannedActivityRepository::class);
-        $repo->expects($this->never())->method('savePlannedActivityInRanges');
+        $repo->expects($this->never())->method('savePlannedActivity');
 
         $response = $this->runMoveActivity($this->createMovableActivity(), ['begin' => '2026-10-21', 'end' => '2026-10-22'], $repo, null, true, null, 1);
 
         $this->assertSame(422, $response->getStatusCode());
         $this->assertStringContainsString('Invalid dates', (string) $response->getContent());
+    }
+
+    /**
+     * @param array<string, object> $services
+     */
+    private function runConfirmTentative(bool $submitted, bool $projectAccess, TentativeConfirmer $confirmer, array $services = []): Response
+    {
+        $controller = new WeeklyPlannerController(
+            $this->createMock(PlannedActivityRepository::class),
+            $this->createMock(WeeklyPlannerService::class),
+            $this->createMock(UserRepository::class),
+            $this->createMock(PlannerUserProvider::class)
+        );
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturnCallback(static fn (string $attribute): bool => $attribute !== 'access' || $projectAccess);
+
+        $router = $this->createMock(RouterInterface::class);
+        $router->method('generate')->willReturnCallback(static fn (string $route, array $params = []): string => $route . '?' . http_build_query($params));
+
+        $form = $this->createMock(FormInterface::class);
+        $form->method('isSubmitted')->willReturn($submitted);
+        $form->method('isValid')->willReturn(true);
+        $form->method('createView')->willReturn(new FormView());
+
+        $formBuilder = $this->createMock(\Symfony\Component\Form\FormBuilderInterface::class);
+        $formBuilder->method('setAction')->willReturnSelf();
+        $formBuilder->method('setMethod')->willReturnSelf();
+        $formBuilder->method('getForm')->willReturn($form);
+
+        $formFactory = $this->createMock(FormFactoryInterface::class);
+        $formFactory->method('createBuilder')->willReturn($formBuilder);
+
+        $flashBag = new \Symfony\Component\HttpFoundation\Session\Flash\FlashBag();
+        $session = $this->createMock(\Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface::class);
+        $session->method('getFlashBag')->willReturn($flashBag);
+        $request = new Request(['date' => '2026-11-04']);
+        $request->setSession($session);
+        $requestStack = new \Symfony\Component\HttpFoundation\RequestStack();
+        $requestStack->push($request);
+
+        $services = array_merge([
+            'security.authorization_checker' => $authChecker,
+            'router' => $router,
+            'form.factory' => $formFactory,
+            'request_stack' => $requestStack,
+        ], $services);
+
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnCallback(static fn (string $id): bool => isset($services[$id]));
+        $container->method('get')->willReturnCallback(static fn (string $id): ?object => $services[$id] ?? null);
+        $controller->setContainer($container);
+
+        $project = new Project();
+        (new \ReflectionProperty(Project::class, 'id'))->setValue($project, 7);
+
+        return $controller->confirmTentative($project, $request, $confirmer);
+    }
+
+    public function testConfirmTentativeRendersTheQuestion(): void
+    {
+        $confirmation = new TentativeConfirmation(new Project(), [new PlannedActivity()]);
+        $confirmer = $this->createMock(TentativeConfirmer::class);
+        $confirmer->method('prepare')->willReturn($confirmation);
+        $confirmer->expects($this->never())->method('confirm');
+
+        $twig = $this->createMock(Environment::class);
+        $twig->expects($this->once())->method('render')
+            ->with('@Planner/confirm_tentative.html.twig', $this->callback(static fn (array $context): bool => $context['confirmation'] === $confirmation && $context['date'] === '2026-11-04'))
+            ->willReturn('<html>confirm</html>');
+
+        $response = $this->runConfirmTentative(false, true, $confirmer, ['twig' => $twig]);
+
+        $this->assertSame('<html>confirm</html>', $response->getContent());
+    }
+
+    public function testConfirmTentativeConfirmsAndReturnsToTheWeek(): void
+    {
+        $confirmation = new TentativeConfirmation(new Project(), [new PlannedActivity()]);
+        $confirmer = $this->createMock(TentativeConfirmer::class);
+        $confirmer->method('prepare')->willReturn($confirmation);
+        $confirmer->expects($this->once())->method('confirm')->with($confirmation);
+
+        $response = $this->runConfirmTentative(true, true, $confirmer);
+
+        $this->assertTrue($response->isRedirect('planner_week?date=2026-11-04'));
+    }
+
+    public function testConfirmTentativeRequiresProjectAccess(): void
+    {
+        $confirmer = $this->createMock(TentativeConfirmer::class);
+        $confirmer->expects($this->never())->method('prepare');
+
+        $this->expectException(AccessDeniedException::class);
+
+        $this->runConfirmTentative(true, false, $confirmer);
     }
 }

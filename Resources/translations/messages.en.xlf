@@ -38,6 +38,22 @@
                 <source>planner.expected_hours</source>
                 <target>Expected</target>
             </trans-unit>
+            <trans-unit id="planner.previous_week">
+                <source>planner.previous_week</source>
+                <target>Previous week</target>
+            </trans-unit>
+            <trans-unit id="planner.next_week">
+                <source>planner.next_week</source>
+                <target>Next week</target>
+            </trans-unit>
+            <trans-unit id="planner.previous_period">
+                <source>planner.previous_period</source>
+                <target>Previous %count% weeks</target>
+            </trans-unit>
+            <trans-unit id="planner.next_period">
+                <source>planner.next_period</source>
+                <target>Next %count% weeks</target>
+            </trans-unit>
             <trans-unit id="planner.this_week">
                 <source>planner.this_week</source>
                 <target>This week</target>
@@ -74,9 +90,13 @@
                 <source>planner.add_activity</source>
                 <target>Plan activity for this day</target>
             </trans-unit>
-            <trans-unit id="planner.skip_days_off_help">
-                <source>planner.skip_days_off_help</source>
-                <target>Days the user does not work are skipped.</target>
+            <trans-unit id="planner.add_project">
+                <source>planner.add_project</source>
+                <target>Add project</target>
+            </trans-unit>
+            <trans-unit id="planner.add_another_project">
+                <source>planner.add_another_project</source>
+                <target>Add another project</target>
             </trans-unit>
             <trans-unit id="planner.recurrent_weeks">
                 <source>planner.recurrent_weeks</source>
@@ -170,9 +190,145 @@
                 <source>planner.toggle_activities</source>
                 <target>Expand/collapse activities</target>
             </trans-unit>
+            <trans-unit id="planner.time_off">
+                <source>planner.time_off</source>
+                <target>Time off</target>
+            </trans-unit>
+            <trans-unit id="planner.time_off_help">
+                <source>planner.time_off_help</source>
+                <target>Not available for planning. Leave the hours empty for the whole day.</target>
+            </trans-unit>
+            <trans-unit id="planner.whole_day">
+                <source>planner.whole_day</source>
+                <target>Whole day</target>
+            </trans-unit>
             <trans-unit id="planner.suggestions">
                 <source>planner.suggestions</source>
                 <target>Frequently used</target>
+            </trans-unit>
+            <trans-unit id="planner.tentative">
+                <source>planner.tentative</source>
+                <target>Tentative</target>
+            </trans-unit>
+            <trans-unit id="planner.tentative_help">
+                <source>planner.tentative_help</source>
+                <target>Not confirmed yet, such as a deal that isn't signed. Shown faded and counted apart from the confirmed capacity.</target>
+            </trans-unit>
+            <trans-unit id="planner.tentative_hours">
+                <source>planner.tentative_hours</source>
+                <target>+ %hours% hrs tentative</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_filter">
+                <source>planner.planning_filter</source>
+                <target>Planning</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_all">
+                <source>planner.planning_all</source>
+                <target>All</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_confirmed">
+                <source>planner.planning_confirmed</source>
+                <target>Confirmed only</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_tentative">
+                <source>planner.planning_tentative</source>
+                <target>Tentative only</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative">
+                <source>planner.confirm_tentative</source>
+                <target>Confirm all for this project</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_submit">
+                <source>planner.confirm_tentative_submit</source>
+                <target>Confirm</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_question">
+                <source>planner.confirm_tentative_question</source>
+                <target>Confirm all tentative planning for %project%?</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_count">
+                <source>planner.confirm_tentative_count</source>
+                <target>Planned activities: %count%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_users">
+                <source>planner.confirm_tentative_users</source>
+                <target>Number of people: %count%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_period">
+                <source>planner.confirm_tentative_period</source>
+                <target>Period: %begin% to %end%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_scope">
+                <source>planner.confirm_tentative_scope</source>
+                <target>Only planning that ends today or later is confirmed, past planning stays as it was.</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_skipped">
+                <source>planner.confirm_tentative_skipped</source>
+                <target>Tentative planned activities of people you can't edit stay tentative: %count%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_none">
+                <source>planner.confirm_tentative_none</source>
+                <target>%project% has no tentative planning from today onwards that you can confirm.</target>
+            </trans-unit>
+            <trans-unit id="planner.order_name">
+                <source>planner.order_name</source>
+                <target>Name</target>
+            </trans-unit>
+            <trans-unit id="planner.order_free_hours">
+                <source>planner.order_free_hours</source>
+                <target>Most free hours</target>
+            </trans-unit>
+            <trans-unit id="planner.free_hours">
+                <source>planner.free_hours</source>
+                <target>%hours%h free</target>
+            </trans-unit>
+            <trans-unit id="planner.over_hours">
+                <source>planner.over_hours</source>
+                <target>%hours%h over</target>
+            </trans-unit>
+            <trans-unit id="planner.day_hours">
+                <source>planner.day_hours</source>
+                <target>%planned% of %expected% hrs planned, %actual% hrs logged</target>
+            </trans-unit>
+            <trans-unit id="planner.week_hours">
+                <source>planner.week_hours</source>
+                <target>%planned%/%expected% hrs (%actual% hrs)</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.calendar">
+                <source>planner.holidays.calendar</source>
+                <target>Public holiday calendar</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.calendar_help">
+                <source>planner.holidays.calendar_help</source>
+                <target>Everyone follows this calendar unless their own preferences pick another. Public holidays count as days off in the planner.</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.observances">
+                <source>planner.holidays.observances</source>
+                <target>Also days off</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.observances_help">
+                <source>planner.holidays.observances_help</source>
+                <target>Days that are not public holidays but that your organisation has off, such as Christmas Eve. A ticked day applies to every calendar that has it.</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.none">
+                <source>planner.holidays.none</source>
+                <target>No public holidays</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.organisation_default">
+                <source>planner.holidays.organisation_default</source>
+                <target>Organisation default</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.preference_help">
+                <source>planner.holidays.preference_help</source>
+                <target>The public holidays this user has off in the planner, if they differ from the organisation's.</target>
+            </trans-unit>
+            <trans-unit id="planner_holiday_calendar">
+                <source>planner_holiday_calendar</source>
+                <target>Public holidays</target>
+            </trans-unit>
+            <trans-unit id="planner.day_time_off">
+                <source>planner.day_time_off</source>
+                <target>Time off: %hours% hrs</target>
             </trans-unit>
         </body>
     </file>

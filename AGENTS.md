@@ -7,7 +7,7 @@ Use this guide when working on the **PlannerBundle** plugin in `var/plugins/Plan
 ## Overview & Scope
 
 - **Plugin Name**: `PlannerBundle` (`happiness/planner-bundle` or `KimaiPlugin\PlannerBundle`)
-- **Description**: Lightweight weekly team capacity and workload planner for Kimai (inspired by Forecastapp). Allows team leads and users to plan, visualize, and balance workloads on a weekly timeline. Every planned activity belongs to a customer and optionally a project.
+- **Description**: Lightweight weekly team capacity and workload planner for Kimai (inspired by Forecastapp). Allows team leads and users to plan, visualize, and balance workloads on a weekly timeline. Planned work belongs to a customer and optionally a project; time off belongs to neither and reduces capacity.
 - **Primary Capabilities**:
   - Weekly matrix grid overview showing planned activities and daily allocations (Monday through Sunday).
   - Capacity and workload calculations integrating with Kimai user working time contracts.
@@ -44,7 +44,8 @@ var/plugins/PlannerBundle/
 ├── phpstan.neon                       # Plugin-specific PHPStan configuration
 ├── .php-cs-fixer.dist.php             # Plugin-specific code style rules
 ├── API/
-│   └── PlannedActivityController.php # REST API (GET/POST/PATCH/DELETE /api/planner/activities)
+│   ├── PlannedActivityController.php # REST API (GET/POST/PATCH/DELETE /api/planner/activities)
+│   └── PublicHolidayController.php   # REST API (GET /api/planner/holidays)
 ├── Controller/
 │   └── WeeklyPlannerController.php    # Weekly planner routes, week switching, modal CRUD actions
 ├── DependencyInjection/
@@ -52,18 +53,29 @@ var/plugins/PlannerBundle/
 ├── Entity/
 │   └── PlannedActivity.php           # Planned time block entity (user, customer, project, date range, daily hours, comments, color)
 ├── EventSubscriber/
+│   ├── HolidayPreferenceSubscriber.php # Per-user holiday calendar preference (contract permission)
+│   ├── HolidaySettingsSubscriber.php # System settings: default holiday calendar, observance days off
 │   ├── MenuSubscriber.php            # Injects "Planner" item into main navigation
 │   └── PermissionSubscriber.php      # Registers planner permissions
 ├── Form/
 │   ├── PlannedActivityEditForm.php    # Modal form for creating/editing planned activities
-│   └── PlannedActivityApiForm.php     # API variant: ISO dates, no CSRF
+│   ├── PlannedActivityApiForm.php     # API variant: ISO dates, no CSRF
+│   └── Type/                          # HolidayCalendarType (+Preference), HolidayObservancesType (settings and preference fields)
+├── Holiday/
+│   ├── HolidayProviderInterface.php   # Which public holidays a user has off; decorate it to replace the source
+│   ├── YasumiHolidayProvider.php      # Default provider: user preference, else system setting; Yasumi from Kimai core
+│   ├── HolidayCalendars.php           # Calendar list and names, observance days, setting/preference keys
+│   └── PublicHoliday.php              # One holiday: date, name, calendar, type
 ├── Migrations/
 │   ├── doctrine_migrations.yaml       # Plugin migration configuration
 │   ├── Version20260909000000.php      # Initial planner schema (kimai2_planned_activities table)
 │   ├── Version20260914000000.php      # Schema updates (recurring activities support)
-│   └── Version20261019000000.php      # customer_id/project_id columns, title becomes nullable
+│   ├── Version20261019000000.php      # customer_id/project_id columns, title becomes nullable
+│   └── Version20261102120000.php      # tentative flag
 ├── Planner/
 │   ├── PlannerUserProvider.php        # Resolves which users' plans the current user may see (web + API)
+│   ├── TentativeConfirmer.php         # "Confirm all for this project": ongoing/future tentative plans the user may edit (web + API)
+│   ├── TentativeConfirmation.php      # What a confirmation changes: activities, skipped ones, people and period
 │   ├── WeeklyPlannerService.php       # Domain service aggregating week data, user rows, capacity & actuals
 │   ├── WeeklyPlannerData.php          # Value object representing complete week grid
 │   ├── WeeklyPlannerUserRow.php       # Per-user row containing daily breakdowns & contract summary
@@ -82,6 +94,7 @@ var/plugins/PlannerBundle/
 │   └── views/
 │       ├── index.html.twig            # Main weekly planner matrix view & toolbar
 │       ├── form.html.twig             # Modal form template for planned activities
+│       ├── confirm_tentative.html.twig # Modal question before confirming a project's tentative planning
 │       └── delete.html.twig           # Modal deletion confirmation template
 ├── tests/                             # Comprehensive PHPUnit test suite mirroring src/
 │   ├── Controller/
@@ -115,22 +128,28 @@ var/plugins/PlannerBundle/
 4. **Customer/Project Link & Legacy Rows**:
    - `customer_id` is nullable **in the database only** because rows created before the link existed have none; `PlannedActivity` validates `customer` as `NotNull`, so every save through the form or API requires one. `project` is optional and must belong to the customer.
    - `title` is a legacy column (nullable, no longer in the form). Use `getName()`: project name, else customer name, else legacy title.
+   - Time off (`time_off`) is the exception: `validateRequiredFields()` asks for neither customer nor hours, and `setTimeOff(true)` drops customer, project, title and tentative (the switch hides with the other work fields). `hours_per_day` is nullable for it: `null` means the whole contract day (`WeeklyPlannerDay::getHoursOf()`). Time off never counts as planned; `WeeklyPlannerDay::getCapacityHours()` is the contract hours minus time off, and every percentage and allocation state (day, week, user row) is measured against capacity, not contract hours. Time off is one group (`WeeklyPlannerGroup::TIME_OFF_KEY`), listed first, whose row carries `data-planner-off` so dragging in it creates time off (`?off=1`); moving time off ignores the target row's customer/project.
    - Plugins are not loaded in Kimai's `test` environment, so plugin tests are unit tests (mocks / `TypeTestCase`); there is no HTTP-level API test. Core files must not be touched, which rules out registering the plugin for tests.
    - The API doc bundle cannot dump the plugin's form models from the CLI (core forms using `UserType` fail the same way); review the generated docs in the logged-in `/api/doc` UI after changing API attributes.
 5. **Grid Layout (Forecast style)**:
-   - Per user there is one collapsible summary row (avatar, name, capacity bar) followed by one sub-row per customer/project (`WeeklyPlannerUserRow::getGroups()`). Day cells only show hours; consecutive days of the same activity are merged via `colspan` (`WeeklyPlannerGroup::getSegments()`).
-   - All of a user's rows share `data-user-id`; the toggle JS relies on that. Empty days in a sub-row open the create modal for that user/date (customer/project are not pre-filled yet). Every user always gets one extra empty sub-row after the customer/project rows (also when there are none), so new planning can be dragged out; it has no `data-customer-id`/`data-project-id`.
+   - Per user there is one collapsible summary row (avatar, name, capacity bar) followed by one sub-row per customer/project (`WeeklyPlannerUserRow::getGroups()`). Day cells only show hours; consecutive days of the same activity are merged via `colspan` (`WeeklyPlannerGroup::getSegments()`). Directly under the summary row a `tr.planner-row-days` (no `planner-row` class or `data-user-id`, so the toggle, drag and move JS ignore it) shows each day's planned hours against capacity (contract minus time off) and percentage from `WeeklyPlannerDay`, hatched when the whole day is off; with more than one week only the percentage, the hours are in the cell's `title`.
+   - All of a user's rows share `data-user-id`; the toggle JS relies on that. Empty days in a sub-row open the create modal for that user/date with the row's customer/project pre-filled. Every user always gets one extra empty sub-row after the customer/project rows (also when there are none), so new planning can be dragged out; it has no `data-customer-id`/`data-project-id`. Its label cell holds an "Add project" / "Add another project" button that opens the same create dialog for today, or the first shown day when today is not in range.
 6. **Multiple Weeks**:
    - The grid shows 1, 2, 4 (default) or 8 consecutive weeks (`WeeklyPlannerController::WEEK_OPTIONS`). The count comes from the `weeks` query parameter and is remembered in the session (`planner_weeks`), so it survives navigation and redirects after saving. The service clamps it to 1-8.
    - The range always starts on the Monday of the selected week; previous/next move by one week. Capacity bars are per calendar week (`WeeklyPlannerUserRow::getWeeks()`), while sub-row bars run continuously across week borders. With more than one week day columns shrink to 44px and headers show weekday + day number.
 7. **Drag to Create**:
    - Empty day cells carry `data-planner-date`; dragging across empty cells of one row opens the create dialog with `date`, `end`, `user` and, for sub-rows, `customer`/`project` (read from the row's `data-customer-id`/`data-project-id`). The JS lives in `index.html.twig`, reuses Kimai's delegated `.modal-ajax-form` click handler by clicking a temporary link, and suppresses the click that follows `mouseup`. A plain click still opens the single-day dialog. Mouse only, no touch support.
    - `createActivity()` ignores an `end` before `date` and only pre-fills customer/project the user may `access`.
-   - On save, `createActivity()`, `editActivity()` (except "all future" edits, whose dates the following activities take over) and `moveActivity()` (move and resize) split the range into runs of working days (`Planner\WorkingDayRanges`, from the user's working time contract: a day with 0 expected hours is a day off) and saves one activity per run in one flush (`PlannedActivityRepository::savePlannedActivityInRanges()`). Nothing is split when the range has no day off, or no working day at all (a weekend planned on purpose). Recurring weeks repeat every part as one series (`createRecurringActivitiesForAll()`). Several parts share a recurrence group even without repeating weeks, so "this and all following" edits or deletes them together; the redirect goes to the week of the entered begin. The form option `skip_days_off` adds a help text under the end date (create, and edit of non-recurring activities). The API keeps the dates it is given. A message after saving would not show: the modal fetches the redirect target in the background, which consumes the flash, and Kimai never shows success flashes anyway.
 8. **Move and Resize**:
    - Activities with the edit permission carry `data-planner-move-url`/`-begin`/`-end`; a left/right handle (`data-planner-handle`) is rendered only where the activity really begins/ends. The JS maps the pointer to a day through the `th[data-planner-day]` headers (merged cells do not map to one day) and to a row through `tr.planner-row-details`.
    - `POST /planner/activity/{id}/move` (CSRF token `planner_move`) takes `begin`, `end` and optionally `user`, `customer`, `project`. The voter is checked before and after the changes, so planning cannot be moved to someone the user may not plan for. Hours per day are never changed. Only the single activity is moved, also when it is recurring.
-9. **Isolated Database Migrations**:
+9. **Public Holidays**:
+   - `WeeklyPlannerService` asks the optional `HolidayProviderInterface` for each user's holidays in the range; a holiday sets that day's expected hours to 0 and is attached to the `WeeklyPlannerDay` (`getHoliday()`), so capacity, `isWorkingDay()` and everything built on them treat it as a day off.
+   - Calendars are Yasumi's ISO 3166 codes (`SE`, `GB-ENG`). The user preference `planner_holiday_calendar` (empty: organisation default, `none`: no holidays) beats the system setting `planner.holiday_calendar`. Types `official` and `bank` are days off; `observance` days only when their Yasumi key is in `planner.holiday_observances` (comma separated, system settings hold one value). Do not use core's `public_holiday_group` preference: it belongs to Kimai's paid work contract plugin.
+   - The preference is only enabled for those granted `contract` on the user. Core renders a disabled preference as a `HiddenType` with the same options, so a preference must not pass options only its own form type knows: that is why `HolidayCalendarPreferenceType` exists instead of an option on `HolidayCalendarType`.
+   - Names come in the current request language, preferring the calendar's country variant (`en_GB` for an English reader of `GB-ENG`, so "Boxing Day"). Where Yasumi has no translation it would return the key, so `HolidayCalendars::getHolidayName()` falls back to any translation it has.
+   - The template marks holiday cells with `planner-holiday` (striped tint) on every row of that user; the day summary cell shows the name truncated, with name and calendar in the tooltip.
+10. **Isolated Database Migrations**:
    - Always run and test migrations using the bundle's dedicated configuration file:
      `bin/console doctrine:migrations:migrate --configuration=var/plugins/PlannerBundle/Migrations/doctrine_migrations.yaml --no-interaction`
 

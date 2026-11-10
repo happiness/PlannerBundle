@@ -9,7 +9,14 @@
             <div class="row align-items-center">
                 <div class="col">
                     <div class="btn-group week-picker-btn-group" role="group" aria-label="{{ 'planner.title'|trans }}">
-                        <a href="{{ path('planner_week', {'date': prevWeek}) }}" class="btn btn-left btn-icon">
+                        {# with one week shown, a period is a week and the single arrows already do it #}
+                        {% if weeks > 1 %}
+                            {% set periodLabel = 'planner.previous_period'|trans({'%count%': weeks}) %}
+                            <a href="{{ path('planner_week', {'date': prevPeriod}) }}" class="btn btn-icon" data-toggle="tooltip" data-placement="top" title="{{ periodLabel }}" aria-label="{{ periodLabel }}">
+                                {{ icon('left2') }}
+                            </a>
+                        {% endif %}
+                        <a href="{{ path('planner_week', {'date': prevWeek}) }}" class="btn btn-left btn-icon" data-toggle="tooltip" data-placement="top" title="{{ 'planner.previous_week'|trans }}" aria-label="{{ 'planner.previous_week'|trans }}">
                             {{ icon('left') }}
                         </a>
                         <span class="btn btn-default pe-none">
@@ -21,9 +28,15 @@
                                 &ndash; {{ 'stats.workingTimeWeekShort'|trans({'%week%': lastWeek|date('W')}) }}
                             {% endif %}
                         </span>
-                        <a href="{{ path('planner_week', {'date': nextWeek}) }}" class="btn btn-right btn-icon">
+                        <a href="{{ path('planner_week', {'date': nextWeek}) }}" class="btn btn-right btn-icon" data-toggle="tooltip" data-placement="top" title="{{ 'planner.next_week'|trans }}" aria-label="{{ 'planner.next_week'|trans }}">
                             {{ icon('right') }}
                         </a>
+                        {% if weeks > 1 %}
+                            {% set periodLabel = 'planner.next_period'|trans({'%count%': weeks}) %}
+                            <a href="{{ path('planner_week', {'date': nextPeriod}) }}" class="btn btn-icon" data-toggle="tooltip" data-placement="top" title="{{ periodLabel }}" aria-label="{{ periodLabel }}">
+                                {{ icon('right2') }}
+                            </a>
+                        {% endif %}
                     </div>
                     <a href="{{ path('planner_week', {'date': todayWeek}) }}" class="btn">
                         {{ icon('calendar', true) }}
@@ -152,55 +165,138 @@
                                         <td class="w-avatar align-middle p-1 planner-user-cell">{{ widgets.user_avatar(row.user, false, 'avatar-sm') }}</td>
                                         <td class="text-nowrap align-middle p-1 planner-user-cell">
                                             <div class="d-flex justify-content-between align-items-center">
-                                                <div>{{ row.user.displayName }}</div>
+                                                <div>
+                                                    <div>{{ row.user.displayName }}</div>
+                                                    {# explains the order while sorting by free hours #}
+                                                    {% if query.orderedByFreeHours %}
+                                                        {% set freeHours = row.freeHours %}
+                                                        <div class="small {{ freeHours < 0 ? 'text-danger' : 'text-muted' }} planner-free-hours">{{ (freeHours < 0 ? 'planner.over_hours' : 'planner.free_hours')|trans({'%hours%': freeHours|abs}) }}</div>
+                                                    {% endif %}
+                                                </div>
                                                 <button type="button" class="btn btn-sm btn-icon btn-ghost-secondary planner-user-toggle m-2 p-0" aria-expanded="false" title="{{ 'planner.toggle_activities'|trans }}">
                                                     <span class="toggle-icon d-inline-block">{{ icon('right') }}</span>
                                                 </button>
                                             </div>
                                         </td>
                                         {% for week in row.weeks %}
-                                            {% set barColorClass = week.isOverAllocated ? 'planner-bar-danger' : (week.totalPlannedHours > 0 ? 'planner-bar-success' : 'planner-bar-muted') %}
+                                            {# amber with space left, green when full, red when overbooked, like the day cells below #}
+                                            {% if week.isOverAllocated %}
+                                                {% set barColorClass = 'planner-bar-danger' %}
+                                            {% elseif week.totalPlannedHours > 0 and week.isBalanced %}
+                                                {% set barColorClass = 'planner-bar-success' %}
+                                            {% elseif week.totalPlannedHours > 0 %}
+                                                {% set barColorClass = 'planner-bar-warning' %}
+                                            {% else %}
+                                                {% set barColorClass = 'planner-bar-muted' %}
+                                            {% endif %}
                                             <td colspan="{{ week.days|length }}" class="planner-week-summary align-middle p-0{% if compact %} border-start{% endif %}">
                                                 <div class="planner-summary-bar {{ barColorClass }}">
                                                     <div class="planner-summary-badge">
                                                         <div class="planner-summary-pct">{{ week.plannedPercentage }}%</div>
                                                         <div class="planner-summary-hours">
-                                                            {{ week.totalPlannedHours }}/{{ week.totalExpectedHours }} hrs ({{ week.totalActualHours }} hrs)
+                                                            {{ 'planner.week_hours'|trans({'%planned%': week.totalPlannedHours, '%expected%': week.totalCapacityHours, '%actual%': week.totalActualHours}) }}
                                                         </div>
                                                     </div>
+                                                    {# tentative work on top of the confirmed planning, it does not change the colour #}
+                                                    {% if week.totalTentativeHours > 0 %}
+                                                        <div class="planner-summary-tentative" style="flex-basis: {{ min(week.tentativePercentage, 100) }}%;" title="{{ 'planner.tentative_hours'|trans({'%hours%': week.totalTentativeHours}) }}">
+                                                            <span class="text-truncate">{{ 'planner.tentative_hours'|trans({'%hours%': week.totalTentativeHours}) }}</span>
+                                                        </div>
+                                                    {% endif %}
                                                 </div>
+                                            </td>
+                                        {% endfor %}
+                                    </tr>
+                                    {% set holidays = {} %}
+                                    {% for day in row.days|filter(day => day.holiday) %}
+                                        {% set holidays = holidays|merge({(day.date|date('Y-m-d')): day.holiday}) %}
+                                    {% endfor %}
+                                    {# planned against contract hours minus time off per day, aligned with the day columns and always visible #}
+                                    <tr class="planner-row-days">
+                                        <td colspan="2" class="p-0 border-top-0"></td>
+                                        {% for day in row.days %}
+                                            {# the cell fills up to the planned share of the day: amber with space left, green when full, red when overbooked #}
+                                            {% if day.isDayOff and day.plannedHours == 0 %}
+                                                {% set dayClass = 'planner-day-off' %}
+                                                {% set dayFill = 0 %}
+                                            {% elseif day.isOverAllocated %}
+                                                {% set dayClass = 'planner-day-danger' %}
+                                                {% set dayFill = 100 %}
+                                            {% elseif day.plannedHours > 0 and day.isBalanced %}
+                                                {% set dayClass = 'planner-day-success' %}
+                                                {% set dayFill = 100 %}
+                                            {% elseif day.plannedHours > 0 %}
+                                                {% set dayClass = 'planner-day-warning' %}
+                                                {% set dayFill = day.plannedPercentage %}
+                                            {% else %}
+                                                {% set dayClass = 'planner-day-muted' %}
+                                                {% set dayFill = 0 %}
+                                            {% endif %}
+                                            {% set dayHours = 'planner.day_hours'|trans({'%planned%': day.plannedHours, '%expected%': day.capacityHours, '%actual%': day.actualHours}) %}
+                                            {% if day.timeOffHours > 0 %}
+                                                {% set dayHours = dayHours ~ ', ' ~ 'planner.day_time_off'|trans({'%hours%': day.timeOffHours}) %}
+                                            {% endif %}
+                                            {% if day.holiday %}
+                                                {% set dayHours = day.holiday.name ~ ' (' ~ day.holiday.calendarName ~ ')' ~ (day.plannedHours > 0 ? ', ' ~ dayHours : '') %}
+                                            {% endif %}
+                                            <td class="planner-day-summary text-center border-top-0 {{ dayClass }}{% if day.holiday %} planner-holiday{% endif %}{% if loop.index0 % 7 == 0 %} border-start{% endif %}{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %}" style="--planner-day-fill: {{ dayFill }}%;" title="{{ dayHours }}"{% if day.holiday %} data-toggle="tooltip"{% endif %}>
+                                                {% if day.holiday %}
+                                                    {# the name is cut off to fit the column, the tooltip has it in full #}
+                                                    <div class="planner-holiday-name text-truncate">{{ day.holiday.name }}</div>
+                                                    {% if day.plannedHours > 0 %}<div class="planner-day-pct">{{ day.plannedHours }}h</div>{% endif %}
+                                                {% elseif dayClass == 'planner-day-off' %}
+                                                    <div class="planner-day-pct">{{ compact ? '–' : 'planner.time_off'|trans }}</div>
+                                                {% elseif day.capacityHours > 0 %}
+                                                    {% if not compact %}<div class="planner-day-hours">{{ day.plannedHours }}/{{ day.capacityHours }}h</div>{% endif %}
+                                                    <div class="planner-day-pct">{{ day.plannedPercentage }}%</div>
+                                                {% elseif day.plannedHours > 0 %}
+                                                    <div class="planner-day-pct">{{ day.plannedHours }}h</div>
+                                                {% else %}
+                                                    <div class="planner-day-pct">&ndash;</div>
+                                                {% endif %}
                                             </td>
                                         {% endfor %}
                                     </tr>
                                     {% set groups = row.groups %}
                                     {% for group in groups %}
-                                        <tr class="planner-row planner-row-details is-collapsed" data-user-id="{{ row.user.id }}"{% if group.customer %} data-customer-id="{{ group.customer.id }}"{% endif %}{% if group.project %} data-project-id="{{ group.project.id }}"{% endif %}>
+                                        <tr class="planner-row planner-row-details is-collapsed" data-user-id="{{ row.user.id }}"{% if group.timeOff %} data-planner-off="1"{% endif %}{% if group.customer %} data-customer-id="{{ group.customer.id }}"{% endif %}{% if group.project %} data-project-id="{{ group.project.id }}"{% endif %}>
                                             <td class="planner-group-cell p-1 border-top-0" colspan="2">
-                                                <div class="d-flex justify-content-between align-items-center planner-group-label" title="{{ group.customerName }}{% if group.projectName %} / {{ group.projectName }}{% endif %}">
+                                                {% set groupName = group.timeOff ? 'planner.time_off'|trans : group.customerName %}
+                                                <div class="d-flex justify-content-between align-items-center planner-group-label" title="{{ groupName }}{% if group.projectName %} / {{ group.projectName }}{% endif %}">
                                                     <div class="text-truncate">
-                                                        <span class="fw-bold small">{{ group.customerName }}</span>{% if group.projectName %}<span class="text-muted small"> / {{ group.projectName }}</span>{% endif %}
+                                                        <span class="fw-bold small">{{ groupName }}</span>{% if group.projectName %}<span class="text-muted small"> / {{ group.projectName }}</span>{% endif %}
                                                     </div>
-                                                    <span class="text-muted small ms-2 flex-shrink-0">{{ group.getPlannedHours(row.days) }}h</span>
+                                                    <span class="d-flex align-items-center flex-shrink-0 ms-2">
+                                                        {% set groupTentative = group.getTentativeHours(row.days) %}
+                                                        <span class="text-muted small">{{ group.getPlannedHours(row.days) }}h{% if groupTentative > 0 %} <span class="planner-tentative-hours" title="{{ 'planner.tentative_hours'|trans({'%hours%': groupTentative}) }}">+{{ groupTentative }}h</span>{% endif %}</span>
+                                                        {% if group.project and group.hasTentative and is_granted('edit_planner') %}
+                                                            <a href="{{ path('planner_confirm_tentative', {'id': group.project.id, 'date': currentWeek|date('Y-m-d')}) }}" class="btn btn-sm btn-icon btn-ghost-success modal-ajax-form ms-1 p-0" title="{{ 'planner.confirm_tentative'|trans }}">{{ icon('success') }}</a>
+                                                        {% endif %}
+                                                    </span>
                                                 </div>
                                             </td>
                                             {% for segment in group.getSegments(row.days) %}
                                                 {% set date = segment.date %}
-                                                <td colspan="{{ segment.span }}" class="position-relative align-middle border-1 day{% if date is weekend %} weekend{% endif %}{% if date is today %} today{% endif %} p-1 {{ segment.activities is not empty ? 'has-activities' : 'no-activities' }}"{% if canCreate and segment.activities is empty %} data-planner-date="{{ date|date('Y-m-d') }}"{% endif %}>
+                                                <td colspan="{{ segment.span }}" class="position-relative align-middle border-1 day{% if segment.span == 1 and holidays[date|date('Y-m-d')] is defined %} planner-holiday{% endif %}{% if date is weekend %} weekend{% endif %}{% if date is today %} today{% endif %} p-1 {{ segment.activities is not empty ? 'has-activities' : 'no-activities' }}"{% if canCreate and segment.activities is empty %} data-planner-date="{{ date|date('Y-m-d') }}"{% endif %}>
                                                     {% if canCreate and segment.activities is empty %}
-                                                        <a href="{{ path('planner_activity_create', {'user': row.user.id, 'date': date|date('Y-m-d')}) }}"
+                                                        {% set createParams = {'user': row.user.id, 'date': date|date('Y-m-d')}|merge(group.timeOff ? {'off': 1} : {}) %}
+                                                        {% if group.customer %}{% set createParams = createParams|merge({'customer': group.customer.id}) %}{% endif %}
+                                                        {% if group.project %}{% set createParams = createParams|merge({'project': group.project.id}) %}{% endif %}
+                                                        <a href="{{ path('planner_activity_create', createParams) }}"
                                                            class="stretched-link cursor-crosshair modal-ajax-form"
                                                            title="{{ 'planner.planned_activity'|trans }}"></a>
                                                     {% endif %}
                                                     {% set segmentEnd = date.modify('+' ~ (segment.span - 1) ~ ' day') %}
                                                     {% for activity in segment.activities %}
                                                         {% set canMove = is_granted('edit', activity) %}
+                                                        {% set activityHours = activity.wholeDay ? 'planner.whole_day'|trans : activity.hoursPerDay ~ 'h' %}
                                                         <a href="{{ path('planner_activity_edit', {'id': activity.id, 'date': date|date('Y-m-d')}) }}"
-                                                           class="planner-activity position-relative z-2 d-flex justify-content-between align-items-center px-2 py-1 rounded text-decoration-none modal-ajax-form shadow-sm{% if not loop.first %} mt-1{% endif %}{% if canMove %} planner-movable{% endif %}"
-                                                           style="background-color: {{ activity.colorSafe }}; color: {{ activity.colorSafe|font_contrast }};"
+                                                           class="planner-activity position-relative z-2 d-flex justify-content-between align-items-center px-2 py-1 rounded text-decoration-none modal-ajax-form shadow-sm{% if not loop.first %} mt-1{% endif %}{% if canMove %} planner-movable{% endif %}{% if activity.timeOff %} planner-activity-off{% endif %}{% if activity.tentative %} planner-tentative{% endif %}"
+                                                           {% if not activity.timeOff %}style="background-color: {{ activity.colorSafe }}; color: {{ activity.colorSafe|font_contrast }};"{% endif %}
                                                            {% if canMove %}data-planner-move-url="{{ path('planner_activity_move', {'id': activity.id}) }}" data-planner-begin="{{ activity.begin|date('Y-m-d') }}" data-planner-end="{{ activity.end|date('Y-m-d') }}"{% endif %}
-                                                           title="{{ activity.name }} ({{ activity.hoursPerDay }}h){% if activity.hasComment %}: {{ activity.comment|u.truncate(1024, '...') }}{% endif %}">
+                                                           title="{% if activity.tentative %}{{ 'planner.tentative'|trans }}: {% endif %}{{ activity.timeOff ? 'planner.time_off'|trans : activity.name }} ({{ activityHours }}){% if activity.hasComment %}: {{ activity.comment|u.truncate(1024, '...') }}{% endif %}">
                                                             {% if canMove and activity.begin|date('Y-m-d') == date|date('Y-m-d') %}<span class="planner-handle planner-handle-start" data-planner-handle="start"></span>{% endif %}
-                                                            <span class="text-truncate small">{% if activity.hasComment %}{{ icon('comment') }} {% endif %}{{ activity.hoursPerDay }}h</span>
+                                                            <span class="text-truncate small">{% if activity.hasComment %}{{ icon('comment') }} {% endif %}{{ activityHours }}</span>
                                                             {% if canMove and activity.end|date('Y-m-d') == segmentEnd|date('Y-m-d') %}<span class="planner-handle planner-handle-end" data-planner-handle="end"></span>{% endif %}
                                                         </a>
                                                     {% endfor %}
@@ -210,9 +306,20 @@
                                     {% endfor %}
                                     {# always keep one empty row per user, so new planning can be dragged out #}
                                     <tr class="planner-row planner-row-details is-collapsed" data-user-id="{{ row.user.id }}">
-                                        <td colspan="2" class="planner-group-cell p-1 border-top-0"></td>
+                                        <td colspan="2" class="planner-group-cell p-1 border-top-0">
+                                            {% if canCreate %}
+                                                {# opens the same dialog as an empty day of this row: today when it is shown, else the first day #}
+                                                {% set addDate = row.days[('now'|date('Y-m-d'))] is defined ? 'now'|date('Y-m-d') : (row.days|first).date|date('Y-m-d') %}
+                                                <div class="planner-group-label">
+                                                    <a href="{{ path('planner_activity_create', {'user': row.user.id, 'date': addDate}) }}"
+                                                       class="btn btn-sm modal-ajax-form planner-add-project">
+                                                        {{ icon('create', true) }}{{ (groups is empty ? 'planner.add_project' : 'planner.add_another_project')|trans }}
+                                                    </a>
+                                                </div>
+                                            {% endif %}
+                                        </td>
                                         {% for day in row.days %}
-                                            <td class="position-relative border-1 day{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %} p-1 no-activities"{% if canCreate %} data-planner-date="{{ day.date|date('Y-m-d') }}"{% endif %}>
+                                            <td class="position-relative border-1 day{% if day.holiday %} planner-holiday{% endif %}{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %} p-1 no-activities"{% if canCreate %} data-planner-date="{{ day.date|date('Y-m-d') }}"{% endif %}>
                                                 {% if canCreate %}
                                                     <a href="{{ path('planner_activity_create', {'user': row.user.id, 'date': day.date|date('Y-m-d')}) }}"
                                                        class="stretched-link cursor-crosshair modal-ajax-form"
@@ -238,9 +345,12 @@
                             </tbody>
                             {% if plannerData.rows|length > 0 %}
                                 <tfoot>
-                                    <tr class="bg-light fw-bold">
+                                    <tr class="summary">
                                         <td class="text-right p-1" colspan="2">
-                                            <div>{{ plannerData.totalPlannedHours }}h / {{ plannerData.totalExpectedHours }}h</div>
+                                            <div>{{ plannerData.totalPlannedHours }}h / {{ plannerData.totalCapacityHours }}h</div>
+                                            {% if plannerData.totalTentativeHours > 0 %}
+                                                <div class="small planner-tentative-hours fw-normal">{{ 'planner.tentative_hours'|trans({'%hours%': plannerData.totalTentativeHours}) }}</div>
+                                            {% endif %}
                                             {% if plannerData.totalActualHours > 0 %}
                                                 <div class="small text-muted fw-normal">{{ 'planner.actual_hours'|trans }}: {{ plannerData.totalActualHours }}h</div>
                                             {% endif %}
@@ -248,8 +358,12 @@
                                         {% for day in plannerData.dateHeaders %}
                                             {% set dayTotalPlanned = plannerData.getTotalPlannedHoursForDay(day) %}
                                             {% set dayTotalActual = plannerData.getTotalActualHoursForDay(day) %}
+                                            {% set dayTotalTentative = plannerData.getTotalTentativeHoursForDay(day) %}
                                             <td class="align-top text-center{% if day is today %} today{% endif %} p-1">
                                                 <div>{{ dayTotalPlanned }}h</div>
+                                                {% if dayTotalTentative > 0 %}
+                                                    <div class="small planner-tentative-hours fw-normal" title="{{ 'planner.tentative_hours'|trans({'%hours%': dayTotalTentative}) }}">+{{ dayTotalTentative }}h</div>
+                                                {% endif %}
                                                 {% if dayTotalActual > 0 %}
                                                     <div class="small text-muted fw-normal">{{ dayTotalActual }}h</div>
                                                 {% endif %}
@@ -320,6 +434,31 @@
         .planner-activity.planner-movable {
             cursor: grab;
         }
+        /* not confirmed yet: faded with a dashed border, the tooltip says so in words */
+        .planner-activity.planner-tentative {
+            opacity: 0.55;
+            border: 1px dashed currentColor;
+            box-shadow: none !important;
+        }
+        .planner-tentative-hours {
+            font-style: italic;
+            opacity: 0.75;
+        }
+        /* an empty placeholder next to the badge: as wide as the share of capacity the tentative work would take */
+        .planner-summary-tentative {
+            display: flex;
+            align-items: center;
+            flex-shrink: 1;
+            min-width: 5.5rem;
+            max-width: calc(100% - 140px);
+            padding: 0 8px;
+            border: 2px dashed rgba(255, 255, 255, 0.8);
+            border-left: 0;
+            background-color: rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
         .planner-handle {
             position: absolute;
             top: 0;
@@ -371,6 +510,9 @@
         .planner-bar-success {
             background-color: #5fa675;
         }
+        .planner-bar-warning {
+            background-color: #e0a43a;
+        }
         .planner-bar-danger {
             background-color: #db5c5c;
         }
@@ -397,6 +539,64 @@
             line-height: 1.2;
             white-space: nowrap;
             color: rgba(255, 255, 255, 0.95);
+        }
+        td.planner-day-summary {
+            --planner-day-color: transparent;
+            padding: 2px 0 !important;
+            font-size: 0.75rem;
+            line-height: 1.2;
+            white-space: nowrap;
+            background-image: linear-gradient(to top, var(--planner-day-color) var(--planner-day-fill, 0%), transparent var(--planner-day-fill, 0%));
+        }
+        .planner-day-pct {
+            font-weight: 600;
+        }
+        td.planner-day-success {
+            --planner-day-color: rgba(95, 166, 117, 0.35);
+            color: #2f6b42;
+        }
+        td.planner-day-warning {
+            --planner-day-color: rgba(240, 173, 78, 0.4);
+            color: #8a5a12;
+        }
+        td.planner-day-danger {
+            --planner-day-color: rgba(219, 92, 92, 0.4);
+            color: #a32626;
+        }
+        td.planner-day-muted {
+            color: #94a3b8;
+        }
+        td.planner-day-off {
+            color: #64748b;
+            background-image: repeating-linear-gradient(135deg, transparent 0 5px, rgba(148, 163, 184, 0.25) 5px 10px);
+        }
+        .planner-activity-off {
+            color: #334155;
+            background-image: repeating-linear-gradient(135deg, #e2e8f0 0 6px, #cbd5e1 6px 12px);
+        }
+        /* the dark text above disappears on the tinted cells of the dark theme */
+        [data-bs-theme="dark"] td.planner-day-success,
+        [data-bs-theme="dark"] td.planner-day-warning,
+        [data-bs-theme="dark"] td.planner-day-danger {
+            color: #ffffff;
+        }
+        /* public holidays: a striped tint across the user's rows, unlike plain days off */
+        td.planner-holiday {
+            background-image: repeating-linear-gradient(135deg, rgba(var(--tblr-purple-rgb, 174, 62, 201), 0.12) 0 4px, transparent 4px 10px);
+        }
+        td.planner-day-summary.planner-holiday {
+            color: var(--tblr-purple, #ae3ec9);
+            max-width: 0;
+        }
+        td.planner-day-summary.planner-day-danger.planner-holiday {
+            background-image: linear-gradient(to top, var(--planner-day-color) var(--planner-day-fill, 0%), transparent var(--planner-day-fill, 0%)), repeating-linear-gradient(135deg, rgba(var(--tblr-purple-rgb, 174, 62, 201), 0.12) 0 4px, transparent 4px 10px);
+        }
+        .planner-holiday-name {
+            font-weight: 600;
+            padding: 0 2px;
+        }
+        [data-bs-theme="dark"] td.planner-day-off {
+            color: #cbd5e1;
         }
         .planner-user-cell {
             cursor: pointer;
@@ -615,6 +815,9 @@
                 }
                 const bounds = range(d);
                 const params = new URLSearchParams({user: d.row.dataset.userId, date: bounds[0], end: bounds[1]});
+                if (d.row.dataset.plannerOff) {
+                    params.set('off', '1');
+                }
                 if (d.row.dataset.customerId) {
                     params.set('customer', d.row.dataset.customerId);
                 }
