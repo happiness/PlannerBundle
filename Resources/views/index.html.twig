@@ -194,7 +194,7 @@
                                                     <div class="planner-summary-badge">
                                                         <div class="planner-summary-pct">{{ week.plannedPercentage }}%</div>
                                                         <div class="planner-summary-hours">
-                                                            {{ week.totalPlannedHours }}/{{ week.totalExpectedHours }} hrs ({{ week.totalActualHours }} hrs)
+                                                            {{ 'planner.week_hours'|trans({'%planned%': week.totalPlannedHours, '%expected%': week.totalExpectedHours, '%actual%': week.totalActualHours}) }}
                                                         </div>
                                                     </div>
                                                 </div>

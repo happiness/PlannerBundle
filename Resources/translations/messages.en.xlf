@@ -214,6 +214,10 @@
                 <source>planner.day_hours</source>
                 <target>%planned% of %expected% hrs planned, %actual% hrs logged</target>
             </trans-unit>
+            <trans-unit id="planner.week_hours">
+                <source>planner.week_hours</source>
+                <target>%planned%/%expected% hrs (%actual% hrs)</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>
