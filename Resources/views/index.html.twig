@@ -836,7 +836,8 @@
 
             function confirmDaysOff(row, cells, proceed, cancel) {
                 const table = row.closest('table[data-planner-create-url]');
-                if (!table || !cells.every(function (cell) { return cell.hasAttribute('data-planner-non-working'); })) {
+                // time off on a day off is no mistake, it needs no confirmation
+                if (!table || row.dataset.plannerOff || !cells.every(function (cell) { return cell.hasAttribute('data-planner-non-working'); })) {
                     proceed();
                     return;
                 }

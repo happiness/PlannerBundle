@@ -226,7 +226,7 @@ What changed:
 - **Multi-week grid**: The planner shows 1, 2, 4 (default) or 8 weeks, with capacity summarized per week. Activities of the same customer/project are grouped in sub-rows per user, and consecutive days are merged into one block.
 - **Always an empty row per user**, so new plannings can be dragged out even when a user has no activities.
 - **Drag to plan**: Dragging over empty days opens the create dialog with the whole date range, showing a transparent preview of the planning.
-- **Confirm days off**: Clicking or dragging over a day the user's work contract has no hours for asks "<name> doesn't usually work on this day. Plan work anyway?" before the create dialog opens. A drag that also covers working days is not asked about. Users without any working day in the displayed period (no work contract) are never asked.
+- **Confirm days off**: Clicking or dragging over a day the user's work contract has no hours for asks "<name> doesn't usually work on this day. Plan work anyway?" before the create dialog opens. A drag that also covers working days is not asked about, and neither is time off. Users without any working day in the displayed period (no work contract) are never asked.
 - **Move and resize**: Drag a planned activity to another day or row (other user, customer/project). Drag the handle on its left or right edge to extend or shorten it. Whole days only, the hours per day stay the same. Requires the edit permission for the activity.
 - **Shortcuts** for frequently used customers and projects when creating a planning; they no longer depend on HappinessBundle.
 - **Recurring activities**: Edit or delete only one instance or all upcoming activities of a series.
