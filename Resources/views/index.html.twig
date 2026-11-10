@@ -219,7 +219,7 @@
                                                 {% set dayClass = 'planner-day-muted' %}
                                                 {% set dayFill = 0 %}
                                             {% endif %}
-                                            {% set dayHours = day.plannedHours ~ '/' ~ day.expectedHours ~ ' hrs (' ~ day.actualHours ~ ' hrs)' %}
+                                            {% set dayHours = 'planner.day_hours'|trans({'%planned%': day.plannedHours, '%expected%': day.expectedHours, '%actual%': day.actualHours}) %}
                                             <td class="planner-day-summary text-center border-top-0 {{ dayClass }}{% if loop.index0 % 7 == 0 %} border-start{% endif %}{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %}" style="--planner-day-fill: {{ dayFill }}%;" title="{{ dayHours }}">
                                                 {% if day.isWorkingDay %}
                                                     {% if not compact %}<div class="planner-day-hours">{{ day.plannedHours }}/{{ day.expectedHours }}h</div>{% endif %}

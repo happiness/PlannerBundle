@@ -210,6 +210,10 @@
                 <source>planner.over_hours</source>
                 <target>%hours% tim över</target>
             </trans-unit>
+            <trans-unit id="planner.day_hours">
+                <source>planner.day_hours</source>
+                <target>%planned% av %expected% tim planerade, %actual% tim rapporterade</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>
