@@ -1,6 +1,6 @@
 # PlannerBundle for Kimai
 
-**PlannerBundle** is a lightweight weekly team capacity planner plugin for [Kimai](https://www.kimai.org/), inspired by tools like Forecastapp. It allows teams and team leaders to visually plan and balance workloads on a weekly timeline. Every planned activity is linked to a customer and, optionally, a project.
+**PlannerBundle** is a lightweight weekly team capacity planner plugin for [Kimai](https://www.kimai.org/), inspired by tools like Forecastapp. It allows teams and team leaders to visually plan and balance workloads on a weekly timeline. Planned work is linked to a customer and, optionally, a project; time off marks a user as not available.
 
 ---
 
@@ -10,12 +10,16 @@
 - **Capacity & Workload Balancing**:
   - Automatically calculates expected capacity from each user's working time contracts.
   - Highlights over-allocated, under-allocated, and balanced days with clear visual badges.
+- **Public Holidays**: Each user's public holidays count as days off, named in their day cell (see [Public holidays](#public-holidays)).
 - **Actual vs Planned Hours**: Directly compares planned allocations against actual recorded timesheet hours.
 - **Lightweight Scheduling**: Plan time blocks for a customer (and optionally a project) with daily hours, date ranges, comments, and color badges.
+- **Time Off**: Mark a user as not available with the "Time off" switch in the planning dialog, or by dragging in the user's "Time off" row. Time off has no customer or project and is not counted as planned work: its hours are taken off the day's capacity, so 4 hours off on an 8 hour day leaves 4 hours to plan. Leave the hours empty to take the whole day off, whatever the user's contract expects for that day. Why someone is away stays with the absence they record in Kimai.
 - **Drag to Plan**: Drag across empty day cells of a row to create a planning spanning several days. A transparent preview block is shown while dragging and stays visible while the dialog is open.
 - **Move and Resize**: Drag a planned activity to another day or row, or drag its left/right handle to extend or shorten it.
-- **Shortcuts**: Frequently used customers and projects are offered as shortcuts when creating a planning.
+- **Shortcuts**: Frequently used projects (with their customer) are offered as shortcuts when creating a planning, unless the dialog was opened from a project's row and already has it selected.
 - **Multiple Weeks**: Show 1, 2, 4 (default) or 8 weeks at once; capacity is summarized per week.
+- **Tentative Planning**: Mark planning that isn't confirmed yet, such as work for a deal that isn't signed. Tentative blocks are faded with a dashed border, and their hours are shown on top of the confirmed capacity ("+ 8 hrs tentative") without changing its colour. A "Planning" filter shows all, confirmed only or tentative only (the capacity always counts everything; "tentative only" also hides users without tentative work). "Confirm all for this project" (on the project row or in the dialog) confirms the ongoing and future tentative planning of a project for everyone you may edit, after showing how many plans, people and which period it changes.
+- **Who's Free**: "Order by" in the search offers "Most free hours": the people with the most contract hours left unplanned across the shown weeks, from today on, come first, overbooked people last, and each name shows its free hours ("16h free" or "4h over"). Switch to one week to ask about a single week. It is kept in the URL and can be bookmarked like the other filters.
 - **Calendar Feed**: Subscribe to your own planning in Google Calendar, Outlook or Apple Calendar through a private address (see [Calendar feed](#calendar-feed)).
 - **REST API**: Create, read, update and delete planned activities via `/api/planner/activities` (see the Kimai API docs under the "Planner" tag).
 - **Quick Modal Editing**: Create, update, or delete planned blocks seamlessly via modal dialogs.
@@ -93,6 +97,22 @@ Permissions can be customized anytime via the Kimai UI under **System > Role per
 
 ---
 
+## Extending
+
+Other plugins can leave users out of the planner, for example accounts that hold time but are not people. Listen to `KimaiPlugin\PlannerBundle\Event\PlannerUsersEvent`: it carries the users the current user is about to see, already limited to what they may see, and `removeUser()` takes one out of the planner grid and the planner API.
+
+```php
+#[AsEventListener]
+public function __invoke(PlannerUsersEvent $event): void
+{
+    foreach ($event->getUsers() as $user) {
+        if ($this->isNotAPerson($user)) {
+            $event->removeUser($user);
+        }
+    }
+}
+```
+
 ## Development & Testing
 
 Run tests and code checks using the provided scripts:
@@ -122,11 +142,35 @@ All endpoints require an API token and the `view_planner` permission; write oper
 
 | Method | Path | Description |
 | :--- | :--- | :--- |
-| `GET` | `/api/planner/activities` | List activities. Filters: `user`, `customers[]`, `projects[]`, `begin`, `end` (`Y-m-d`) |
+| `GET` | `/api/planner/activities` | List activities. Filters: `user`, `customers[]`, `projects[]`, `begin`, `end` (`Y-m-d`), `tentative` (`1` tentative only, `0` confirmed only) |
 | `GET` | `/api/planner/activities/{id}` | Fetch one activity |
-| `POST` | `/api/planner/activities` | Create. Body: `customer` (required), `project`, `user` (defaults to you), `begin`, `end`, `hoursPerDay`, `color`, `comment`, `recurrentWeeks` |
-| `PATCH` | `/api/planner/activities/{id}` | Update any subset of fields; `edit_mode: "future"` also updates later activities of a recurring series |
+| `POST` | `/api/planner/activities` | Create. Body: `customer` (required unless `timeOff`), `project`, `user` (defaults to you), `begin`, `end`, `hoursPerDay` (`null` or left out when switching to time off: the whole day), `timeOff` (time off never keeps a customer or project), `color`, `tentative`, `comment`, `recurrentWeeks` |
+| `PATCH` | `/api/planner/activities/{id}` | Update any subset of fields; `edit_mode: "future"` also updates later activities of a recurring series, moving their dates by as many days as this one moved |
 | `DELETE` | `/api/planner/activities/{id}` | Delete; `?mode=future` also deletes later activities of a recurring series |
+| `POST` | `/api/planner/activities/confirm-tentative` | Confirm the tentative activities of a project ending today or later. Body: `project` (required). Returns the IDs of the `confirmed` activities and of those `skipped` because you may see but not edit them; activities you may not see are neither confirmed nor returned |
+| `GET` | `/api/planner/holidays` | Public holidays users have off. Required: `begin`, `end` (`Y-m-d`, at most 366 days). Optional: `users[]` (default: everyone you may see). Returns `user`, `date`, `name`, `calendar`, `calendarName`, `type` per day |
+
+## Public holidays
+
+Public holidays are days off in the planner, just like days without contract hours: they have no capacity, and the cell under the user's week shows the holiday's name (the tooltip adds which calendar it comes from).
+
+- **Organisation default**: pick a calendar under *System > Settings > Weekly Planner*. Nobody has public holidays until one is chosen, so installing or updating the plugin changes nothing.
+- **Per user**: a user's preferences can pick another calendar, or "No public holidays", for teams spread over several countries. Only those who may edit the user's work contract (`contract` permission) can change it.
+- **Which days**: official and bank holidays are always days off. Some days are not public holidays but most organisations have them off anyway, such as Christmas Eve, Midsummer Eve and New Year's Eve in Sweden. Tick those under *Also days off* in the same settings; a ticked day applies to every calendar that has it.
+
+The holidays come from [Yasumi](https://github.com/azuyalabs/yasumi), which ships with Kimai core, so no network access or extra package is needed. It covers about 50 countries and many of their regions.
+
+The planner relies on Kimai core keeping Yasumi: a plugin cannot declare Composer dependencies of its own, so it uses the copy Kimai's `composer.json` requires (`azuyalabs/yasumi`, `^2.6` at the time of writing). Kimai itself doesn't call it, so check that it is still required before updating Kimai; if a release ever dropped it, the planner's holidays would need it back, or another provider (below).
+
+To take holidays from somewhere else, decorate `KimaiPlugin\PlannerBundle\Holiday\HolidayProviderInterface` in your own plugin:
+
+```yaml
+services:
+    App\MyHolidays:
+        decorates: KimaiPlugin\PlannerBundle\Holiday\HolidayProviderInterface
+```
+
+Time off is returned with `"timeOff": true`, `customer` and `project` set to `null`, and `hoursPerDay` set to `null` when it covers the whole day, so clients must not assume either is always present.
 
 ## Calendar feed
 
@@ -138,6 +182,10 @@ Everyone with the `view_planner` permission can subscribe to their own planned w
 - The address carries a random 64-character token and needs no login, which is how calendar apps can fetch it. Renewing the address on the same page makes the old one stop working; "Switch off" removes it. The feed also stops for users who are deactivated or lose `view_planner`.
 
 ## Upgrading
+
+### Tentative planning
+
+The migration `Version20261102120000` adds the column `tentative` (default false) to `kimai2_planned_activities`, so all existing planning stays confirmed. Run it after updating (see [Installation](#installation)).
 
 ### From 1.x to 2.0.0
 
