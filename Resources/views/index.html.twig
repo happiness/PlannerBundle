@@ -194,7 +194,7 @@
                                                     <div class="planner-summary-badge">
                                                         <div class="planner-summary-pct">{{ week.plannedPercentage }}%</div>
                                                         <div class="planner-summary-hours">
-                                                            {{ 'planner.week_hours'|trans({'%planned%': week.totalPlannedHours, '%expected%': week.totalExpectedHours, '%actual%': week.totalActualHours}) }}
+                                                            {{ 'planner.week_hours'|trans({'%planned%': week.totalPlannedHours, '%expected%': week.totalCapacityHours, '%actual%': week.totalActualHours}) }}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -205,12 +205,15 @@
                                     {% for day in row.days|filter(day => day.holiday) %}
                                         {% set holidays = holidays|merge({(day.date|date('Y-m-d')): day.holiday}) %}
                                     {% endfor %}
-                                    {# planned against contract hours per day, aligned with the day columns and always visible #}
+                                    {# planned against contract hours minus time off per day, aligned with the day columns and always visible #}
                                     <tr class="planner-row-days">
                                         <td colspan="2" class="p-0 border-top-0"></td>
                                         {% for day in row.days %}
                                             {# the cell fills up to the planned share of the day: amber with space left, green when full, red when overbooked #}
-                                            {% if day.isOverAllocated %}
+                                            {% if day.isDayOff and day.plannedHours == 0 %}
+                                                {% set dayClass = 'planner-day-off' %}
+                                                {% set dayFill = 0 %}
+                                            {% elseif day.isOverAllocated %}
                                                 {% set dayClass = 'planner-day-danger' %}
                                                 {% set dayFill = 100 %}
                                             {% elseif day.plannedHours > 0 and day.isBalanced %}
@@ -223,7 +226,10 @@
                                                 {% set dayClass = 'planner-day-muted' %}
                                                 {% set dayFill = 0 %}
                                             {% endif %}
-                                            {% set dayHours = 'planner.day_hours'|trans({'%planned%': day.plannedHours, '%expected%': day.expectedHours, '%actual%': day.actualHours}) %}
+                                            {% set dayHours = 'planner.day_hours'|trans({'%planned%': day.plannedHours, '%expected%': day.capacityHours, '%actual%': day.actualHours}) %}
+                                            {% if day.timeOffHours > 0 %}
+                                                {% set dayHours = dayHours ~ ', ' ~ 'planner.day_time_off'|trans({'%hours%': day.timeOffHours}) %}
+                                            {% endif %}
                                             {% if day.holiday %}
                                                 {% set dayHours = day.holiday.name ~ ' (' ~ day.holiday.calendarName ~ ')' ~ (day.plannedHours > 0 ? ', ' ~ dayHours : '') %}
                                             {% endif %}
@@ -232,8 +238,10 @@
                                                     {# the name is cut off to fit the column, the tooltip has it in full #}
                                                     <div class="planner-holiday-name text-truncate">{{ day.holiday.name }}</div>
                                                     {% if day.plannedHours > 0 %}<div class="planner-day-pct">{{ day.plannedHours }}h</div>{% endif %}
-                                                {% elseif day.isWorkingDay %}
-                                                    {% if not compact %}<div class="planner-day-hours">{{ day.plannedHours }}/{{ day.expectedHours }}h</div>{% endif %}
+                                                {% elseif dayClass == 'planner-day-off' %}
+                                                    <div class="planner-day-pct">{{ compact ? '–' : 'planner.time_off'|trans }}</div>
+                                                {% elseif day.capacityHours > 0 %}
+                                                    {% if not compact %}<div class="planner-day-hours">{{ day.plannedHours }}/{{ day.capacityHours }}h</div>{% endif %}
                                                     <div class="planner-day-pct">{{ day.plannedPercentage }}%</div>
                                                 {% elseif day.plannedHours > 0 %}
                                                     <div class="planner-day-pct">{{ day.plannedHours }}h</div>
@@ -245,11 +253,12 @@
                                     </tr>
                                     {% set groups = row.groups %}
                                     {% for group in groups %}
-                                        <tr class="planner-row planner-row-details is-collapsed" data-user-id="{{ row.user.id }}"{% if group.customer %} data-customer-id="{{ group.customer.id }}"{% endif %}{% if group.project %} data-project-id="{{ group.project.id }}"{% endif %}>
+                                        <tr class="planner-row planner-row-details is-collapsed" data-user-id="{{ row.user.id }}"{% if group.timeOff %} data-planner-off="1"{% endif %}{% if group.customer %} data-customer-id="{{ group.customer.id }}"{% endif %}{% if group.project %} data-project-id="{{ group.project.id }}"{% endif %}>
                                             <td class="planner-group-cell p-1 border-top-0" colspan="2">
-                                                <div class="d-flex justify-content-between align-items-center planner-group-label" title="{{ group.customerName }}{% if group.projectName %} / {{ group.projectName }}{% endif %}">
+                                                {% set groupName = group.timeOff ? 'planner.time_off'|trans : group.customerName %}
+                                                <div class="d-flex justify-content-between align-items-center planner-group-label" title="{{ groupName }}{% if group.projectName %} / {{ group.projectName }}{% endif %}">
                                                     <div class="text-truncate">
-                                                        <span class="fw-bold small">{{ group.customerName }}</span>{% if group.projectName %}<span class="text-muted small"> / {{ group.projectName }}</span>{% endif %}
+                                                        <span class="fw-bold small">{{ groupName }}</span>{% if group.projectName %}<span class="text-muted small"> / {{ group.projectName }}</span>{% endif %}
                                                     </div>
                                                     <span class="text-muted small ms-2 flex-shrink-0">{{ group.getPlannedHours(row.days) }}h</span>
                                                 </div>
@@ -258,7 +267,7 @@
                                                 {% set date = segment.date %}
                                                 <td colspan="{{ segment.span }}" class="position-relative align-middle border-1 day{% if segment.span == 1 and holidays[date|date('Y-m-d')] is defined %} planner-holiday{% endif %}{% if date is weekend %} weekend{% endif %}{% if date is today %} today{% endif %} p-1 {{ segment.activities is not empty ? 'has-activities' : 'no-activities' }}"{% if canCreate and segment.activities is empty %} data-planner-date="{{ date|date('Y-m-d') }}"{% endif %}>
                                                     {% if canCreate and segment.activities is empty %}
-                                                        {% set createParams = {'user': row.user.id, 'date': date|date('Y-m-d')} %}
+                                                        {% set createParams = {'user': row.user.id, 'date': date|date('Y-m-d')}|merge(group.timeOff ? {'off': 1} : {}) %}
                                                         {% if group.customer %}{% set createParams = createParams|merge({'customer': group.customer.id}) %}{% endif %}
                                                         {% if group.project %}{% set createParams = createParams|merge({'project': group.project.id}) %}{% endif %}
                                                         <a href="{{ path('planner_activity_create', createParams) }}"
@@ -268,13 +277,14 @@
                                                     {% set segmentEnd = date.modify('+' ~ (segment.span - 1) ~ ' day') %}
                                                     {% for activity in segment.activities %}
                                                         {% set canMove = is_granted('edit', activity) %}
+                                                        {% set activityHours = activity.wholeDay ? 'planner.whole_day'|trans : activity.hoursPerDay ~ 'h' %}
                                                         <a href="{{ path('planner_activity_edit', {'id': activity.id, 'date': date|date('Y-m-d')}) }}"
-                                                           class="planner-activity position-relative z-2 d-flex justify-content-between align-items-center px-2 py-1 rounded text-decoration-none modal-ajax-form shadow-sm{% if not loop.first %} mt-1{% endif %}{% if canMove %} planner-movable{% endif %}"
-                                                           style="background-color: {{ activity.colorSafe }}; color: {{ activity.colorSafe|font_contrast }};"
+                                                           class="planner-activity position-relative z-2 d-flex justify-content-between align-items-center px-2 py-1 rounded text-decoration-none modal-ajax-form shadow-sm{% if not loop.first %} mt-1{% endif %}{% if canMove %} planner-movable{% endif %}{% if activity.timeOff %} planner-activity-off{% endif %}"
+                                                           {% if not activity.timeOff %}style="background-color: {{ activity.colorSafe }}; color: {{ activity.colorSafe|font_contrast }};"{% endif %}
                                                            {% if canMove %}data-planner-move-url="{{ path('planner_activity_move', {'id': activity.id}) }}" data-planner-begin="{{ activity.begin|date('Y-m-d') }}" data-planner-end="{{ activity.end|date('Y-m-d') }}"{% endif %}
-                                                           title="{{ activity.name }} ({{ activity.hoursPerDay }}h){% if activity.hasComment %}: {{ activity.comment|u.truncate(1024, '...') }}{% endif %}">
+                                                           title="{{ activity.timeOff ? 'planner.time_off'|trans : activity.name }} ({{ activityHours }}){% if activity.hasComment %}: {{ activity.comment|u.truncate(1024, '...') }}{% endif %}">
                                                             {% if canMove and activity.begin|date('Y-m-d') == date|date('Y-m-d') %}<span class="planner-handle planner-handle-start" data-planner-handle="start"></span>{% endif %}
-                                                            <span class="text-truncate small">{% if activity.hasComment %}{{ icon('comment') }} {% endif %}{{ activity.hoursPerDay }}h</span>
+                                                            <span class="text-truncate small">{% if activity.hasComment %}{{ icon('comment') }} {% endif %}{{ activityHours }}</span>
                                                             {% if canMove and activity.end|date('Y-m-d') == segmentEnd|date('Y-m-d') %}<span class="planner-handle planner-handle-end" data-planner-handle="end"></span>{% endif %}
                                                         </a>
                                                     {% endfor %}
@@ -325,7 +335,7 @@
                                 <tfoot>
                                     <tr class="summary">
                                         <td class="text-right p-1" colspan="2">
-                                            <div>{{ plannerData.totalPlannedHours }}h / {{ plannerData.totalExpectedHours }}h</div>
+                                            <div>{{ plannerData.totalPlannedHours }}h / {{ plannerData.totalCapacityHours }}h</div>
                                             {% if plannerData.totalActualHours > 0 %}
                                                 <div class="small text-muted fw-normal">{{ 'planner.actual_hours'|trans }}: {{ plannerData.totalActualHours }}h</div>
                                             {% endif %}
@@ -512,6 +522,14 @@
         td.planner-day-muted {
             color: #94a3b8;
         }
+        td.planner-day-off {
+            color: #64748b;
+            background-image: repeating-linear-gradient(135deg, transparent 0 5px, rgba(148, 163, 184, 0.25) 5px 10px);
+        }
+        .planner-activity-off {
+            color: #334155;
+            background-image: repeating-linear-gradient(135deg, #e2e8f0 0 6px, #cbd5e1 6px 12px);
+        }
         /* the dark text above disappears on the tinted cells of the dark theme */
         [data-bs-theme="dark"] td.planner-day-success,
         [data-bs-theme="dark"] td.planner-day-warning,
@@ -532,6 +550,9 @@
         .planner-holiday-name {
             font-weight: 600;
             padding: 0 2px;
+        }
+        [data-bs-theme="dark"] td.planner-day-off {
+            color: #cbd5e1;
         }
         .planner-user-cell {
             cursor: pointer;
@@ -750,6 +771,9 @@
                 }
                 const bounds = range(d);
                 const params = new URLSearchParams({user: d.row.dataset.userId, date: bounds[0], end: bounds[1]});
+                if (d.row.dataset.plannerOff) {
+                    params.set('off', '1');
+                }
                 if (d.row.dataset.customerId) {
                     params.set('customer', d.row.dataset.customerId);
                 }
