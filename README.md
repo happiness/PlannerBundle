@@ -127,7 +127,7 @@ All endpoints require an API token and the `view_planner` permission; write oper
 | `POST` | `/api/planner/activities` | Create. Body: `customer` (required), `project`, `user` (defaults to you), `begin`, `end`, `hoursPerDay`, `color`, `tentative`, `comment`, `recurrentWeeks` |
 | `PATCH` | `/api/planner/activities/{id}` | Update any subset of fields; `edit_mode: "future"` also updates later activities of a recurring series |
 | `DELETE` | `/api/planner/activities/{id}` | Delete; `?mode=future` also deletes later activities of a recurring series |
-| `POST` | `/api/planner/activities/confirm-tentative` | Confirm the tentative activities of a project ending today or later. Body: `project` (required). Returns the IDs of the `confirmed` activities and of those `skipped` because you may not edit them |
+| `POST` | `/api/planner/activities/confirm-tentative` | Confirm the tentative activities of a project ending today or later. Body: `project` (required). Returns the IDs of the `confirmed` activities and of those `skipped` because you may see but not edit them; activities you may not see are neither confirmed nor returned |
 
 ## Upgrading
 
