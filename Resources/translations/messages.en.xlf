@@ -226,6 +226,114 @@
                 <source>planner.suggestions</source>
                 <target>Frequently used</target>
             </trans-unit>
+            <trans-unit id="planner.calendar.button">
+                <source>planner.calendar.button</source>
+                <target>Calendar feed</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.title">
+                <source>planner.calendar.title</source>
+                <target>Calendar feed</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.name">
+                <source>planner.calendar.name</source>
+                <target>Planner: %name%</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.intro">
+                <source>planner.calendar.intro</source>
+                <target>Subscribe to your planned work in Google Calendar, Outlook or Apple Calendar, so it shows next to your meetings. Your calendar app refreshes it by itself, usually within a few hours.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.copy">
+                <source>planner.calendar.copy</source>
+                <target>Copy</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.copied">
+                <source>planner.calendar.copied</source>
+                <target>Copied</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.secret">
+                <source>planner.calendar.secret</source>
+                <target>Anyone with this address can see your planning. If you shared it by mistake, renew it: the old address stops working.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto">
+                <source>planner.calendar.howto</source>
+                <target>Adding it to your calendar</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto_google">
+                <source>planner.calendar.howto_google</source>
+                <target>Google Calendar: next to &quot;Other calendars&quot;, click + and choose &quot;From URL&quot;.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto_outlook">
+                <source>planner.calendar.howto_outlook</source>
+                <target>Outlook: choose &quot;Add calendar&quot;, then &quot;Subscribe from web&quot;.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto_apple">
+                <source>planner.calendar.howto_apple</source>
+                <target>Apple Calendar: choose File, then &quot;New Calendar Subscription&quot;.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.create">
+                <source>planner.calendar.create</source>
+                <target>Create calendar address</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.renew">
+                <source>planner.calendar.renew</source>
+                <target>Renew address</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.renew_confirm">
+                <source>planner.calendar.renew_confirm</source>
+                <target>The current address stops working, and calendars using it need the new one. Renew it?</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.remove">
+                <source>planner.calendar.remove</source>
+                <target>Switch off</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.remove_confirm">
+                <source>planner.calendar.remove_confirm</source>
+                <target>The current address stops working. Switch off the calendar feed?</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.shown_once">
+                <source>planner.calendar.shown_once</source>
+                <target>Copy this address now. It is stored hashed and won't be shown again: if you lose it, renew it and subscribe again.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.hidden">
+                <source>planner.calendar.hidden</source>
+                <target>Your calendar feed is active. Its address is stored hashed, so it can't be shown again: renew it to get a new one, then subscribe again with that.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.include_comments">
+                <source>planner.calendar.include_comments</source>
+                <target>Include notes in my feed</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments">
+                <source>planner.calendar_feed.comments</source>
+                <target>Notes in calendar feeds</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_help">
+                <source>planner.calendar_feed.comments_help</source>
+                <target>Notes often hold details meant for colleagues only. A calendar feed hands everything in it to whichever calendar service each person subscribes from, such as Google or Microsoft.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_exclude">
+                <source>planner.calendar_feed.comments_exclude</source>
+                <target>Leave out</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_include">
+                <source>planner.calendar_feed.comments_include</source>
+                <target>Include</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_user">
+                <source>planner.calendar_feed.comments_user</source>
+                <target>Let people choose for their own feed</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_user_help">
+                <source>planner.calendar_feed.comments_user_help</source>
+                <target>Each person can then switch notes on or off for their own feed, starting from the choice above.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.hash">
+                <source>planner.calendar_feed.hash</source>
+                <target>Store feed addresses hashed</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.hash_help">
+                <source>planner.calendar_feed.hash_help</source>
+                <target>A leaked database backup then reveals no working feed address. An address is shown only once, right after it is created: whoever loses theirs renews it and subscribes again. Existing addresses are hashed the next time a calendar fetches them.</target>
+            </trans-unit>
             <trans-unit id="planner.tentative">
                 <source>planner.tentative</source>
                 <target>Tentative</target>

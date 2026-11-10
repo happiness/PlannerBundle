@@ -23,6 +23,7 @@
 - **Multiple Weeks**: Show 1, 2, 4 (default) or 8 weeks at once; capacity is summarized per week.
 - **Tentative Planning**: Mark planning that isn't confirmed yet, such as work for a deal that isn't signed. Tentative blocks are faded with a dashed border, and their hours are shown on top of the confirmed capacity ("+ 8 hrs tentative") without changing its colour. A "Planning" filter shows all, confirmed only or tentative only (the capacity always counts everything; "tentative only" also hides users without tentative work). "Confirm all for this project" (on the project row or in the dialog) confirms the ongoing and future tentative planning of a project for everyone you may edit, after showing how many plans, people and which period it changes.
 - **Who's Free**: "Order by" in the search offers "Most free hours": the people with the most contract hours left unplanned across the shown weeks, from today on, come first, overbooked people last, and each name shows its free hours ("16h free" or "4h over"). Switch to one week to ask about a single week. It is kept in the URL and can be bookmarked like the other filters.
+- **Calendar Feed**: Subscribe to your own planning in Google Calendar, Outlook or Apple Calendar through a private address (see [Calendar feed](#calendar-feed)).
 - **REST API**: Create, read, update and delete planned activities via `/api/planner/activities` (see the Kimai API docs under the "Planner" tag).
 - **Quick Modal Editing**: Create, update, or delete planned blocks seamlessly via modal dialogs.
 - **Date Navigation**: Fast week switcher controls (`Previous Week`, `Today`, `Next Week`, and date picker jump).
@@ -94,6 +95,7 @@ The plugin registers dedicated permissions that integrate seamlessly into Kimai'
 | `delete_planner` | Delete own planned activities | `ROLE_USER`, `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `view_other_planner` | View other team members in the weekly planner | `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `edit_other_planner` | Create, edit, and delete activities for other users | `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
+| `calendar_feed_planner` | Subscribe to your own planning as a calendar feed, together with `view_planner` (see [Calendar feed](#calendar-feed)) | `ROLE_USER`, `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 
 Permissions can be customized anytime via the Kimai UI under **System > Role permissions**.
 
@@ -173,6 +175,21 @@ services:
 ```
 
 Time off is returned with `"timeOff": true`, `customer` and `project` set to `null`, and `hoursPerDay` set to `null` when it covers the whole day, so clients must not assume either is always present.
+
+## Calendar feed
+
+Everyone with both `view_planner` and `calendar_feed_planner` (every role has the latter by default; take it away under *System > Role permissions*) can subscribe to their own planned work from a calendar app. The "Calendar feed" button above the planner opens a page with a private address to add as a calendar subscription ("From URL" in Google Calendar, "Subscribe from web" in Outlook, "New Calendar Subscription" in Apple Calendar).
+
+- Each planned activity is an all-day event over its days, titled with the project (or customer) and the hours per day; the description has customer, project and hours, and the event links back to that week in the planner. Events are marked as free, so planned work never makes you look busy for meetings. Tentative work is titled "Tentative: …" and marked tentative, and time off without hours shows as a whole day.
+- The feed covers 60 days back to a year ahead. Calendar apps refresh subscriptions on their own schedule, Google can take up to a day.
+- Run the plugin's migrations after updating: the addresses are kept in a new table, `kimai2_planner_calendar_tokens`.
+- The address carries a random 64-character token and needs no login, which is how calendar apps can fetch it. Renewing the address on the same page makes the old one stop working; "Switch off" removes it. The feed also stops for users who are deactivated or lose either permission.
+
+Three settings under *System > Settings > Weekly Planner* decide what leaves Kimai once someone subscribes:
+
+- **Notes in calendar feeds** (default: leave out). Comments often hold details meant for colleagues only, and the feed hands everything in it to whichever calendar service each person subscribes from. Set it to "Include" to add them to the event description.
+- **Let people choose for their own feed** (default: no). With it on, the feed page gets an "Include notes in my feed" switch that starts from the setting above. Only a choice that differs from the organisation's is kept, so everyone else follows it if it changes.
+- **Store feed addresses hashed** (default: yes). Only a SHA-256 hash of the token is kept, so a leaked database backup reveals no working address. The address is then shown once, right after it is created; whoever loses it renews it and subscribes again. Addresses created while the setting was off are hashed as soon as it is saved as on (and, on update, by the migration that brings the setting), and keep working.
 
 ## Upgrading
 

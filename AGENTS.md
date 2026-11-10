@@ -46,13 +46,23 @@ var/plugins/PlannerBundle/
 ├── API/
 │   ├── PlannedActivityController.php # REST API (GET/POST/PATCH/DELETE /api/planner/activities)
 │   └── PublicHolidayController.php   # REST API (GET /api/planner/holidays)
+├── Calendar/
+│   ├── CalendarFeedBuilder.php        # iCalendar (RFC 5545) output: all-day events, escaping, line folding
+│   ├── CalendarFeedSettings.php       # The organisation's feed settings: comments, personal choice, hashing
+│   └── CalendarFeedTokens.php         # Create, renew, remove and look up feed tokens (Entity/CalendarFeedToken), hashed or plain
 ├── Controller/
+│   ├── CalendarFeedSettingsController.php # /{_locale}/planner/calendar: show, renew, switch off the feed address
 │   └── WeeklyPlannerController.php    # Weekly planner routes, week switching, modal CRUD actions
 ├── DependencyInjection/
 │   └── PlannerExtension.php          # Container configuration (prepends roles, sets, views)
+├── Feed/
+│   └── CalendarFeedController.php     # Public GET /planner-calendar/{token}.ics (no login, token is the credential)
 ├── Entity/
+│   ├── CalendarFeedToken.php          # One calendar feed token per user (own table, kept out of audited preferences)
 │   └── PlannedActivity.php           # Planned time block entity (user, customer, project, date range, daily hours, comments, color)
 ├── EventSubscriber/
+│   ├── CalendarFeedHashingListener.php # Hashes plain feed tokens when "Store feed addresses hashed" is saved as on
+│   ├── CalendarFeedSettingsSubscriber.php # System settings: comments in feeds, personal choice, hashed tokens
 │   ├── HolidayPreferenceSubscriber.php # Per-user holiday calendar preference (contract permission)
 │   ├── HolidaySettingsSubscriber.php # System settings: default holiday calendar, observance days off
 │   ├── MenuSubscriber.php            # Injects "Planner" item into main navigation
@@ -71,7 +81,9 @@ var/plugins/PlannerBundle/
 │   ├── Version20260909000000.php      # Initial planner schema (kimai2_planned_activities table)
 │   ├── Version20260914000000.php      # Schema updates (recurring activities support)
 │   ├── Version20261019000000.php      # customer_id/project_id columns, title becomes nullable
-│   └── Version20261102120000.php      # tentative flag
+│   ├── Version20261102000000.php      # kimai2_planner_calendar_tokens (calendar feed tokens)
+│   ├── Version20261102120000.php      # tentative flag
+│   └── Version20261110180000.php      # calendar feed tokens: hashed flag and the user's choice on comments
 ├── Planner/
 │   ├── PlannerUserProvider.php        # Resolves which users' plans the current user may see (web + API)
 │   ├── TentativeConfirmer.php         # "Confirm all for this project": ongoing/future tentative plans the user may edit (web + API)
@@ -153,7 +165,15 @@ var/plugins/PlannerBundle/
    - The preference is only enabled for those granted `contract` on the user. Core renders a disabled preference as a `HiddenType` with the same options, so a preference must not pass options only its own form type knows: that is why `HolidayCalendarPreferenceType` exists instead of an option on `HolidayCalendarType`.
    - Names come in the current request language, preferring the calendar's country variant (`en_GB` for an English reader of `GB-ENG`, so "Boxing Day"). Where Yasumi has no translation it would return the key, so `HolidayCalendars::getHolidayName()` falls back to any translation it has.
    - The template marks holiday cells with `planner-holiday` (striped tint) on every row of that user; the day summary cell shows the name truncated, with name and calendar in the tooltip.
-10. **Isolated Database Migrations**:
+10. **Calendar Feed**:
+   - `Feed/` is imported in `routes.yaml` without the `/{_locale}` prefix, so the feed needs no login; the 64-hex token is the only credential. Anything else added to `Feed/` is public too. A plain controller class there needs `#[AsController]`, or Symfony cannot call it (only `AbstractController` subclasses are registered automatically).
+   - The feed lives outside the `/{_locale}/` prefix, so Kimai's `access_control` rule that requires `ROLE_USER` there (a real pattern since Kimai 2.72, kimai/kimai#6316; before that a literal regex that matched nothing) does not cover it. Every controller under `/{_locale}/` in `Controller/` must still carry its own `#[IsGranted]`, as `CalendarFeedSettingsController` does (`view_planner` and `calendar_feed_planner`).
+   - Tokens live in their own table (`Entity\CalendarFeedToken`, `kimai2_planner_calendar_tokens`, migrations `Version20261102000000` and `Version20261110180000`), never in a user preference: audit plugins version every preference value (renewed tokens would stay readable in the audit log) and users can write any existing preference through `PATCH /api/users/{id}/preferences`.
+   - `CalendarFeedSettings` reads the three system settings (`planner.calendar_comments`, `planner.calendar_comments_user`, `planner.calendar_hash_tokens`); unset means comments out, no personal choice, hashing on. `CalendarFeedSettingsSubscriber` adds them to the `planner` section after `HolidaySettingsSubscriber` creates it.
+   - With hashing on, `token` holds the SHA-256 of the token and `hashed` is set; `findFeed()` looks up both forms and hashes a plain token it finds. Plain tokens are also hashed in one statement (`CalendarFeedTokens::HASH_PLAIN_TOKENS_SQL`, MySQL `SHA2()`) by `Version20261110180000::postUp()` unless hashing is switched off, and by `CalendarFeedHashingListener` (a Doctrine entity listener on core's `Configuration`, since Kimai dispatches no event when settings are saved) whenever the setting is saved as on. A token stored hashed is only known in the request that creates it: the settings controller passes it to the next page view once through the session. `include_comments` is the user's own choice (`null` follows the organisation), kept only when it differs from the organisation's.
+   - The feed answers 404 for an unknown token, a disabled user and a user whose roles lack `view_planner` or `calendar_feed_planner` (`RolePermissionManager::hasRolePermission()`; there is no security token on this request, so voters cannot be used).
+   - Events are all-day (`DTEND` is the exclusive day after `end`), `TRANSP:TRANSPARENT`, UID `planner-activity-{id}@{host}`. Labels use the feed owner's language (`User::getLanguage()`), not the request's. A feed with no planning has no events, which Google and Outlook accept.
+11. **Isolated Database Migrations**:
    - Always run and test migrations using the bundle's dedicated configuration file:
      `bin/console doctrine:migrations:migrate --configuration=var/plugins/PlannerBundle/Migrations/doctrine_migrations.yaml --no-interaction`
 

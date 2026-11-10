@@ -6,6 +6,17 @@
 {% block main %}
     <div class="page-header d-print-none">
         <div class="container-fluid">
+            {# a row of its own, the navigation row below is already full #}
+            {% if is_granted('calendar_feed_planner') %}
+                <div class="row mb-2">
+                    <div class="col-auto ms-auto">
+                        <a href="{{ path('planner_calendar') }}" class="btn" title="{{ 'planner.calendar.intro'|trans }}">
+                            {{ icon('calendar', true) }}
+                            {{ 'planner.calendar.button'|trans }}
+                        </a>
+                    </div>
+                </div>
+            {% endif %}
             <div class="row align-items-center">
                 <div class="col">
                     <div class="btn-group week-picker-btn-group" role="group" aria-label="{{ 'planner.title'|trans }}">
