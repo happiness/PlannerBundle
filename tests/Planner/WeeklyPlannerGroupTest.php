@@ -27,8 +27,9 @@ class WeeklyPlannerGroupTest extends TestCase
     {
         $days = [];
         $monday = new \DateTimeImmutable('2026-10-19');
+        // a working week: eight hours Monday to Friday, the weekend off
         for ($i = 0; $i < 7; ++$i) {
-            $days[] = new WeeklyPlannerDay($monday->modify('+' . $i . ' day'));
+            $days[] = new WeeklyPlannerDay($monday->modify('+' . $i . ' day'), $i < 5 ? 8.0 : 0.0);
         }
 
         return $days;
