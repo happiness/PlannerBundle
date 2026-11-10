@@ -15,6 +15,7 @@ use App\Entity\User;
 use App\Model\DailyStatistic;
 use App\Repository\Query\TimesheetStatisticQuery;
 use App\Timesheet\TimesheetStatisticService;
+use App\WorkingTime\Calculator\WorkingTimeCalculator;
 use App\WorkingTime\WorkingTimeService;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Holiday\HolidayProviderInterface;
@@ -83,6 +84,8 @@ class WeeklyPlannerService
             $calculator = $this->workingTimeService->getContractMode($user)->getCalculator($user);
             $holidays = $this->holidayProvider?->getHolidays($user, $start, $end) ?? [];
 
+            /** @var array<WeeklyPlannerDay> $days */
+            $days = [];
             $cur = $start;
             while ($cur <= $end) {
                 // a public holiday is a day without contract hours
@@ -113,8 +116,11 @@ class WeeklyPlannerService
                 }
 
                 $userRow->addDay($day);
+                $days[] = $day;
                 $cur = $cur->modify('+1 day');
             }
+
+            $this->countWorkPlannedOnDaysOff($user, $calculator, $userActivities[(int) $user->getId()] ?? [], $days, $start, $end);
 
             if ($planning === PlannerQuery::PLANNING_TENTATIVE && $userRow->getUniqueActivities() === []) {
                 continue;
@@ -124,6 +130,72 @@ class WeeklyPlannerService
         }
 
         return $plannerData;
+    }
+
+    /**
+     * Work across a day off takes no hours there (WeeklyPlannerDay::counts()), unless every day of the activity is a
+     * day off: then it was planned there on purpose, like weekend work, and counts in full. Most activities have a
+     * working day on screen, so the contract is only asked about days outside the shown range when there is none.
+     *
+     * @param array<PlannedActivity> $activities
+     * @param array<WeeklyPlannerDay> $days
+     */
+    private function countWorkPlannedOnDaysOff(User $user, WorkingTimeCalculator $calculator, array $activities, array $days, \DateTimeImmutable $start, \DateTimeImmutable $end): void
+    {
+        foreach ($activities as $activity) {
+            if ($activity->isTimeOff()) {
+                continue;
+            }
+
+            $covered = array_filter($days, static fn (WeeklyPlannerDay $day): bool => $activity->coversDate($day->getDate()));
+            if ($covered === []) {
+                continue;
+            }
+
+            foreach ($covered as $day) {
+                if ($day->getExpectedHours() > 0.0) {
+                    continue 2;
+                }
+            }
+
+            if ($this->hasWorkingDayOutside($user, $calculator, $activity, $start, $end)) {
+                continue;
+            }
+
+            foreach ($covered as $day) {
+                $day->countOnDayOff($activity);
+            }
+        }
+    }
+
+    /**
+     * Whether a day of the activity outside the shown range has contract hours and is no public holiday.
+     */
+    private function hasWorkingDayOutside(User $user, WorkingTimeCalculator $calculator, PlannedActivity $activity, \DateTimeImmutable $start, \DateTimeImmutable $end): bool
+    {
+        $begin = $activity->getBegin();
+        $last = $activity->getEnd();
+        if ($begin === null || $last === null) {
+            return false;
+        }
+
+        $from = \DateTimeImmutable::createFromInterface($begin)->setTime(0, 0);
+        $to = \DateTimeImmutable::createFromInterface($last)->setTime(0, 0);
+        $holidays = null;
+
+        for ($day = $from; $day <= $to; $day = $day->modify('+1 day')) {
+            if ($day >= $start && $day <= $end) {
+                // already known to be a day off
+                continue;
+            }
+
+            $holidays ??= $this->holidayProvider?->getHolidays($user, $from, $to) ?? [];
+            if (!\array_key_exists($day->format('Y-m-d'), $holidays) && $calculator->getWorkHoursForDay($day) > 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function isShown(PlannedActivity $activity, string $planning): bool
