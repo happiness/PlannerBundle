@@ -692,6 +692,10 @@
             position: fixed;
             pointer-events: none;
         }
+        /* Bootstrap leaves the arrow's position to Popper, which sets it inline; this tooltip places it itself */
+        .planner-tooltip .tooltip-arrow {
+            position: absolute;
+        }
         .planner-tooltip .tooltip-inner {
             max-width: 320px;
             text-align: left;
@@ -1415,8 +1419,9 @@
         })();
 
         // A tooltip for the planned bars: what is planned, and the note on its own lines. Kimai's Bootstrap tooltips
-        // are only set up on the first page load, and the planner reloads its content after every change, so this one
-        // is delegated from the document and uses Bootstrap's markup for the same look.
+        // are only set up on the first page load, the planner reloads its content after every change, and Bootstrap's
+        // Tooltip class is not reachable from a plugin's template. So this one is delegated from the document and only
+        // places itself; the markup and every colour come from Kimai's own tooltip styles.
         (function () {
             const BAR = '.planner-activity[data-planner-tip]';
             const DELAY = 150;
