@@ -156,6 +156,8 @@ Public holidays are days off in the planner, just like days without contract hou
 
 The holidays come from [Yasumi](https://github.com/azuyalabs/yasumi), which ships with Kimai core, so no network access or extra package is needed. It covers about 50 countries and many of their regions.
 
+The planner relies on Kimai core keeping Yasumi: a plugin cannot declare Composer dependencies of its own, so it uses the copy Kimai's `composer.json` requires (`azuyalabs/yasumi`, `^2.6` at the time of writing). Kimai itself doesn't call it, so check that it is still required before updating Kimai; if a release ever dropped it, the planner's holidays would need it back, or another provider (below).
+
 To take holidays from somewhere else, decorate `KimaiPlugin\PlannerBundle\Holiday\HolidayProviderInterface` in your own plugin:
 
 ```yaml
