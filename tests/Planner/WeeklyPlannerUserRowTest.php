@@ -146,4 +146,23 @@ class WeeklyPlannerUserRowTest extends TestCase
         // time off is not free time, so "Most free hours" sees the day as full
         $this->assertSame(0.0, $row->getFreeHours(new \DateTimeImmutable('2026-11-01')));
     }
+
+    public function testUncountedDaysAreTheDaysOffABarCrosses(): void
+    {
+        $row = new WeeklyPlannerUserRow(new User());
+        // Friday to Tuesday, eight hours on weekdays
+        foreach (['2026-11-13' => 8.0, '2026-11-14' => 0.0, '2026-11-15' => 0.0, '2026-11-16' => 8.0, '2026-11-17' => 8.0] as $date => $expected) {
+            $row->addDay(new WeeklyPlannerDay(new \DateTimeImmutable($date), $expected));
+        }
+        $work = (new PlannedActivity())->setHoursPerDay(4.0)->setBegin(new \DateTime('2026-11-13'))->setEnd(new \DateTime('2026-11-17'));
+        $timeOff = (new PlannedActivity())->setTimeOff(true)->setBegin(new \DateTime('2026-11-13'))->setEnd(new \DateTime('2026-11-17'));
+
+        $this->assertSame([1, 2], $row->getUncountedDays($work, new \DateTimeImmutable('2026-11-13'), 5));
+        // a segment that starts on the Saturday
+        $this->assertSame([0], $row->getUncountedDays($work, new \DateTimeImmutable('2026-11-15'), 2));
+        // time off is capped at the contract day instead, nothing to mark
+        $this->assertSame([], $row->getUncountedDays($timeOff, new \DateTimeImmutable('2026-11-13'), 5));
+        // days outside the row are not known, so not marked
+        $this->assertSame([], $row->getUncountedDays($work, new \DateTimeImmutable('2026-11-18'), 2));
+    }
 }
