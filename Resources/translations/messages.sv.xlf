@@ -458,6 +458,78 @@
                 <source>planner.day_time_off</source>
                 <target>Ledig: %hours% tim</target>
             </trans-unit>
+            <trans-unit id="planner.reservation">
+                <source>planner.reservation</source>
+                <target>Reserverad tid</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation_help">
+                <source>planner.reservation_help</source>
+                <target>Tid som hålls för något som inte är en kund eller ett projekt. Lämna tomt för att planera en kund eller ett projekt.</target>
+            </trans-unit>
+            <trans-unit id="planner.reservations">
+                <source>planner.reservations</source>
+                <target>Reserverad tid</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.create">
+                <source>planner.reservation.create</source>
+                <target>Ny reservation</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.intro">
+                <source>planner.reservation.intro</source>
+                <target>Reserverad tid håller timmar i någons planering för något som inte är en kund eller ett projekt, till exempel en daglig buffert eller tech lead-tid. Den planeras och räknas som projektarbete, men ingen kan rapportera tid på den. Raderna visas i planeraren i den här ordningen.</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.none">
+                <source>planner.reservation.none</source>
+                <target>Ingen reserverad tid ännu.</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.plannings">
+                <source>planner.reservation.plannings</source>
+                <target>Planeringar</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.active">
+                <source>planner.reservation.active</source>
+                <target>Aktiv</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.archived">
+                <source>planner.reservation.archived</source>
+                <target>Arkiverad</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.archived_help">
+                <source>planner.reservation.archived_help</source>
+                <target>Erbjuds inte för ny planering. Befintliga planeringar ligger kvar i planeraren och räknas fortfarande.</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.archive">
+                <source>planner.reservation.archive</source>
+                <target>Arkivera</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.archive_help">
+                <source>planner.reservation.archive_help</source>
+                <target>Slutar erbjuda den för ny planering. Dess %count% planeringar ligger kvar i planeraren och räknas fortfarande, så ta bort eller korta dem för att frigöra tiden.</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.restore">
+                <source>planner.reservation.restore</source>
+                <target>Återställ</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.restore_help">
+                <source>planner.reservation.restore_help</source>
+                <target>Erbjuder den för ny planering igen.</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.move_up">
+                <source>planner.reservation.move_up</source>
+                <target>Flytta upp</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.move_down">
+                <source>planner.reservation.move_down</source>
+                <target>Flytta ned</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.name_help">
+                <source>planner.reservation.name_help</source>
+                <target>Visas i planeraren. Att byta namn behåller alla planeringar.</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.delete_in_use">
+                <source>planner.reservation.delete_in_use</source>
+                <target>Planeringar använder den här reservationen, så den kan bara arkiveras.</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>

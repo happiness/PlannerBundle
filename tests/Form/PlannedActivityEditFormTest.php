@@ -15,11 +15,18 @@ use App\Entity\Customer;
 use App\Entity\Project;
 use App\Entity\User;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Entity\Reservation;
 use KimaiPlugin\PlannerBundle\Form\PlannedActivityEditForm;
+use KimaiPlugin\PlannerBundle\Repository\ReservationRepository;
+use Symfony\Component\Form\AbstractTypeExtension;
+use Symfony\Component\Form\Extension\Core\Type\FormType;
 use Symfony\Component\Form\FormEvent;
 use Symfony\Component\Form\FormEvents;
+use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\FormInterface;
+use Symfony\Component\Form\Forms;
 use Symfony\Component\Form\Test\TypeTestCase;
+use Symfony\Component\OptionsResolver\OptionsResolver;
 
 class PlannedActivityEditFormTest extends TypeTestCase
 {
@@ -203,6 +210,58 @@ class PlannedActivityEditFormTest extends TypeTestCase
 
         PlannedActivityEditForm::fillCustomerFromProject(new FormEvent($this->createMock(FormInterface::class), $activity));
 
+        $this->assertNull($activity->getCustomer());
+    }
+
+    private function createFormFactoryWith(ReservationRepository $reservations): FormFactoryInterface
+    {
+        return Forms::createFormFactoryBuilder()
+            ->addExtensions($this->getExtensions())
+            ->addType(new PlannedActivityEditForm($reservations))
+            // the API documentation option, which NelmioApiDocBundle adds in the application
+            ->addTypeExtension(new class() extends AbstractTypeExtension {
+                public function configureOptions(OptionsResolver $resolver): void
+                {
+                    $resolver->setDefined('documentation');
+                }
+
+                public static function getExtendedTypes(): iterable
+                {
+                    return [FormType::class];
+                }
+            })
+            ->getFormFactory();
+    }
+
+    public function testReservationIsOfferedOnlyWhenThereAreAny(): void
+    {
+        $this->assertFalse($this->factory->createBuilder(PlannedActivityEditForm::class, new PlannedActivity(), ['user' => new User()])->has('reservation'));
+
+        $buffer = (new Reservation())->setName('Agency buffer');
+        $old = (new Reservation())->setName('Old')->setArchived(true);
+        $repository = $this->createStub(ReservationRepository::class);
+        $repository->method('findSelectable')->willReturn([$buffer]);
+
+        $builder = $this->createFormFactoryWith($repository)->createBuilder(PlannedActivityEditForm::class, new PlannedActivity(), ['user' => new User()]);
+        $this->assertTrue($builder->has('reservation'));
+        $this->assertSame([$buffer], $builder->get('reservation')->getOption('choices'));
+
+        // an archived reservation a planning already has stays choosable, so it can be edited without moving it
+        $builder = $this->createFormFactoryWith($repository)->createBuilder(PlannedActivityEditForm::class, (new PlannedActivity())->setReservation($old), ['user' => new User()]);
+        $this->assertSame([$buffer, $old], $builder->get('reservation')->getOption('choices'));
+    }
+
+    public function testReservationNeverKeepsASubmittedCustomer(): void
+    {
+        $buffer = (new Reservation())->setName('Agency buffer');
+
+        // what the form leaves behind when an existing reservation gets a customer: the unchanged reservation is not written again
+        $activity = (new PlannedActivity())->setReservation($buffer);
+        $activity->setCustomer(new Customer('ACME'));
+
+        $this->dispatchOwnListener(FormEvents::POST_SUBMIT, $activity, $activity);
+
+        $this->assertSame($buffer, $activity->getReservation());
         $this->assertNull($activity->getCustomer());
     }
 }

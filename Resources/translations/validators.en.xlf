@@ -6,6 +6,10 @@
                 <source>This project is already planned for this user on one of these days.</source>
                 <target>This project is already planned for this user on one of these days.</target>
             </trans-unit>
+            <trans-unit id="planner.overlapping_reservation">
+                <source>This reserved time is already planned for this user on one of these days.</source>
+                <target>This reserved time is already planned for this user on one of these days.</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>

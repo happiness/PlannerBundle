@@ -28,7 +28,7 @@ class MenuSubscriberTest extends TestCase
     public function testOnMenuConfigureWhenGranted(): void
     {
         $security = $this->createMock(Security::class);
-        $security->method('isGranted')->with('view_planner')->willReturn(true);
+        $security->method('isGranted')->willReturnCallback(static fn (string $attribute): bool => $attribute === 'view_planner');
 
         $user = new User();
         $event = new ConfigureMainMenuEvent($user);
@@ -48,7 +48,7 @@ class MenuSubscriberTest extends TestCase
     public function testOnMenuConfigureWhenDenied(): void
     {
         $security = $this->createMock(Security::class);
-        $security->method('isGranted')->with('view_planner')->willReturn(false);
+        $security->method('isGranted')->willReturn(false);
 
         $user = new User();
         $event = new ConfigureMainMenuEvent($user);
@@ -60,5 +60,21 @@ class MenuSubscriberTest extends TestCase
         $plannerChild = $menu->getChild('planner');
 
         $this->assertNull($plannerChild);
+    }
+
+    public function testReservedTimeIsInTheAdminMenuForWhoeverManagesIt(): void
+    {
+        $security = $this->createMock(Security::class);
+        $security->method('isGranted')->willReturnCallback(static fn (string $attribute): bool => $attribute === 'manage_reservations_planner');
+
+        $event = new ConfigureMainMenuEvent(new User());
+        (new MenuSubscriber($security))->onMenuConfigure($event);
+
+        $item = $event->getAdminMenu()->getChild('planner_reservations');
+        $this->assertNotNull($item);
+        $this->assertSame('planner.reservations', $item->getLabel());
+        $this->assertTrue($item->isChildRoute('planner_reservation_edit'));
+        // without view_planner there is no planner menu item
+        $this->assertNull($event->getMenu()->getChild('planner'));
     }
 }

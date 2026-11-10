@@ -20,6 +20,7 @@ use Doctrine\ORM\Query;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Entity\Reservation;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use PHPUnit\Framework\TestCase;
 
@@ -686,7 +687,7 @@ class PlannedActivityRepositoryTest extends TestCase
         $repository = $this->createRepository($em);
 
         $project = new Project();
-        $result = $repository->findByFilter([new User()], new \DateTime('2026-10-01'), new \DateTime('2026-10-31'), [new Customer('ACME')], [$project], true);
+        $result = $repository->findByFilter([new User()], new \DateTime('2026-10-01'), new \DateTime('2026-10-31'), [new Customer('ACME')], [$project], true, [(new Reservation())->setName('Buffer')]);
 
         $this->assertSame([$activity], $result);
         $this->assertSame([
@@ -695,6 +696,7 @@ class PlannedActivityRepositoryTest extends TestCase
             'p.customer IN (:customers)',
             'p.project IN (:projects)',
             'p.tentative = :tentative',
+            'p.reservation IN (:reservations)',
         ], $conditions);
     }
 
@@ -775,5 +777,50 @@ class PlannedActivityRepositoryTest extends TestCase
         $this->assertSame($customer, $repository->findCustomer(3));
         $this->assertSame($project, $repository->findProject(7));
         $this->assertNull($repository->findProject(8));
+    }
+
+    public function testSplitActivityKeepsTheReservation(): void
+    {
+        $buffer = (new Reservation())->setName('Buffer');
+        $activity = (new PlannedActivity())
+            ->setUser(new User())
+            ->setReservation($buffer)
+            ->setHoursPerDay(1.0)
+            ->setBegin(new \DateTime('2026-11-02'))
+            ->setEnd(new \DateTime('2026-11-06'));
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->exactly(2))->method('persist');
+
+        $second = $this->createRepository($em)->splitActivity($activity, new \DateTimeImmutable('2026-11-04'));
+
+        $this->assertSame($buffer, $second?->getReservation());
+        $this->assertNull($second?->getCustomer());
+    }
+
+    public function testOverlapOfAReservationIsTheSameReservation(): void
+    {
+        $query = $this->createMock(Query::class);
+        $query->method('getSingleScalarResult')->willReturn(1);
+
+        $conditions = [];
+        $qb = $this->createMock(QueryBuilder::class);
+        foreach (['select', 'from', 'where', 'setParameter'] as $method) {
+            $qb->method($method)->willReturnSelf();
+        }
+        $qb->method('andWhere')->willReturnCallback(function (string $condition) use (&$conditions, $qb) {
+            $conditions[] = $condition;
+
+            return $qb;
+        });
+        $qb->method('getQuery')->willReturn($query);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('createQueryBuilder')->willReturn($qb);
+
+        $activity = (new PlannedActivity())->setUser(new User())->setReservation((new Reservation())->setName('Buffer'))->setBegin(new \DateTime('2026-11-02'))->setEnd(new \DateTime('2026-11-03'));
+
+        $this->assertSame(1, $this->createRepository($em)->countOverlapping($activity));
+        $this->assertSame(['p.begin <= :end', 'p.end >= :begin', 'p.tentative = :tentative', 'p.reservation = :reservation'], $conditions);
     }
 }

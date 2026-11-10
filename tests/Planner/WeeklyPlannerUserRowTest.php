@@ -14,6 +14,7 @@ namespace KimaiPlugin\PlannerBundle\Tests\Planner;
 use App\Entity\Customer;
 use App\Entity\User;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Entity\Reservation;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerDay;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerUserRow;
 use PHPUnit\Framework\TestCase;
@@ -145,5 +146,44 @@ class WeeklyPlannerUserRowTest extends TestCase
         $this->assertTrue($row->isBalanced());
         // time off is not free time, so "Most free hours" sees the day as full
         $this->assertSame(0.0, $row->getFreeHours(new \DateTimeImmutable('2026-11-01')));
+    }
+
+    public function testReservationsComeAfterTheProjectsInTheirOrder(): void
+    {
+        $row = new WeeklyPlannerUserRow(new User());
+        $lead = (new Reservation())->setName('Tech leading')->setPosition(2);
+        $buffer = (new Reservation())->setName('Agency buffer')->setPosition(1);
+        $day = new \DateTime('2026-11-02');
+
+        foreach ([
+            (new PlannedActivity())->setReservation($lead),
+            (new PlannedActivity())->setCustomer(new Customer('Zeta')),
+            (new PlannedActivity())->setReservation($buffer),
+            (new PlannedActivity())->setTimeOff(true),
+            (new PlannedActivity())->setReservation($buffer),
+        ] as $activity) {
+            $row->addUniqueActivity($activity->setBegin($day)->setEnd($day));
+        }
+
+        $groups = $row->getGroups();
+
+        $this->assertCount(4, $groups);
+        $this->assertTrue($groups[0]->isTimeOff());
+        $this->assertSame('Zeta', $groups[1]->getCustomerName());
+        $this->assertSame($buffer, $groups[2]->getReservation());
+        $this->assertSame('Agency buffer', $groups[2]->getCustomerName());
+        $this->assertSame($lead, $groups[3]->getReservation());
+    }
+
+    public function testReservationsCountAsPlannedWork(): void
+    {
+        $row = new WeeklyPlannerUserRow(new User());
+        $day = new WeeklyPlannerDay(new \DateTimeImmutable('2026-11-02'), 8.0);
+        $day->addActivity((new PlannedActivity())->setReservation((new Reservation())->setName('Buffer'))->setHoursPerDay(1.0));
+        $day->addActivity((new PlannedActivity())->setCustomer(new Customer('ACME'))->setHoursPerDay(7.0));
+        $row->addDay($day);
+
+        $this->assertSame(8.0, $row->getTotalPlannedHours());
+        $this->assertTrue($row->isBalanced());
     }
 }

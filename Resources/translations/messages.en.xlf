@@ -458,6 +458,78 @@
                 <source>planner.day_time_off</source>
                 <target>Time off: %hours% hrs</target>
             </trans-unit>
+            <trans-unit id="planner.reservation">
+                <source>planner.reservation</source>
+                <target>Reserved time</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation_help">
+                <source>planner.reservation_help</source>
+                <target>Time held for something that is not a customer or project. Leave empty to plan a customer or project.</target>
+            </trans-unit>
+            <trans-unit id="planner.reservations">
+                <source>planner.reservations</source>
+                <target>Reserved time</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.create">
+                <source>planner.reservation.create</source>
+                <target>New reservation</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.intro">
+                <source>planner.reservation.intro</source>
+                <target>Reserved time holds hours in someone's planning for something that is not a customer or project, such as a daily buffer or tech leading. It is planned and counted like project work, but nobody can log time to it. The rows are shown in the planner in this order.</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.none">
+                <source>planner.reservation.none</source>
+                <target>No reserved time yet.</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.plannings">
+                <source>planner.reservation.plannings</source>
+                <target>Plannings</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.active">
+                <source>planner.reservation.active</source>
+                <target>Active</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.archived">
+                <source>planner.reservation.archived</source>
+                <target>Archived</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.archived_help">
+                <source>planner.reservation.archived_help</source>
+                <target>Not offered for new planning. Its existing plannings stay in the planner and keep counting.</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.archive">
+                <source>planner.reservation.archive</source>
+                <target>Archive</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.archive_help">
+                <source>planner.reservation.archive_help</source>
+                <target>Stops offering it for new planning. Its %count% plannings stay in the planner and keep counting, so remove or shorten them to free the time.</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.restore">
+                <source>planner.reservation.restore</source>
+                <target>Restore</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.restore_help">
+                <source>planner.reservation.restore_help</source>
+                <target>Offers it for new planning again.</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.move_up">
+                <source>planner.reservation.move_up</source>
+                <target>Move up</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.move_down">
+                <source>planner.reservation.move_down</source>
+                <target>Move down</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.name_help">
+                <source>planner.reservation.name_help</source>
+                <target>Shown in the planner. Renaming it keeps every planning.</target>
+            </trans-unit>
+            <trans-unit id="planner.reservation.delete_in_use">
+                <source>planner.reservation.delete_in_use</source>
+                <target>Plannings use this reservation, so it can only be archived.</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>

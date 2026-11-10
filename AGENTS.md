@@ -52,6 +52,7 @@ var/plugins/PlannerBundle/
 │   └── CalendarFeedTokens.php         # Create, renew, remove and look up feed tokens (Entity/CalendarFeedToken), hashed or plain
 ├── Controller/
 │   ├── CalendarFeedSettingsController.php # /{_locale}/planner/calendar: show, renew, switch off the feed address
+│   ├── ReservationController.php      # Administration > Reserved time: list, create, edit, archive, delete, order
 │   └── WeeklyPlannerController.php    # Weekly planner routes, week switching, modal CRUD actions
 ├── DependencyInjection/
 │   └── PlannerExtension.php          # Container configuration (prepends roles, sets, views)
@@ -59,7 +60,8 @@ var/plugins/PlannerBundle/
 │   └── CalendarFeedController.php     # Public GET /planner-calendar/{token}.ics (no login, token is the credential)
 ├── Entity/
 │   ├── CalendarFeedToken.php          # One calendar feed token per user (own table, kept out of audited preferences)
-│   └── PlannedActivity.php           # Planned time block entity (user, customer, project, date range, daily hours, comments, color)
+│   ├── PlannedActivity.php           # Planned time block entity (user, customer, project, date range, daily hours, comments, color)
+│   └── Reservation.php               # Reserved time: name, colour, archived, position (kimai2_planner_reservations)
 ├── EventSubscriber/
 │   ├── CalendarFeedHashingListener.php # Hashes plain feed tokens when "Store feed addresses hashed" is saved as on
 │   ├── CalendarFeedSettingsSubscriber.php # System settings: comments in feeds, personal choice, hashed tokens
@@ -70,6 +72,7 @@ var/plugins/PlannerBundle/
 ├── Form/
 │   ├── PlannedActivityEditForm.php    # Modal form for creating/editing planned activities
 │   ├── PlannedActivityApiForm.php     # API variant: ISO dates, no CSRF
+│   ├── ReservationForm.php            # Name and colour of a reservation
 │   └── Type/                          # HolidayCalendarType (+Preference), HolidayObservancesType (settings and preference fields)
 ├── Holiday/
 │   ├── HolidayProviderInterface.php   # Which public holidays a user has off; decorate it to replace the source
@@ -83,7 +86,8 @@ var/plugins/PlannerBundle/
 │   ├── Version20261019000000.php      # customer_id/project_id columns, title becomes nullable
 │   ├── Version20261102000000.php      # kimai2_planner_calendar_tokens (calendar feed tokens)
 │   ├── Version20261102120000.php      # tentative flag
-│   └── Version20261110180000.php      # calendar feed tokens: hashed flag and the user's choice on comments
+│   ├── Version20261110180000.php      # calendar feed tokens: hashed flag and the user's choice on comments
+│   └── Version20261111000000.php      # kimai2_planner_reservations and the reservation_id foreign key
 ├── Planner/
 │   ├── PlannerUserProvider.php        # Resolves which users' plans the current user may see (web + API)
 │   ├── TentativeConfirmer.php         # "Confirm all for this project": ongoing/future tentative plans the user may edit (web + API)
@@ -95,7 +99,8 @@ var/plugins/PlannerBundle/
 │   ├── WeeklyPlannerGroup.php         # One user's activities for one customer/project; builds merged day segments (one sub-row in the grid)
 │   └── WeeklyPlannerDay.php           # Daily metrics (planned hours, actual hours, contract hours, status)
 ├── Repository/
-│   └── PlannedActivityRepository.php  # PlannedActivity queries (date ranges, user filtering)
+│   ├── PlannedActivityRepository.php  # PlannedActivity queries (date ranges, user filtering)
+│   └── ReservationRepository.php      # Reservations in order, the selectable ones, planning counts, reordering
 ├── Resources/
 │   ├── config/
 │   │   ├── routes.yaml                # Plugin route definitions (/planner, /planner/week/{date}, etc.)
@@ -173,7 +178,12 @@ var/plugins/PlannerBundle/
    - With hashing on, `token` holds the SHA-256 of the token and `hashed` is set; `findFeed()` looks up both forms and hashes a plain token it finds. Plain tokens are also hashed in one statement (`CalendarFeedTokens::HASH_PLAIN_TOKENS_SQL`, MySQL `SHA2()`) by `Version20261110180000::postUp()` unless hashing is switched off, and by `CalendarFeedHashingListener` (a Doctrine entity listener on core's `Configuration`, since Kimai dispatches no event when settings are saved) whenever the setting is saved as on. A token stored hashed is only known in the request that creates it: the settings controller passes it to the next page view once through the session. `include_comments` is the user's own choice (`null` follows the organisation), kept only when it differs from the organisation's.
    - The feed answers 404 for an unknown token, a disabled user and a user whose roles lack `view_planner` or `calendar_feed_planner` (`RolePermissionManager::hasRolePermission()`; there is no security token on this request, so voters cannot be used).
    - Events are all-day (`DTEND` is the exclusive day after `end`), `TRANSP:TRANSPARENT`, UID `planner-activity-{id}@{host}`. Labels use the feed owner's language (`User::getLanguage()`), not the request's. A feed with no planning has no events, which Google and Outlook accept.
-11. **Isolated Database Migrations**:
+11. **Reserved Time**:
+   - `PlannedActivity::$reservation` is a ManyToOne to `Reservation` (`reservation_id`, `onDelete: RESTRICT`): one with planning can only be archived. `isProjectWork()` (neither time off nor reserved time) is the one check for "has a customer, project, title and tentative state": validation asks for a customer only then, tentative only exists then, and `clearProjectWork()` drops those fields for both time off and reservations. `setReservation()` also drops colour and time off; `setTimeOff(true)` drops the reservation. `getName()` and `getColorSafe()` fall back to the reservation, so templates, the delete dialog and feeds need no special case.
+   - `copyPlanningTo()` copies every field but dates and recurrence group; removing a day, splitting, repeating and "all future" edits use it instead of their own setter lists. `isJoinableWith()` also requires the same reservation, and the move action's overlap check (`countOverlapping()`) compares the reservation instead of customer and project (`planner.overlapping_reservation`).
+   - The form adds a `reservation` ChoiceType (Reservation objects, value = ID) when there are selectable reservations or the planning already has one (kept even when archived). It is mapped after customer and project and before `timeOff`, and the POST_SUBMIT listener re-applies it, like time off. JS hides `.planner-project-field` (customer, project, colour, tentative, suggestions) while one is chosen.
+   - `WeeklyPlannerGroup` keys reservations as `r<id>`; `WeeklyPlannerUserRow::getGroups()` sorts time off, then customers and projects, then reservations by position. Rows of reservations that are not archived carry `data-reservation-id`, which click/drag-create (`reservation` query parameter) and move (`reservation` POST field, 400 unless selectable) use; a drop on a project row clears the reservation.
+12. **Isolated Database Migrations**:
    - Always run and test migrations using the bundle's dedicated configuration file:
      `bin/console doctrine:migrations:migrate --configuration=var/plugins/PlannerBundle/Migrations/doctrine_migrations.yaml --no-interaction`
 
