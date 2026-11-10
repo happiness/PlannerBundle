@@ -12,3 +12,6 @@ services:
             - '../../DependencyInjection/'
             - '../../Migrations/'
             - '../../tests/'
+
+    # replace the holidays by decorating this service, see README
+    KimaiPlugin\PlannerBundle\Holiday\HolidayProviderInterface: '@KimaiPlugin\PlannerBundle\Holiday\YasumiHolidayProvider'
