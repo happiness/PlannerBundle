@@ -21,6 +21,7 @@ use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
 use KimaiPlugin\PlannerBundle\Planner\TentativeConfirmer;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
+use KimaiPlugin\PlannerBundle\Voter\PlannedActivityVoter;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Form\FormFactoryInterface;
@@ -212,13 +213,20 @@ class PlannedActivityControllerTest extends TestCase
         $ref->setValue($mine, 3);
         $theirs = (new PlannedActivity())->setTentative(true);
         $ref->setValue($theirs, 4);
+        // of someone the caller may not see: its ID must not leak into "skipped"
+        $hidden = (new PlannedActivity())->setTentative(true);
+        $ref->setValue($hidden, 5);
 
         $repository = $this->createMock(PlannedActivityRepository::class);
-        $repository->method('findTentativeForProject')->with($project)->willReturn([$mine, $theirs]);
+        $repository->method('findTentativeForProject')->with($project)->willReturn([$mine, $theirs, $hidden]);
         $repository->expects($this->once())->method('confirmPlannedActivities')->with([$mine]);
 
         $authChecker = $this->createStub(AuthorizationCheckerInterface::class);
-        $authChecker->method('isGranted')->willReturnCallback(static fn (string $attribute, mixed $subject): bool => $subject === $mine);
+        $authChecker->method('isGranted')->willReturnCallback(static fn (string $attribute, mixed $subject): bool => match ($attribute) {
+            PlannedActivityVoter::EDIT => $subject === $mine,
+            PlannedActivityVoter::VIEW => $subject !== $hidden,
+            default => false,
+        });
         $confirmer = new TentativeConfirmer($repository, $authChecker);
 
         $viewHandler = $this->createMock(ViewHandlerInterface::class);
