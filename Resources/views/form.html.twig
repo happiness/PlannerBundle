@@ -36,7 +36,9 @@
                             {{ form_row(form.color) }}
                         </div>
                     </div>
-                    {{ form_row(form.tentative) }}
+                    <div class="planner-work-field">
+                        {{ form_row(form.tentative) }}
+                    </div>
                     {{ form_row(form.comment) }}
                 </div>
                 <div class="planner-edit-recurring-prompt d-none">
@@ -158,7 +160,9 @@
                         {{ form_row(form.color) }}
                     </div>
                 </div>
-                {{ form_row(form.tentative) }}
+                <div class="planner-work-field">
+                    {{ form_row(form.tentative) }}
+                </div>
                 {% if form.recurrentWeeks is defined %}
                     {{ form_row(form.recurrentWeeks) }}
                 {% endif %}

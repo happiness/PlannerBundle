@@ -145,7 +145,7 @@ class PlannedActivityEditFormTest extends TypeTestCase
         $this->assertSame(['timeOff' => true], $this->dispatchOwnListener(FormEvents::PRE_SUBMIT, (new PlannedActivity())->setTimeOff(true), ['timeOff' => true]));
     }
 
-    public function testTimeOffNeverKeepsASubmittedCustomerOrProject(): void
+    public function testTimeOffNeverKeepsASubmittedCustomerProjectOrTentative(): void
     {
         $customer = new Customer('ACME');
         $project = new Project();
@@ -153,13 +153,14 @@ class PlannedActivityEditFormTest extends TypeTestCase
 
         // what the form leaves behind when existing time off gets a customer: the unchanged flag is not written again
         $activity = (new PlannedActivity())->setTimeOff(true);
-        $activity->setCustomer($customer)->setProject($project);
+        $activity->setCustomer($customer)->setProject($project)->setTentative(true);
 
         $this->dispatchOwnListener(FormEvents::POST_SUBMIT, $activity, $activity);
 
         $this->assertTrue($activity->isTimeOff());
         $this->assertNull($activity->getCustomer());
         $this->assertNull($activity->getProject());
+        $this->assertFalse($activity->isTentative());
 
         $work = (new PlannedActivity())->setCustomer($customer);
         $this->dispatchOwnListener(FormEvents::POST_SUBMIT, $work, $work);

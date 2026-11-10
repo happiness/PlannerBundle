@@ -157,7 +157,7 @@ class PlannedActivityTest extends TestCase
         $project = new Project();
         $project->setCustomer($customer);
 
-        $activity = (new PlannedActivity())->setCustomer($customer)->setProject($project)->setTitle('Legacy');
+        $activity = (new PlannedActivity())->setCustomer($customer)->setProject($project)->setTitle('Legacy')->setTentative(true);
         $this->assertFalse($activity->isTimeOff());
 
         $activity->setTimeOff(true);
@@ -166,6 +166,8 @@ class PlannedActivityTest extends TestCase
         $this->assertNull($activity->getCustomer());
         $this->assertNull($activity->getProject());
         $this->assertNull($activity->getTitle());
+        // time off is never tentative
+        $this->assertFalse($activity->isTentative());
         $this->assertNull($activity->getName());
     }
 

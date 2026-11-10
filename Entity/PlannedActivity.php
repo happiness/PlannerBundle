@@ -278,7 +278,7 @@ class PlannedActivity
     }
 
     /**
-     * Time off belongs to no customer or project, switching it on drops them.
+     * Time off belongs to no customer or project and is never tentative, switching it on drops them.
      */
     public function setTimeOff(bool $timeOff): self
     {
@@ -288,6 +288,7 @@ class PlannedActivity
             $this->customer = null;
             $this->project = null;
             $this->title = null;
+            $this->tentative = false;
         }
 
         return $this;
