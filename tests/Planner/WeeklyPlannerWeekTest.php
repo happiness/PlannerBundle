@@ -40,7 +40,21 @@ class WeeklyPlannerWeekTest extends TestCase
         $this->assertSame(7.0, $week->getTotalActualHours());
         $this->assertSame(75, $week->getPlannedPercentage());
         $this->assertFalse($week->isOverAllocated());
+        $this->assertFalse($week->isBalanced());
         $this->assertSame('2026-10-19', $week->getStart()?->format('Y-m-d'));
+    }
+
+    public function testBalancedWhenPlannedMatchesCapacity(): void
+    {
+        $full = new WeeklyPlannerWeek([
+            $this->createDay('2026-10-19', 8.0, 0.0, 8.0),
+            $this->createDay('2026-10-20', 8.0, 0.0, 8.0),
+        ]);
+        $this->assertTrue($full->isBalanced());
+        $this->assertFalse($full->isOverAllocated());
+
+        $over = new WeeklyPlannerWeek([$this->createDay('2026-10-19', 8.0, 0.0, 10.0)]);
+        $this->assertFalse($over->isBalanced());
     }
 
     public function testOverAllocationAndNoCapacity(): void
