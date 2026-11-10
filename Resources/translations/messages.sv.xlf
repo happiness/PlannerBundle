@@ -38,6 +38,22 @@
                 <source>planner.expected_hours</source>
                 <target>Förväntade</target>
             </trans-unit>
+            <trans-unit id="planner.previous_week">
+                <source>planner.previous_week</source>
+                <target>Föregående vecka</target>
+            </trans-unit>
+            <trans-unit id="planner.next_week">
+                <source>planner.next_week</source>
+                <target>Nästa vecka</target>
+            </trans-unit>
+            <trans-unit id="planner.previous_period">
+                <source>planner.previous_period</source>
+                <target>Föregående %count% veckor</target>
+            </trans-unit>
+            <trans-unit id="planner.next_period">
+                <source>planner.next_period</source>
+                <target>Nästa %count% veckor</target>
+            </trans-unit>
             <trans-unit id="planner.this_week">
                 <source>planner.this_week</source>
                 <target>Denna vecka</target>
@@ -74,6 +90,14 @@
                 <source>planner.add_activity</source>
                 <target>Planera aktivitet för denna dag</target>
             </trans-unit>
+            <trans-unit id="planner.add_project">
+                <source>planner.add_project</source>
+                <target>Lägg till projekt</target>
+            </trans-unit>
+            <trans-unit id="planner.add_another_project">
+                <source>planner.add_another_project</source>
+                <target>Lägg till ett projekt till</target>
+            </trans-unit>
             <trans-unit id="planner.split_here">
                 <source>planner.split_here</source>
                 <target>Dela här</target>
@@ -81,6 +105,10 @@
             <trans-unit id="planner.join_here">
                 <source>planner.join_here</source>
                 <target>Slå ihop</target>
+            </trans-unit>
+            <trans-unit id="planner.planned_twice">
+                <source>planner.planned_twice</source>
+                <target>Projektet är planerat mer än en gång den här dagen.</target>
             </trans-unit>
             <trans-unit id="planner.recurrent_weeks">
                 <source>planner.recurrent_weeks</source>
@@ -174,9 +202,145 @@
                 <source>planner.toggle_activities</source>
                 <target>Visa/dölj aktiviteter</target>
             </trans-unit>
+            <trans-unit id="planner.time_off">
+                <source>planner.time_off</source>
+                <target>Ledig</target>
+            </trans-unit>
+            <trans-unit id="planner.time_off_help">
+                <source>planner.time_off_help</source>
+                <target>Inte tillgänglig för planering. Lämna timmarna tomma för hela dagen.</target>
+            </trans-unit>
+            <trans-unit id="planner.whole_day">
+                <source>planner.whole_day</source>
+                <target>Hela dagen</target>
+            </trans-unit>
             <trans-unit id="planner.suggestions">
                 <source>planner.suggestions</source>
                 <target>Ofta använda</target>
+            </trans-unit>
+            <trans-unit id="planner.tentative">
+                <source>planner.tentative</source>
+                <target>Preliminär</target>
+            </trans-unit>
+            <trans-unit id="planner.tentative_help">
+                <source>planner.tentative_help</source>
+                <target>Inte bekräftat ännu, till exempel en affär som inte är påskriven. Visas tonat och räknas separat från den bekräftade kapaciteten.</target>
+            </trans-unit>
+            <trans-unit id="planner.tentative_hours">
+                <source>planner.tentative_hours</source>
+                <target>+ %hours% tim preliminärt</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_filter">
+                <source>planner.planning_filter</source>
+                <target>Planering</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_all">
+                <source>planner.planning_all</source>
+                <target>Alla</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_confirmed">
+                <source>planner.planning_confirmed</source>
+                <target>Endast bekräftad</target>
+            </trans-unit>
+            <trans-unit id="planner.planning_tentative">
+                <source>planner.planning_tentative</source>
+                <target>Endast preliminär</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative">
+                <source>planner.confirm_tentative</source>
+                <target>Bekräfta allt för projektet</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_submit">
+                <source>planner.confirm_tentative_submit</source>
+                <target>Bekräfta</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_question">
+                <source>planner.confirm_tentative_question</source>
+                <target>Bekräfta all preliminär planering för %project%?</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_count">
+                <source>planner.confirm_tentative_count</source>
+                <target>Planerade aktiviteter: %count%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_users">
+                <source>planner.confirm_tentative_users</source>
+                <target>Antal personer: %count%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_period">
+                <source>planner.confirm_tentative_period</source>
+                <target>Period: %begin% till %end%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_scope">
+                <source>planner.confirm_tentative_scope</source>
+                <target>Bara planering som slutar i dag eller senare bekräftas, tidigare planering lämnas som den är.</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_skipped">
+                <source>planner.confirm_tentative_skipped</source>
+                <target>Preliminära aktiviteter för personer du inte kan redigera förblir preliminära: %count%</target>
+            </trans-unit>
+            <trans-unit id="planner.confirm_tentative_none">
+                <source>planner.confirm_tentative_none</source>
+                <target>%project% har ingen preliminär planering från i dag och framåt som du kan bekräfta.</target>
+            </trans-unit>
+            <trans-unit id="planner.order_name">
+                <source>planner.order_name</source>
+                <target>Namn</target>
+            </trans-unit>
+            <trans-unit id="planner.order_free_hours">
+                <source>planner.order_free_hours</source>
+                <target>Flest lediga timmar</target>
+            </trans-unit>
+            <trans-unit id="planner.free_hours">
+                <source>planner.free_hours</source>
+                <target>%hours% tim lediga</target>
+            </trans-unit>
+            <trans-unit id="planner.over_hours">
+                <source>planner.over_hours</source>
+                <target>%hours% tim över</target>
+            </trans-unit>
+            <trans-unit id="planner.day_hours">
+                <source>planner.day_hours</source>
+                <target>%planned% av %expected% tim planerade, %actual% tim rapporterade</target>
+            </trans-unit>
+            <trans-unit id="planner.week_hours">
+                <source>planner.week_hours</source>
+                <target>%planned%/%expected% tim (%actual% tim)</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.calendar">
+                <source>planner.holidays.calendar</source>
+                <target>Kalender för helgdagar</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.calendar_help">
+                <source>planner.holidays.calendar_help</source>
+                <target>Alla följer den här kalendern om inte deras egna inställningar väljer en annan. Helgdagar räknas som lediga dagar i planeringen.</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.observances">
+                <source>planner.holidays.observances</source>
+                <target>Också lediga dagar</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.observances_help">
+                <source>planner.holidays.observances_help</source>
+                <target>Dagar som inte är helgdagar men som organisationen har ledigt, till exempel julafton. En vald dag gäller i alla kalendrar som har den.</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.none">
+                <source>planner.holidays.none</source>
+                <target>Inga helgdagar</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.organisation_default">
+                <source>planner.holidays.organisation_default</source>
+                <target>Organisationens standard</target>
+            </trans-unit>
+            <trans-unit id="planner.holidays.preference_help">
+                <source>planner.holidays.preference_help</source>
+                <target>Helgdagarna som den här användaren är ledig i planeringen, om de skiljer sig från organisationens.</target>
+            </trans-unit>
+            <trans-unit id="planner_holiday_calendar">
+                <source>planner_holiday_calendar</source>
+                <target>Helgdagar</target>
+            </trans-unit>
+            <trans-unit id="planner.day_time_off">
+                <source>planner.day_time_off</source>
+                <target>Ledig: %hours% tim</target>
             </trans-unit>
         </body>
     </file>

@@ -22,12 +22,11 @@ use FOS\RestBundle\View\ViewHandlerInterface;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Form\PlannedActivityApiForm;
 use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
+use KimaiPlugin\PlannerBundle\Planner\TentativeConfirmer;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
-use KimaiPlugin\PlannerBundle\Validator\Constraints\NoOverlappingPlanning;
 use KimaiPlugin\PlannerBundle\Voter\PlannedActivityVoter;
 use Nelmio\ApiDocBundle\Attribute\Model;
 use OpenApi\Attributes as OA;
-use Symfony\Component\Form\FormError;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -61,6 +60,7 @@ final class PlannedActivityController extends BaseApiController
     #[Rest\QueryParam(name: 'projects', map: true, requirements: '\d+', strict: true, nullable: true, default: [], description: 'List of project IDs to filter, e.g.: projects[]=1&projects[]=2')]
     #[Rest\QueryParam(name: 'begin', requirements: [new Constraints\DateTime(format: 'Y-m-d', message: 'This value is not a valid date, expected format: Y-m-d (2026-10-19).')], strict: true, nullable: true, description: 'Only activities ending on or after this day are returned. Format: Y-m-d')]
     #[Rest\QueryParam(name: 'end', requirements: [new Constraints\DateTime(format: 'Y-m-d', message: 'This value is not a valid date, expected format: Y-m-d (2026-10-19).')], strict: true, nullable: true, description: 'Only activities beginning on or before this day are returned. Format: Y-m-d')]
+    #[Rest\QueryParam(name: 'tentative', requirements: '0|1', strict: true, nullable: true, description: 'Pass 1 for tentative activities only, 0 for confirmed ones only (default: both)')]
     public function cgetAction(ParamFetcherInterface $paramFetcher, CustomerRepository $customerRepository, ProjectRepository $projectRepository): Response
     {
         /** @var User $currentUser */
@@ -92,19 +92,55 @@ final class PlannedActivityController extends BaseApiController
 
         $begin = $paramFetcher->get('begin');
         $end = $paramFetcher->get('end');
+        $tentative = $paramFetcher->get('tentative');
 
         $activities = $this->repository->findByFilter(
             $users,
             \is_string($begin) && $begin !== '' ? new \DateTimeImmutable($begin) : null,
             \is_string($end) && $end !== '' ? new \DateTimeImmutable($end) : null,
             $customers,
-            $projects
+            $projects,
+            \is_string($tentative) && $tentative !== '' ? $tentative === '1' : null
         );
 
         $view = new View($activities, Response::HTTP_OK);
         $view->getContext()->setGroups(self::GROUPS_ENTITY);
 
         return $this->viewHandler->handle($view);
+    }
+
+    /**
+     * Confirm all tentative activities of a project
+     */
+    #[IsGranted('edit_planner')]
+    #[OA\Post(description: 'Confirms the ongoing and future tentative activities of a project (those ending today or later), for every user you may edit. Returns the IDs of the confirmed activities and of those skipped because you may see but not edit them; activities you may not see are neither confirmed nor returned.', responses: [new OA\Response(response: 200, description: 'IDs of the confirmed and the skipped activities', content: new OA\JsonContent(properties: [new OA\Property(property: 'confirmed', type: 'array', items: new OA\Items(type: 'integer')), new OA\Property(property: 'skipped', type: 'array', items: new OA\Items(type: 'integer'))]))])]
+    #[OA\RequestBody(required: true, content: new OA\JsonContent(required: ['project'], properties: [new OA\Property(property: 'project', type: 'integer', description: 'Project ID')]))]
+    #[Route(methods: ['POST'], path: '/confirm-tentative', name: 'post_planned_activities_confirm_tentative')]
+    public function confirmTentativeAction(Request $request, ProjectRepository $projectRepository, TentativeConfirmer $confirmer): Response
+    {
+        $projectId = $request->request->get('project');
+        if (!is_numeric($projectId)) {
+            throw new BadRequestHttpException('Missing project');
+        }
+
+        $project = $projectRepository->find((int) $projectId);
+        if ($project === null) {
+            throw $this->createNotFoundException('Unknown project');
+        }
+
+        if (!$this->isGranted('access', $project)) {
+            throw $this->createAccessDeniedException('Cannot access Project: ' . $project->getId());
+        }
+
+        $confirmation = $confirmer->prepare($project);
+        $confirmer->confirm($confirmation);
+
+        $ids = static fn (array $activities): array => array_map(static fn (PlannedActivity $activity): ?int => $activity->getId(), $activities);
+
+        return $this->viewHandler->handle(new View([
+            'confirmed' => $ids($confirmation->getActivities()),
+            'skipped' => $ids($confirmation->getSkipped()),
+        ], Response::HTTP_OK));
     }
 
     /**
@@ -145,20 +181,15 @@ final class PlannedActivityController extends BaseApiController
 
         $form->submit($request->request->all(), false);
 
-        // before validating, which looks up the user's planning
-        $this->assertAccess(PlannedActivityVoter::CREATE, $activity);
-
-        $weeks = $form->get('recurrentWeeks')->getData();
-        if ($form->isValid() && \is_int($weeks) && $this->repository->countRecurringOverlaps($activity, $weeks) > 0) {
-            $form->get('recurrentWeeks')->addError(new FormError(NoOverlappingPlanning::SERIES_MESSAGE));
-        }
-
         if (!$form->isValid()) {
             return $this->handleForm($form);
         }
 
+        $this->assertAccess(PlannedActivityVoter::CREATE, $activity);
+
         $this->repository->savePlannedActivity($activity);
 
+        $weeks = $form->get('recurrentWeeks')->getData();
         if (\is_int($weeks) && $weeks > 0) {
             $this->repository->createRecurringActivities($activity, $weeks);
         }
@@ -173,7 +204,7 @@ final class PlannedActivityController extends BaseApiController
      * Update a planned activity
      */
     #[IsGranted('edit', 'activity')]
-    #[OA\Patch(description: 'Update an existing planned activity, you can pass all or just a subset of attributes. Pass "edit_mode": "future" to apply the change to all following activities of a recurring series (default: "single").', responses: [new OA\Response(response: 200, description: 'Returns the updated planned activity', content: new OA\JsonContent(ref: new Model(type: PlannedActivity::class, groups: self::GROUPS_ENTITY)))])]
+    #[OA\Patch(description: 'Update an existing planned activity, you can pass all or just a subset of attributes. Pass "edit_mode": "future" to apply the change to all following activities of a recurring series (default: "single"); a changed begin or end moves their dates by the same number of days.', responses: [new OA\Response(response: 200, description: 'Returns the updated planned activity', content: new OA\JsonContent(ref: new Model(type: PlannedActivity::class, groups: self::GROUPS_ENTITY)))])]
     #[OA\RequestBody(required: true, content: new OA\JsonContent(ref: new Model(type: PlannedActivityApiForm::class)))]
     #[OA\Parameter(name: 'id', in: 'path', description: 'Planned activity ID to update', required: true)]
     #[Route(methods: ['PATCH'], path: '/{id}', name: 'patch_planned_activity', requirements: ['id' => '\d+'])]
@@ -183,13 +214,17 @@ final class PlannedActivityController extends BaseApiController
         $currentUser = $this->getUser();
 
         $data = $request->request->all();
-        $editMode = $data['edit_mode'] ?? 'single';
-        unset($data['edit_mode']);
+        // Kimai's API turns snake_case JSON keys into camelCase before they get here (edit_mode arrives as editMode),
+        // and the form rejects either as an extra field
+        $editMode = $data['editMode'] ?? $data['edit_mode'] ?? 'single';
+        unset($data['editMode'], $data['edit_mode']);
         if (!\in_array($editMode, ['single', 'future'], true)) {
             throw new BadRequestHttpException('Invalid edit_mode, allowed values: single, future');
         }
 
         $previousUser = $activity->getUser();
+        $previousBegin = $activity->getBegin() !== null ? clone $activity->getBegin() : null;
+        $previousEnd = $activity->getEnd() !== null ? clone $activity->getEnd() : null;
 
         $form = $this->createForm(PlannedActivityApiForm::class, $activity, [
             'user' => $currentUser,
@@ -198,24 +233,19 @@ final class PlannedActivityController extends BaseApiController
 
         $form->submit($data, false);
 
-        // moving an activity to another user requires permission for both the old and the new owner,
-        // checked before validating, which looks up the user's planning
-        if ($activity->getUser() !== $previousUser) {
-            $this->assertAccess(PlannedActivityVoter::EDIT, $activity);
-        }
-
-        if ($editMode === 'future' && $activity->isRecurring() && $form->isValid() && $this->repository->countFutureRecurringOverlaps($activity) > 0) {
-            $form->addError(new FormError(NoOverlappingPlanning::SERIES_MESSAGE));
-        }
-
         if (!$form->isValid()) {
             return $this->handleForm($form);
+        }
+
+        // moving an activity to another user requires permission for both the old and the new owner
+        if ($activity->getUser() !== $previousUser) {
+            $this->assertAccess(PlannedActivityVoter::EDIT, $activity);
         }
 
         $this->repository->savePlannedActivity($activity);
 
         if ($editMode === 'future' && $activity->isRecurring()) {
-            $this->repository->updateFutureRecurringActivities($activity);
+            $this->repository->updateFutureRecurringActivities($activity, $previousBegin, $previousEnd);
         }
 
         $view = new View($activity, Response::HTTP_OK);

@@ -134,4 +134,66 @@ class WeeklyPlannerGroupTest extends TestCase
         $this->assertSame($second, $group->getJoinableAfter($first));
         $this->assertNull($group->getJoinableAfter($second));
     }
+
+    public function testTentativeHoursAreCountedApart(): void
+    {
+        $confirmed = $this->createActivity('2026-10-19', '2026-10-20', 4.0);
+        $tentative = $this->createActivity('2026-10-21', '2026-10-21', 2.0)->setTentative(true);
+        $group = WeeklyPlannerGroup::createFor($confirmed);
+        $group->addActivity($confirmed);
+
+        $this->assertFalse($group->hasTentative());
+
+        $group->addActivity($tentative);
+
+        $this->assertTrue($group->hasTentative());
+        $this->assertSame(8.0, $group->getPlannedHours($this->createWeek()));
+        $this->assertSame(2.0, $group->getTentativeHours($this->createWeek()));
+    }
+
+    public function testTimeOffHasItsOwnGroupAndCountsWholeDays(): void
+    {
+        $timeOff = $this->createActivity('2026-10-19', '2026-10-20')->setTimeOff(true)->setHoursPerDay(null);
+        $this->assertSame(WeeklyPlannerGroup::TIME_OFF_KEY, WeeklyPlannerGroup::keyFor($timeOff));
+
+        $group = WeeklyPlannerGroup::createFor($timeOff);
+        $group->addActivity($timeOff);
+
+        $this->assertTrue($group->isTimeOff());
+        $this->assertSame(14.0, $group->getPlannedHours([
+            new WeeklyPlannerDay(new \DateTimeImmutable('2026-10-19'), 8.0),
+            new WeeklyPlannerDay(new \DateTimeImmutable('2026-10-20'), 6.0),
+            new WeeklyPlannerDay(new \DateTimeImmutable('2026-10-21'), 8.0),
+        ]));
+
+        // a weekend and more hours than the contract day are not taken off
+        $long = $this->createActivity('2026-10-24', '2026-10-25', 10.0)->setTimeOff(true);
+        $longGroup = WeeklyPlannerGroup::createFor($long);
+        $longGroup->addActivity($long);
+        $this->assertSame(8.0, $longGroup->getPlannedHours([
+            new WeeklyPlannerDay(new \DateTimeImmutable('2026-10-24'), 8.0),
+            new WeeklyPlannerDay(new \DateTimeImmutable('2026-10-25'), 0.0),
+        ]));
+
+        $work = $this->createActivity('2026-10-19', '2026-10-19')->setCustomer(new Customer('ACME'));
+        $this->assertFalse(WeeklyPlannerGroup::createFor($work)->isTimeOff());
+    }
+
+    public function testTheSameProjectPlannedTwiceOnADayIsMarked(): void
+    {
+        $customer = new Customer('ACME');
+        $week = $this->createActivity('2026-10-19', '2026-10-23')->setCustomer($customer);
+        $extra = $this->createActivity('2026-10-21', '2026-10-21', 2.0)->setCustomer($customer);
+        $tentative = $this->createActivity('2026-10-22', '2026-10-22', 2.0)->setCustomer($customer)->setTentative(true);
+
+        $group = WeeklyPlannerGroup::createFor($week);
+        foreach ([$week, $extra, $tentative] as $activity) {
+            $group->addActivity($activity);
+        }
+
+        $this->assertTrue($group->isPlannedTwiceOn(new \DateTimeImmutable('2026-10-21')));
+        $this->assertFalse($group->isPlannedTwiceOn(new \DateTimeImmutable('2026-10-20')));
+        // confirmed and tentative work side by side is a reasonable combination, not a slip
+        $this->assertFalse($group->isPlannedTwiceOn(new \DateTimeImmutable('2026-10-22')));
+    }
 }

@@ -59,8 +59,26 @@ class WeeklyPlannerUserRowTest extends TestCase
         $this->assertFalse($row->isOverAllocated());
         $this->assertFalse($row->isBalanced());
 
+        $this->assertSame(0.0, $row->getTotalTentativeHours());
+
+        $tentative = (new PlannedActivity())->setHoursPerDay(2.0)->setTentative(true);
+        $day2->addActivity($tentative);
+        $this->assertSame(2.0, $row->getTotalTentativeHours());
+        $this->assertSame(12.0, $row->getTotalPlannedHours());
+
+        $past = new \DateTimeImmutable('2026-01-01');
+        $this->assertSame(4.0, $row->getFreeHours($past));
+        // the 4 free hours of the first day have passed
+        $this->assertSame(0.0, $row->getFreeHours($d2));
+        $this->assertSame(0.0, $row->getFreeHours(new \DateTimeImmutable('2026-09-10')));
+
+        $over = (new PlannedActivity())->setHoursPerDay(6.5);
+        $day2->addActivity($over);
+        $this->assertSame(-2.5, $row->getFreeHours($past));
+
         $emptyRow = new WeeklyPlannerUserRow(new User());
         $this->assertSame(0, $emptyRow->getPlannedPercentage());
+        $this->assertSame(0.0, $emptyRow->getFreeHours($past));
     }
 
     public function testGetGroupsGroupsByCustomerAndProjectAndSortsByName(): void
@@ -98,5 +116,34 @@ class WeeklyPlannerUserRowTest extends TestCase
         $this->assertSame('2026-10-26', $weeks[1]->getStart()?->format('Y-m-d'));
         $this->assertSame(40.0, $weeks[0]->getTotalExpectedHours());
         $this->assertSame(0.0, $weeks[1]->getTotalExpectedHours());
+    }
+
+    public function testTimeOffGroupComesFirst(): void
+    {
+        $row = new WeeklyPlannerUserRow(new User());
+        $row->addUniqueActivity((new PlannedActivity())->setCustomer(new Customer('Acme')));
+        $row->addUniqueActivity((new PlannedActivity())->setTimeOff(true));
+
+        $groups = $row->getGroups();
+
+        $this->assertCount(2, $groups);
+        $this->assertTrue($groups[0]->isTimeOff());
+        $this->assertSame('Acme', $groups[1]->getCustomerName());
+    }
+
+    public function testTimeOffIsTakenOffTheCapacity(): void
+    {
+        $row = new WeeklyPlannerUserRow(new User());
+        $day = new WeeklyPlannerDay(new \DateTimeImmutable('2026-11-06'), 8.0);
+        $day->addActivity((new PlannedActivity())->setTimeOff(true)->setHoursPerDay(2.0));
+        $day->addActivity((new PlannedActivity())->setHoursPerDay(6.0));
+        $row->addDay($day);
+
+        $this->assertSame(8.0, $row->getTotalExpectedHours());
+        $this->assertSame(6.0, $row->getTotalCapacityHours());
+        $this->assertSame(100, $row->getPlannedPercentage());
+        $this->assertTrue($row->isBalanced());
+        // time off is not free time, so "Most free hours" sees the day as full
+        $this->assertSame(0.0, $row->getFreeHours(new \DateTimeImmutable('2026-11-01')));
     }
 }

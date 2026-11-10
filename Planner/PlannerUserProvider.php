@@ -15,8 +15,10 @@ use App\Entity\Team;
 use App\Entity\User;
 use App\Repository\Query\UserQuery;
 use App\Repository\UserRepository;
+use KimaiPlugin\PlannerBundle\Event\PlannerUsersEvent;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 /**
  * Resolves which users' plans the current user is allowed to see.
@@ -25,7 +27,8 @@ class PlannerUserProvider
 {
     public function __construct(
         private readonly UserRepository $userRepository,
-        private readonly Security $security
+        private readonly Security $security,
+        private readonly ?EventDispatcherInterface $dispatcher = null,
     ) {
     }
 
@@ -33,9 +36,27 @@ class PlannerUserProvider
      * Users without "view_all_data" only see the members of the teams they lead,
      * the optional planner query narrows the result further by teams and users.
      *
+     * Plugins can leave users out through {@see PlannerUsersEvent}.
+     *
      * @return array<User>
      */
     public function getVisibleUsers(User $currentUser, ?PlannerQuery $plannerQuery = null): array
+    {
+        $users = $this->findVisibleUsers($currentUser, $plannerQuery);
+        if ($users === [] || $this->dispatcher === null) {
+            return $users;
+        }
+
+        $event = new PlannerUsersEvent($currentUser, $users);
+        $this->dispatcher->dispatch($event);
+
+        return $event->getUsers();
+    }
+
+    /**
+     * @return array<User>
+     */
+    private function findVisibleUsers(User $currentUser, ?PlannerQuery $plannerQuery): array
     {
         $canSeeOther = $this->security->isGranted('view_other_planner') || $this->security->isGranted('view_all_data');
 

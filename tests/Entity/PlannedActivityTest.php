@@ -27,6 +27,10 @@ class PlannedActivityTest extends TestCase
 
         $this->assertNull($activity->getId());
 
+        $this->assertFalse($activity->isTentative());
+        $this->assertSame($activity, $activity->setTentative(true));
+        $this->assertTrue($activity->isTentative());
+
         $user = new User();
         $this->assertSame($activity, $activity->setUser($user));
         $this->assertSame($user, $activity->getUser());
@@ -200,5 +204,65 @@ class PlannedActivityTest extends TestCase
         $this->assertTrue($make('2026-11-02', '2026-11-04')->isJoinableWith($make('2026-11-05', '2026-11-08')));
         // without a series, any length joins
         $this->assertTrue($make('2026-11-02', '2026-11-08')->setRecurrenceGroup(null)->isJoinableWith($make('2026-11-09', '2026-11-15')->setRecurrenceGroup(null)));
+    }
+
+    public function testTimeOffDropsCustomerAndProject(): void
+    {
+        $customer = new Customer('ACME');
+        $project = new Project();
+        $project->setCustomer($customer);
+
+        $activity = (new PlannedActivity())->setCustomer($customer)->setProject($project)->setTitle('Legacy')->setTentative(true);
+        $this->assertFalse($activity->isTimeOff());
+
+        $activity->setTimeOff(true);
+
+        $this->assertTrue($activity->isTimeOff());
+        $this->assertNull($activity->getCustomer());
+        $this->assertNull($activity->getProject());
+        $this->assertNull($activity->getTitle());
+        // time off is never tentative
+        $this->assertFalse($activity->isTentative());
+        $this->assertNull($activity->getName());
+    }
+
+    public function testOnlyTimeOffWithoutHoursIsAWholeDay(): void
+    {
+        $activity = (new PlannedActivity())->setTimeOff(true)->setHoursPerDay(null);
+        $this->assertTrue($activity->isWholeDay());
+        $this->assertSame(0.0, $activity->getTotalHours());
+
+        $activity->setHoursPerDay(4.0);
+        $this->assertFalse($activity->isWholeDay());
+
+        $this->assertFalse((new PlannedActivity())->setHoursPerDay(null)->isWholeDay());
+    }
+
+    public function testWorkNeedsCustomerAndHours(): void
+    {
+        $paths = [];
+        $builder = $this->createMock(ConstraintViolationBuilderInterface::class);
+        $builder->method('atPath')->willReturnCallback(function (string $path) use ($builder, &$paths) {
+            $paths[] = $path;
+
+            return $builder;
+        });
+        $builder->method('setTranslationDomain')->willReturnSelf();
+
+        $context = $this->createMock(ExecutionContextInterface::class);
+        $context->method('buildViolation')->willReturn($builder);
+
+        (new PlannedActivity())->setHoursPerDay(null)->validateRequiredFields($context);
+
+        $this->assertSame(['customer', 'hoursPerDay'], $paths);
+    }
+
+    public function testTimeOffNeedsNeitherCustomerNorHours(): void
+    {
+        $context = $this->createMock(ExecutionContextInterface::class);
+        $context->expects($this->never())->method('buildViolation');
+
+        (new PlannedActivity())->setTimeOff(true)->setHoursPerDay(null)->validateRequiredFields($context);
+        (new PlannedActivity())->setCustomer(new Customer('ACME'))->validateRequiredFields($context);
     }
 }

@@ -35,6 +35,25 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $entityManager->flush();
     }
 
+    /**
+     * Confirms tentative activities in one flush.
+     *
+     * @param array<PlannedActivity> $activities
+     */
+    public function confirmPlannedActivities(array $activities): void
+    {
+        if ($activities === []) {
+            return;
+        }
+
+        $entityManager = $this->getEntityManager();
+        foreach ($activities as $activity) {
+            $activity->setTentative(false);
+            $entityManager->persist($activity);
+        }
+        $entityManager->flush();
+    }
+
     public function findCustomer(int $id): ?Customer
     {
         return $this->getEntityManager()->find(Customer::class, $id);
@@ -95,7 +114,17 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $activity->setEnd(new \DateTime($firstEnd->format('Y-m-d')));
         $this->savePlannedActivity($activity);
 
-        $splitActivity = $this->createCopy($activity);
+        $splitActivity = new PlannedActivity();
+        $splitActivity->setUser($activity->getUser());
+        $splitActivity->setCustomer($activity->getCustomer());
+        $splitActivity->setProject($activity->getProject());
+        $splitActivity->setTitle($activity->getTitle());
+        $splitActivity->setHoursPerDay($activity->getHoursPerDay());
+        $splitActivity->setTimeOff($activity->isTimeOff());
+        $splitActivity->setColor($activity->getColor());
+        $splitActivity->setComment($activity->getComment());
+        $splitActivity->setTentative($activity->isTentative());
+        $splitActivity->setRecurrenceGroup($activity->getRecurrenceGroup());
         $splitActivity->setBegin(new \DateTime($secondBegin->format('Y-m-d')));
         $splitActivity->setEnd(new \DateTime($originalEnd->format('Y-m-d')));
 
@@ -103,8 +132,9 @@ class PlannedActivityRepository extends ServiceEntityRepository
     }
 
     /**
-     * Other activities of the same user and customer/project sharing at least one day with this one.
-     * Legacy activities without a customer are not checked, they have nothing to compare.
+     * Other activities of the same user and customer/project sharing at least one day with this one, confirmed or
+     * tentative like it (confirmed and tentative work on the same project may well sit side by side). Legacy
+     * activities without a customer, and time off, are not checked: they have nothing to compare.
      */
     public function countOverlapping(PlannedActivity $activity): int
     {
@@ -115,84 +145,6 @@ class PlannedActivityRepository extends ServiceEntityRepository
         }
 
         return $this->countOverlappingFor($activity, $begin, $end, $activity->getId() === null ? [] : [$activity->getId()]);
-    }
-
-    /**
-     * Whether user, customer, project or dates differ from what was loaded, so an unrelated edit of a row that
-     * already overlapped (from before the check existed) is not blocked. New activities always count as changed.
-     */
-    public function isPlanningChanged(PlannedActivity $activity): bool
-    {
-        if ($activity->getId() === null) {
-            return true;
-        }
-
-        $original = $this->getEntityManager()->getUnitOfWork()->getOriginalEntityData($activity);
-        if ($original === []) {
-            return true;
-        }
-
-        $day = static fn (mixed $date): ?string => $date instanceof \DateTimeInterface ? $date->format('Y-m-d') : null;
-
-        return ($original['user'] ?? null) !== $activity->getUser()
-            || ($original['customer'] ?? null) !== $activity->getCustomer()
-            || ($original['project'] ?? null) !== $activity->getProject()
-            || $day($original['begin'] ?? null) !== $day($activity->getBegin())
-            || $day($original['end'] ?? null) !== $day($activity->getEnd());
-    }
-
-    /**
-     * Repeated weeks of a new activity that would overlap planning of the same customer/project; an activity
-     * of more than seven days overlaps its own copies, so every week counts.
-     */
-    public function countRecurringOverlaps(PlannedActivity $activity, int $weeks): int
-    {
-        $begin = $activity->getBegin();
-        $end = $activity->getEnd();
-        if ($weeks <= 0 || $begin === null || $end === null) {
-            return 0;
-        }
-
-        if ($activity->getDaysCount() > 7) {
-            return $weeks;
-        }
-
-        $exclude = $activity->getId() === null ? [] : [$activity->getId()];
-        $overlaps = 0;
-        for ($i = 1; $i <= $weeks; $i++) {
-            $weekBegin = (clone $begin)->modify(\sprintf('+%d week', $i));
-            $weekEnd = (clone $end)->modify(\sprintf('+%d week', $i));
-            if ($this->countOverlappingFor($activity, $weekBegin, $weekEnd, $exclude) > 0) {
-                ++$overlaps;
-            }
-        }
-
-        return $overlaps;
-    }
-
-    /**
-     * Following activities of the series that would overlap other planning once they get this activity's
-     * user, customer and project (see updateFutureRecurringActivities()).
-     */
-    public function countFutureRecurringOverlaps(PlannedActivity $activity): int
-    {
-        $futureActivities = $this->findFutureRecurringActivities($activity);
-        if ($futureActivities === []) {
-            return 0;
-        }
-
-        // the series moves together, its own activities are no conflict
-        $exclude = array_values(array_filter(array_map(static fn (PlannedActivity $a): ?int => $a->getId(), [$activity, ...$futureActivities])));
-
-        $overlaps = 0;
-        foreach ($futureActivities as $future) {
-            if ($future->getBegin() !== null && $future->getEnd() !== null
-                && $this->countOverlappingFor($activity, $future->getBegin(), $future->getEnd(), $exclude) > 0) {
-                ++$overlaps;
-            }
-        }
-
-        return $overlaps;
     }
 
     /**
@@ -210,7 +162,9 @@ class PlannedActivityRepository extends ServiceEntityRepository
             ->andWhere('p.customer = :customer')
             ->andWhere('p.begin <= :end')
             ->andWhere('p.end >= :begin')
+            ->andWhere('p.tentative = :tentative')
             ->setParameter('user', $activity->getUser())
+            ->setParameter('tentative', $activity->isTentative())
             ->setParameter('customer', $activity->getCustomer())
             ->setParameter('begin', $begin->format('Y-m-d'))
             ->setParameter('end', $end->format('Y-m-d'));
@@ -229,8 +183,8 @@ class PlannedActivityRepository extends ServiceEntityRepository
     }
 
     /**
-     * Splits a multi-day activity in two: the original ends the day before $secondBegin, a copy with the same
-     * user, customer, project, hours, colour, comment and recurrence group covers $secondBegin to the old end.
+     * Splits a multi-day activity in two: the original ends the day before $secondBegin, a copy with
+     * everything else (see createCopy()) covers $secondBegin to the old end.
      * Both are written in one flush, so a failure leaves the activity as it was.
      *
      * @return PlannedActivity|null the new second part, null when $secondBegin is not a day after the begin within the range
@@ -288,8 +242,10 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $copy->setProject($activity->getProject());
         $copy->setTitle($activity->getTitle());
         $copy->setHoursPerDay($activity->getHoursPerDay());
+        $copy->setTimeOff($activity->isTimeOff());
         $copy->setColor($activity->getColor());
         $copy->setComment($activity->getComment());
+        $copy->setTentative($activity->isTentative());
         $copy->setRecurrenceGroup($activity->getRecurrenceGroup());
 
         return $copy;
@@ -332,49 +288,78 @@ class PlannedActivityRepository extends ServiceEntityRepository
     }
 
     /**
-     * @return array<PlannedActivity> the following activities of the series, the given one excluded
+     * Copies the edited activity to the following activities of its recurring series.
+     *
+     * Pass the dates the activity had before the edit to move the following activities
+     * as well: their begin and end are shifted by the same number of days, so an activity
+     * stretched from Thursday to Monday-Friday covers Monday-Friday in every following week.
      */
-    private function findFutureRecurringActivities(PlannedActivity $activity): array
+    public function updateFutureRecurringActivities(PlannedActivity $activity, ?\DateTimeInterface $previousBegin = null, ?\DateTimeInterface $previousEnd = null): void
     {
         $recurrenceGroup = $activity->getRecurrenceGroup();
         $begin = $activity->getBegin();
         if ($recurrenceGroup === null || $recurrenceGroup === '' || $begin === null) {
-            return [];
+            return;
         }
 
+        $beginShift = $previousBegin !== null ? $this->daysBetween($previousBegin, $begin) : 0;
+        $end = $activity->getEnd();
+        $endShift = $previousEnd !== null && $end !== null ? $this->daysBetween($previousEnd, $end) : 0;
+
+        // "Future" is measured from where the activity was, so moving it later does not skip the activities it passed
         $qb = $this->createQueryBuilder('p');
         $qb->where('p.recurrenceGroup = :group')
             ->andWhere('p.id != :currentId')
             ->andWhere('p.begin >= :begin')
             ->setParameter('group', $recurrenceGroup)
             ->setParameter('currentId', $activity->getId())
-            ->setParameter('begin', $begin->format('Y-m-d'));
+            ->setParameter('begin', ($previousBegin ?? $begin)->format('Y-m-d'));
 
         /** @var array<PlannedActivity> $futureActivities */
         $futureActivities = $qb->getQuery()->getResult();
 
-        return $futureActivities;
-    }
-
-    public function updateFutureRecurringActivities(PlannedActivity $activity): void
-    {
-        $futureActivities = $this->findFutureRecurringActivities($activity);
-        if ($futureActivities === []) {
-            return;
-        }
-
         $entityManager = $this->getEntityManager();
         foreach ($futureActivities as $future) {
+            $this->shiftDates($future, $beginShift, $endShift);
             $future->setUser($activity->getUser());
             $future->setCustomer($activity->getCustomer());
             $future->setProject($activity->getProject());
             $future->setTitle($activity->getTitle());
             $future->setHoursPerDay($activity->getHoursPerDay());
+            $future->setTimeOff($activity->isTimeOff());
             $future->setColor($activity->getColor());
             $future->setComment($activity->getComment());
+            $future->setTentative($activity->isTentative());
             $entityManager->persist($future);
         }
         $entityManager->flush();
+    }
+
+    private function daysBetween(\DateTimeInterface $from, \DateTimeInterface $to): int
+    {
+        $from = new \DateTimeImmutable($from->format('Y-m-d'));
+        $to = new \DateTimeImmutable($to->format('Y-m-d'));
+
+        return (int) $from->diff($to)->format('%r%a');
+    }
+
+    private function shiftDates(PlannedActivity $activity, int $beginShift, int $endShift): void
+    {
+        $begin = $activity->getBegin();
+        $end = $activity->getEnd();
+        if ($begin === null || $end === null || ($beginShift === 0 && $endShift === 0)) {
+            return;
+        }
+
+        $newBegin = (new \DateTime($begin->format('Y-m-d')))->modify(\sprintf('%+d days', $beginShift));
+        $newEnd = (new \DateTime($end->format('Y-m-d')))->modify(\sprintf('%+d days', $endShift));
+        // an activity that was shorter than the edited one must not end before it begins
+        if ($newEnd < $newBegin) {
+            $newEnd = clone $newBegin;
+        }
+
+        $activity->setBegin($newBegin);
+        $activity->setEnd($newEnd);
     }
 
     /**
@@ -401,8 +386,10 @@ class PlannedActivityRepository extends ServiceEntityRepository
             $recurring->setProject($activity->getProject());
             $recurring->setTitle($activity->getTitle());
             $recurring->setHoursPerDay($activity->getHoursPerDay());
+            $recurring->setTimeOff($activity->isTimeOff());
             $recurring->setColor($activity->getColor());
             $recurring->setComment($activity->getComment());
+            $recurring->setTentative($activity->isTentative());
             $recurring->setRecurrenceGroup($activity->getRecurrenceGroup());
 
             $recBegin = (clone $begin)->modify(\sprintf('+%d week', $i));
@@ -462,6 +449,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
      * @param array<User> $users
      * @param array<Customer> $customers
      * @param array<Project> $projects
+     * @param bool|null $tentative true for tentative activities only, false for confirmed ones only, null for both
      * @return array<PlannedActivity>
      */
     public function findByFilter(
@@ -469,7 +457,8 @@ class PlannedActivityRepository extends ServiceEntityRepository
         ?\DateTimeInterface $begin = null,
         ?\DateTimeInterface $end = null,
         array $customers = [],
-        array $projects = []
+        array $projects = [],
+        ?bool $tentative = null
     ): array {
         if ($users === []) {
             return [];
@@ -500,6 +489,35 @@ class PlannedActivityRepository extends ServiceEntityRepository
         if ($projects !== []) {
             $qb->andWhere('p.project IN (:projects)')->setParameter('projects', $projects);
         }
+
+        if ($tentative !== null) {
+            $qb->andWhere('p.tentative = :tentative')->setParameter('tentative', $tentative);
+        }
+
+        /** @var array<PlannedActivity> $result */
+        $result = $qb->getQuery()->getResult();
+
+        return $result;
+    }
+
+    /**
+     * Tentative activities of a project that end on or after the given day, of every user.
+     *
+     * @return array<PlannedActivity>
+     */
+    public function findTentativeForProject(Project $project, \DateTimeInterface $from): array
+    {
+        $qb = $this->createQueryBuilder('p');
+        $qb->leftJoin('p.user', 'u')
+            ->addSelect('u')
+            ->where('p.project = :project')
+            ->andWhere('p.tentative = :tentative')
+            ->andWhere('p.end >= :from')
+            ->orderBy('p.begin', 'ASC')
+            ->addOrderBy('p.id', 'ASC')
+            ->setParameter('project', $project)
+            ->setParameter('tentative', true)
+            ->setParameter('from', $from->format('Y-m-d'));
 
         /** @var array<PlannedActivity> $result */
         $result = $qb->getQuery()->getResult();

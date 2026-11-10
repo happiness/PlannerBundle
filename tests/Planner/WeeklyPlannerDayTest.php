@@ -12,11 +12,27 @@ declare(strict_types=1);
 namespace KimaiPlugin\PlannerBundle\Tests\Planner;
 
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Holiday\PublicHoliday;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerDay;
 use PHPUnit\Framework\TestCase;
 
 class WeeklyPlannerDayTest extends TestCase
 {
+    public function testTentativeHoursAreCountedApart(): void
+    {
+        $day = new WeeklyPlannerDay(new \DateTimeImmutable('2026-11-02'), 8.0);
+        $day->addActivity((new PlannedActivity())->setHoursPerDay(6.0));
+        $day->addActivity((new PlannedActivity())->setHoursPerDay(4.0)->setTentative(true));
+
+        $this->assertSame(6.0, $day->getPlannedHours());
+        $this->assertSame(4.0, $day->getTentativeHours());
+        $this->assertSame(75, $day->getPlannedPercentage());
+        // tentative work never makes a day overbooked, only confirmed work does
+        $this->assertFalse($day->isOverAllocated());
+        $this->assertTrue($day->isUnderAllocated());
+        $this->assertCount(2, $day->getActivities());
+    }
+
     public function testGettersAndAllocationStatus(): void
     {
         $date = new \DateTimeImmutable('2026-09-08');
@@ -63,5 +79,88 @@ class WeeklyPlannerDayTest extends TestCase
         $this->assertSame(0, $weekendDay->getPlannedPercentage());
         $weekendDay->addActivity($act1);
         $this->assertSame(0, $weekendDay->getPlannedPercentage());
+    }
+
+    public function testTimeOffReducesCapacityInsteadOfCountingAsPlanned(): void
+    {
+        $day = new WeeklyPlannerDay(new \DateTimeImmutable('2026-11-06'), 8.0);
+        $day->addActivity((new PlannedActivity())->setTimeOff(true)->setHoursPerDay(4.0));
+
+        $this->assertTrue($day->hasTimeOff());
+        $this->assertSame(4.0, $day->getTimeOffHours());
+        $this->assertSame(4.0, $day->getCapacityHours());
+        $this->assertSame(8.0, $day->getExpectedHours());
+        $this->assertSame(0.0, $day->getPlannedHours());
+        $this->assertFalse($day->isDayOff());
+        $this->assertTrue($day->isUnderAllocated());
+
+        $day->addActivity((new PlannedActivity())->setHoursPerDay(4.0));
+
+        $this->assertSame(4.0, $day->getPlannedHours());
+        $this->assertSame(100, $day->getPlannedPercentage());
+        $this->assertTrue($day->isBalanced());
+        $this->assertFalse($day->isOverAllocated());
+    }
+
+    public function testTimeOffWithoutHoursTakesTheWholeContractDay(): void
+    {
+        $timeOff = (new PlannedActivity())->setTimeOff(true)->setHoursPerDay(null);
+
+        $friday = new WeeklyPlannerDay(new \DateTimeImmutable('2026-11-06'), 6.0);
+        $friday->addActivity($timeOff);
+
+        $this->assertSame(6.0, $friday->getHoursOf($timeOff));
+        $this->assertSame(6.0, $friday->getTimeOffHours());
+        $this->assertSame(0.0, $friday->getCapacityHours());
+        $this->assertTrue($friday->isDayOff());
+        $this->assertTrue($friday->isBalanced());
+        $this->assertSame(0, $friday->getPlannedPercentage());
+
+        // planning work on a day off is overbooking
+        $friday->addActivity((new PlannedActivity())->setHoursPerDay(2.0));
+        $this->assertTrue($friday->isOverAllocated());
+    }
+
+    public function testTimeOffNeverExceedsTheContractDay(): void
+    {
+        $day = new WeeklyPlannerDay(new \DateTimeImmutable('2026-11-06'), 8.0);
+        $day->addActivity((new PlannedActivity())->setTimeOff(true)->setHoursPerDay(6.0));
+        $day->addActivity((new PlannedActivity())->setTimeOff(true)->setHoursPerDay(6.0));
+
+        $this->assertSame(8.0, $day->getTimeOffHours());
+        $this->assertSame(0.0, $day->getCapacityHours());
+
+        $weekend = new WeeklyPlannerDay(new \DateTimeImmutable('2026-11-07'), 0.0);
+        $weekend->addActivity((new PlannedActivity())->setTimeOff(true)->setHoursPerDay(null));
+
+        $this->assertSame(0.0, $weekend->getTimeOffHours());
+        $this->assertFalse($weekend->isDayOff());
+    }
+
+    public function testHoliday(): void
+    {
+        $day = new WeeklyPlannerDay(new \DateTimeImmutable('2026-09-07'), 8.0);
+        $this->assertFalse($day->isHoliday());
+        $this->assertNull($day->getHoliday());
+
+        $holiday = new PublicHoliday(new \DateTimeImmutable('2026-12-25'), 'Christmas Day', 'SE', 'Sweden', 'official');
+        $day = new WeeklyPlannerDay(new \DateTimeImmutable('2026-12-25'), 0.0, 0.0, $holiday);
+        $this->assertTrue($day->isHoliday());
+        $this->assertSame($holiday, $day->getHoliday());
+        $this->assertFalse($day->isWorkingDay());
+    }
+
+    public function testTimeOffOnAHolidayDoesNotCountTwice(): void
+    {
+        // the holiday already takes the contract hours to zero, so time off has nothing left to take
+        $holiday = new PublicHoliday(new \DateTimeImmutable('2026-12-25'), 'Christmas Day', 'SE', 'Sweden', 'official');
+        $day = new WeeklyPlannerDay(new \DateTimeImmutable('2026-12-25'), 0.0, 0.0, $holiday);
+        $day->addActivity((new PlannedActivity())->setTimeOff(true)->setHoursPerDay(null));
+        $day->addActivity((new PlannedActivity())->setTimeOff(true)->setHoursPerDay(8.0));
+
+        $this->assertSame(0.0, $day->getTimeOffHours());
+        $this->assertSame(0.0, $day->getCapacityHours());
+        $this->assertSame(0.0, $day->getPlannedHours());
+        $this->assertFalse($day->isDayOff());
     }
 }
