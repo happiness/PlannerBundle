@@ -148,6 +148,9 @@ class WeeklyPlannerControllerTest extends TestCase
                     $this->assertSame('34', $context['currentWeek']->format('W'));
                     $this->assertSame('2026-08-10', $context['prevWeek']);
                     $this->assertSame('2026-08-24', $context['nextWeek']);
+                    // four weeks shown by default: a period back and forth is four weeks
+                    $this->assertSame('2026-07-20', $context['prevPeriod']);
+                    $this->assertSame('2026-09-14', $context['nextPeriod']);
 
                     $expectedToday = (new \DateTimeImmutable('today'))->modify('this week monday')->format('Y-m-d');
                     $this->assertSame($expectedToday, $context['todayWeek']);
@@ -1109,7 +1112,13 @@ class WeeklyPlannerControllerTest extends TestCase
 
         $repo = $this->createMock(PlannedActivityRepository::class);
         $repo->expects($this->once())->method('savePlannedActivity')->with($activity);
-        $repo->expects($this->once())->method('updateFutureRecurringActivities')->with($activity);
+        // the dates the activity had before the form changed it, to move the rest of the series alike
+        $previousEnd = $activity->getEnd()?->format('Y-m-d');
+        $repo->expects($this->once())->method('updateFutureRecurringActivities')->with(
+            $activity,
+            $this->callback(fn ($begin) => $begin instanceof \DateTimeInterface && $begin->format('Y-m-d') === '2026-09-14'),
+            $this->callback(fn ($end) => $end?->format('Y-m-d') === $previousEnd)
+        );
 
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
@@ -1220,6 +1229,9 @@ class WeeklyPlannerControllerTest extends TestCase
             ->with('@Planner/index.html.twig', $this->callback(function (array $context) use ($expectedWeeks): bool {
                 $this->assertSame($expectedWeeks, $context['weeks']);
                 $this->assertSame([1, 2, 4, 8], $context['weekOptions']);
+                $monday = $context['currentWeek'];
+                $this->assertSame($monday->modify('-' . $expectedWeeks . ' weeks')->format('Y-m-d'), $context['prevPeriod']);
+                $this->assertSame($monday->modify('+' . $expectedWeeks . ' weeks')->format('Y-m-d'), $context['nextPeriod']);
 
                 return true;
             }))
@@ -1343,6 +1355,87 @@ class WeeklyPlannerControllerTest extends TestCase
         $controller->setContainer($container);
 
         $this->assertInstanceOf(Response::class, $controller->index());
+    }
+
+    /**
+     * @return array<string, array{string, array<int>}>
+     */
+    public static function orderScenarios(): array
+    {
+        return [
+            'by name keeps the order of the users' => [PlannerQuery::ORDER_BY_NAME, [1, 2, 3]],
+            'by free hours puts the most free hours first' => [PlannerQuery::ORDER_BY_FREE_HOURS, [3, 1, 2]],
+        ];
+    }
+
+    /**
+     * @param array<int> $expectedOrder
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('orderScenarios')]
+    public function testRowsAreOrderedAsTheSearchAsks(string $orderBy, array $expectedOrder): void
+    {
+        $user = new User();
+        $ref = new \ReflectionProperty(User::class, 'id');
+        $ref->setValue($user, 1);
+
+        // a week to come, since days that have passed have no free hours
+        $monday = new \DateTimeImmutable('monday next week');
+        $data = new WeeklyPlannerData($monday, $monday->modify('+6 days'));
+        // user => [expected, planned] on Monday: 2 free, overbooked by 2, 8 free
+        foreach ([1 => [8.0, 6.0], 2 => [8.0, 10.0], 3 => [8.0, 0.0]] as $id => [$expected, $planned]) {
+            $rowUser = new User();
+            $ref->setValue($rowUser, $id);
+            $row = new \KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerUserRow($rowUser);
+            $day = new \KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerDay($monday, $expected);
+            $day->addActivity((new PlannedActivity())->setHoursPerDay($planned));
+            $row->addDay($day);
+            $data->addRow($row);
+        }
+
+        $plannerService = $this->createMock(WeeklyPlannerService::class);
+        $plannerService->method('getPlannerData')->willReturn($data);
+
+        $controller = new WeeklyPlannerController(
+            $this->createMock(PlannedActivityRepository::class),
+            $plannerService,
+            $this->createMock(UserRepository::class),
+            $this->createMock(PlannerUserProvider::class)
+        );
+
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturn(false);
+        $tokenStorage = $this->createMock(TokenStorageInterface::class);
+        $tokenStorage->method('getToken')->willReturn(new UsernamePasswordToken($user, 'main', $user->getRoles()));
+
+        $twig = $this->createMock(Environment::class);
+        $twig->expects($this->once())
+            ->method('render')
+            ->with('@Planner/index.html.twig', $this->callback(function (array $context) use ($expectedOrder): bool {
+                $this->assertSame($expectedOrder, array_keys($context['plannerData']->getRows()));
+
+                return true;
+            }))
+            ->willReturn('<html></html>');
+
+        $query = new PlannerQuery();
+        $query->setOrderBy($orderBy);
+        $formServices = $this->createFormServices($query);
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnMap([
+            ['security.authorization_checker', true],
+            ['security.token_storage', true],
+            ...$this->formServiceMap('has', $formServices),
+            ['twig', true],
+        ]);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['security.token_storage', $tokenStorage],
+            ...$this->formServiceMap('get', $formServices),
+            ['twig', $twig],
+        ]);
+        $controller->setContainer($container);
+
+        $controller->index();
     }
 
     /**

@@ -11,9 +11,13 @@ declare(strict_types=1);
 
 namespace KimaiPlugin\PlannerBundle\Tests\Form;
 
+use App\Entity\Customer;
+use App\Entity\Project;
 use App\Entity\User;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Form\PlannedActivityEditForm;
+use Symfony\Component\Form\FormEvent;
+use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\Test\TypeTestCase;
 
 class PlannedActivityEditFormTest extends TypeTestCase
@@ -107,5 +111,44 @@ class PlannedActivityEditFormTest extends TypeTestCase
         $this->assertTrue($form->has('hoursPerDay'));
         $this->assertTrue($form->has('color'));
         $this->assertTrue($form->has('comment'));
+    }
+
+    public function testProjectWithoutCustomerBringsItsCustomer(): void
+    {
+        $customer = new Customer('Customer');
+        $project = new Project();
+        $project->setCustomer($customer);
+
+        $activity = new PlannedActivity();
+        $activity->setProject($project);
+
+        PlannedActivityEditForm::fillCustomerFromProject(new FormEvent($this->createMock(FormInterface::class), $activity));
+
+        $this->assertSame($customer, $activity->getCustomer());
+    }
+
+    public function testChosenCustomerIsKept(): void
+    {
+        $project = new Project();
+        $project->setCustomer(new Customer('Project customer'));
+        $chosen = new Customer('Chosen customer');
+
+        $activity = new PlannedActivity();
+        $activity->setCustomer($chosen);
+        $activity->setProject($project);
+
+        PlannedActivityEditForm::fillCustomerFromProject(new FormEvent($this->createMock(FormInterface::class), $activity));
+
+        // a mismatch is left for validateProjectBelongsToCustomer() to report, not silently replaced
+        $this->assertSame($chosen, $activity->getCustomer());
+    }
+
+    public function testNoProjectLeavesCustomerEmpty(): void
+    {
+        $activity = new PlannedActivity();
+
+        PlannedActivityEditForm::fillCustomerFromProject(new FormEvent($this->createMock(FormInterface::class), $activity));
+
+        $this->assertNull($activity->getCustomer());
     }
 }

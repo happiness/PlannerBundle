@@ -38,6 +38,22 @@
                 <source>planner.expected_hours</source>
                 <target>Expected</target>
             </trans-unit>
+            <trans-unit id="planner.previous_week">
+                <source>planner.previous_week</source>
+                <target>Previous week</target>
+            </trans-unit>
+            <trans-unit id="planner.next_week">
+                <source>planner.next_week</source>
+                <target>Next week</target>
+            </trans-unit>
+            <trans-unit id="planner.previous_period">
+                <source>planner.previous_period</source>
+                <target>Previous %count% weeks</target>
+            </trans-unit>
+            <trans-unit id="planner.next_period">
+                <source>planner.next_period</source>
+                <target>Next %count% weeks</target>
+            </trans-unit>
             <trans-unit id="planner.this_week">
                 <source>planner.this_week</source>
                 <target>This week</target>
@@ -73,6 +89,14 @@
             <trans-unit id="planner.add_activity">
                 <source>planner.add_activity</source>
                 <target>Plan activity for this day</target>
+            </trans-unit>
+            <trans-unit id="planner.add_project">
+                <source>planner.add_project</source>
+                <target>Add project</target>
+            </trans-unit>
+            <trans-unit id="planner.add_another_project">
+                <source>planner.add_another_project</source>
+                <target>Add another project</target>
             </trans-unit>
             <trans-unit id="planner.recurrent_weeks">
                 <source>planner.recurrent_weeks</source>
@@ -233,6 +257,22 @@
             <trans-unit id="planner.confirm_tentative_none">
                 <source>planner.confirm_tentative_none</source>
                 <target>%project% has no tentative planning from today onwards that you can confirm.</target>
+            </trans-unit>
+            <trans-unit id="planner.order_name">
+                <source>planner.order_name</source>
+                <target>Name</target>
+            </trans-unit>
+            <trans-unit id="planner.order_free_hours">
+                <source>planner.order_free_hours</source>
+                <target>Most free hours</target>
+            </trans-unit>
+            <trans-unit id="planner.free_hours">
+                <source>planner.free_hours</source>
+                <target>%hours%h free</target>
+            </trans-unit>
+            <trans-unit id="planner.over_hours">
+                <source>planner.over_hours</source>
+                <target>%hours%h over</target>
             </trans-unit>
         </body>
     </file>

@@ -38,6 +38,22 @@
                 <source>planner.expected_hours</source>
                 <target>Förväntade</target>
             </trans-unit>
+            <trans-unit id="planner.previous_week">
+                <source>planner.previous_week</source>
+                <target>Föregående vecka</target>
+            </trans-unit>
+            <trans-unit id="planner.next_week">
+                <source>planner.next_week</source>
+                <target>Nästa vecka</target>
+            </trans-unit>
+            <trans-unit id="planner.previous_period">
+                <source>planner.previous_period</source>
+                <target>Föregående %count% veckor</target>
+            </trans-unit>
+            <trans-unit id="planner.next_period">
+                <source>planner.next_period</source>
+                <target>Nästa %count% veckor</target>
+            </trans-unit>
             <trans-unit id="planner.this_week">
                 <source>planner.this_week</source>
                 <target>Denna vecka</target>
@@ -73,6 +89,14 @@
             <trans-unit id="planner.add_activity">
                 <source>planner.add_activity</source>
                 <target>Planera aktivitet för denna dag</target>
+            </trans-unit>
+            <trans-unit id="planner.add_project">
+                <source>planner.add_project</source>
+                <target>Lägg till projekt</target>
+            </trans-unit>
+            <trans-unit id="planner.add_another_project">
+                <source>planner.add_another_project</source>
+                <target>Lägg till ett projekt till</target>
             </trans-unit>
             <trans-unit id="planner.recurrent_weeks">
                 <source>planner.recurrent_weeks</source>
@@ -233,6 +257,22 @@
             <trans-unit id="planner.confirm_tentative_none">
                 <source>planner.confirm_tentative_none</source>
                 <target>%project% har ingen preliminär planering från i dag och framåt som du kan bekräfta.</target>
+            </trans-unit>
+            <trans-unit id="planner.order_name">
+                <source>planner.order_name</source>
+                <target>Namn</target>
+            </trans-unit>
+            <trans-unit id="planner.order_free_hours">
+                <source>planner.order_free_hours</source>
+                <target>Flest lediga timmar</target>
+            </trans-unit>
+            <trans-unit id="planner.free_hours">
+                <source>planner.free_hours</source>
+                <target>%hours% tim lediga</target>
+            </trans-unit>
+            <trans-unit id="planner.over_hours">
+                <source>planner.over_hours</source>
+                <target>%hours% tim över</target>
             </trans-unit>
         </body>
     </file>

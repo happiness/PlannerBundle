@@ -150,6 +150,24 @@ final class WeeklyPlannerUserRow
         return $total;
     }
 
+    /**
+     * Expected hours left after the planning from today on, negative when overbooked. Days that have passed are not
+     * free any more, so they don't count.
+     */
+    public function getFreeHours(?\DateTimeInterface $today = null): float
+    {
+        $from = ($today ?? new \DateTimeImmutable('today'))->format('Y-m-d');
+
+        $total = 0.0;
+        foreach ($this->days as $date => $day) {
+            if ($date >= $from) {
+                $total += $day->getExpectedHours() - $day->getPlannedHours();
+            }
+        }
+
+        return round($total, 2);
+    }
+
     public function isOverAllocated(): bool
     {
         return $this->getTotalPlannedHours() > $this->getTotalExpectedHours();
