@@ -15,6 +15,7 @@
 - **Actual vs Planned Hours**: Directly compares planned allocations against actual recorded timesheet hours.
 - **Lightweight Scheduling**: Plan time blocks for a customer (and optionally a project) with daily hours, date ranges, comments, and color badges.
 - **Time Off**: Mark a user as not available with the "Time off" switch in the planning dialog, or by dragging in the user's "Time off" row. Time off has no customer or project and is not counted as planned work: its hours are taken off the day's capacity, so 4 hours off on an 8 hour day leaves 4 hours to plan. Leave the hours empty to take the whole day off, whatever the user's contract expects for that day. Why someone is away stays with the absence they record in Kimai.
+- **Reserved Time**: Hold hours in someone's planning for something that is not a customer or project, such as a daily buffer or tech leading, from a list admins keep under *Administration > Reserved time*. It is planned and counted like project work, but nobody can log time to it (see [Reserved time](#reserved-time)).
 - **Drag to Plan**: Drag across empty day cells of a row to create a planning spanning several days. A transparent preview block is shown while dragging and stays visible while the dialog is open.
 - **Move and Resize**: Drag a planned activity to another day or row, or drag its left/right handle to extend or shorten it. A move or resize that would put the same project twice on one of the user's days is refused, since that is usually a slip of the mouse. Planning it twice on purpose in the dialog or through the API still works, and such days get a small warning mark in the grid.
 - **Split and Join**: Hover the border between two days of a planning and click the scissors to split it into two. Two side-by-side parts that are the same planning show a link icon on the gap between them; a click joins them again.
@@ -94,6 +95,7 @@ The plugin registers dedicated permissions that integrate seamlessly into Kimai'
 | `edit_planner` | Edit own planned activities | `ROLE_USER`, `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `delete_planner` | Delete own planned activities | `ROLE_USER`, `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `view_other_planner` | View other team members in the weekly planner | `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
+| `manage_reservations_planner` | Manage the reserved time list (*Administration > Reserved time*) | `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `edit_other_planner` | Create, edit, and delete activities for other users | `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `calendar_feed_planner` | Subscribe to your own planning as a calendar feed, together with `view_planner` (see [Calendar feed](#calendar-feed)) | `ROLE_USER`, `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 
@@ -146,9 +148,9 @@ All endpoints require an API token and the `view_planner` permission; write oper
 
 | Method | Path | Description |
 | :--- | :--- | :--- |
-| `GET` | `/api/planner/activities` | List activities. Filters: `user`, `customers[]`, `projects[]`, `begin`, `end` (`Y-m-d`), `tentative` (`1` tentative only, `0` confirmed only) |
+| `GET` | `/api/planner/activities` | List activities. Filters: `user`, `customers[]`, `projects[]`, `reservations[]` (IDs), `begin`, `end` (`Y-m-d`), `tentative` (`1` tentative only, `0` confirmed only) |
 | `GET` | `/api/planner/activities/{id}` | Fetch one activity |
-| `POST` | `/api/planner/activities` | Create. Body: `customer` (required unless `timeOff`), `project`, `user` (defaults to you), `begin`, `end`, `hoursPerDay` (`null` or left out when switching to time off: the whole day), `timeOff` (time off never keeps a customer or project), `color`, `tentative`, `comment`, `recurrentWeeks` |
+| `POST` | `/api/planner/activities` | Create. Body: `customer` (required unless `timeOff`), `project`, `user` (defaults to you), `begin`, `end`, `hoursPerDay` (`null` or left out when switching to time off: the whole day), `timeOff` (time off never keeps a customer or project), `reservation` (a reservation ID instead of customer and project, see [Reserved time](#reserved-time)), `color`, `tentative`, `comment`, `recurrentWeeks` |
 | `PATCH` | `/api/planner/activities/{id}` | Update any subset of fields; `edit_mode: "future"` also updates later activities of a recurring series, moving their dates by as many days as this one moved |
 | `DELETE` | `/api/planner/activities/{id}` | Delete; `?mode=future` also deletes later activities of a recurring series |
 | `POST` | `/api/planner/activities/confirm-tentative` | Confirm the tentative activities of a project ending today or later. Body: `project` (required). Returns the IDs of the `confirmed` activities and of those `skipped` because you may see but not edit them; activities you may not see are neither confirmed nor returned |
@@ -176,6 +178,17 @@ services:
 
 Time off is returned with `"timeOff": true`, `customer` and `project` set to `null`, and `hoursPerDay` set to `null` when it covers the whole day, so clients must not assume either is always present.
 
+## Reserved time
+
+Reserved time holds hours in someone's planning for something that is not a customer or project: a daily buffer so nobody is planned for a full day of project work, time for tech leading, internal work that must not be logged as project time.
+
+- **Managing it**: *Administration > Reserved time*, for whoever holds `manage_reservations_planner` (admins and super admins by default). Each one has a name and a colour for its bars, and the arrows set the order of its rows. Renaming is safe: plannings reference it by ID.
+- **Archiving** stops offering it for new planning. Plannings it already has stay in the planner and keep counting, so nobody looks free while their time is held; delete or shorten them to free the time. Restoring offers it again.
+- **Deleting** is only possible while nothing is planned on it. The foreign key refuses the rest, which is what archiving is for.
+- **Planning it**: the dialog shows a "Reserved time" field above the customer when there is at least one. Choosing one hides customer, project, colour and tentative. Each reservation gets its own row under every person, below the projects; clicking or dragging in that row plans it, and dropping other planning there turns it into that reservation (dropping it on a project's row turns it back).
+- **Counting**: like project work, in every gauge and in "Most free hours", and like project work it takes no hours on a day off unless all its days are days off. It is never tentative, and time off replaces it. Moving or stretching it onto the same reservation on one of the person's days is refused, as for projects.
+- **API**: activities carry `reservation` (the reservation, or `null`), create and update take a reservation ID, and `GET /api/planner/activities` filters by `reservations[]`.
+
 ## Calendar feed
 
 Everyone with both `view_planner` and `calendar_feed_planner` (every role has the latter by default; take it away under *System > Role permissions*) can subscribe to their own planned work from a calendar app. The "Calendar feed" button above the planner opens a page with a private address to add as a calendar subscription ("From URL" in Google Calendar, "Subscribe from web" in Outlook, "New Calendar Subscription" in Apple Calendar).
@@ -192,6 +205,10 @@ Three settings under *System > Settings > Weekly Planner* decide what leaves Kim
 - **Store feed addresses hashed** (default: yes). Only a SHA-256 hash of the token is kept, so a leaked database backup reveals no working address. The address is then shown once, right after it is created; whoever loses it renews it and subscribes again. Addresses created while the setting was off are hashed as soon as it is saved as on (and, on update, by the migration that brings the setting), and keep working.
 
 ## Upgrading
+
+### Reserved time
+
+The migration `Version20261111000000` adds the table `kimai2_planner_reservations` and the nullable column `reservation_id` to `kimai2_planned_activities`, so existing planning is unchanged. Run it after updating (see [Installation](#installation)).
 
 ### Tentative planning
 

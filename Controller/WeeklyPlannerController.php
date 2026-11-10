@@ -18,6 +18,7 @@ use App\Entity\User;
 use App\Repository\UserRepository;
 use App\Utils\PageSetup;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Entity\Reservation;
 use KimaiPlugin\PlannerBundle\Form\PlannedActivityEditForm;
 use KimaiPlugin\PlannerBundle\Form\Toolbar\PlannerToolbarForm;
 use KimaiPlugin\PlannerBundle\Planner\CommonProjectService;
@@ -26,6 +27,7 @@ use KimaiPlugin\PlannerBundle\Planner\TentativeConfirmer;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
+use KimaiPlugin\PlannerBundle\Repository\ReservationRepository;
 use KimaiPlugin\PlannerBundle\Voter\PlannedActivityVoter;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -49,7 +51,8 @@ final class WeeklyPlannerController extends AbstractController
         private readonly PlannedActivityRepository $repository,
         private readonly WeeklyPlannerService $plannerService,
         private readonly UserRepository $userRepository,
-        private readonly PlannerUserProvider $userProvider
+        private readonly PlannerUserProvider $userProvider,
+        private readonly ReservationRepository $reservations
     ) {
     }
 
@@ -150,6 +153,9 @@ final class WeeklyPlannerController extends AbstractController
         if ($request->query->getBoolean('off')) {
             $activity->setTimeOff(true);
             $activity->setHoursPerDay(null);
+        } elseif (($reservation = $this->findSelectableReservation($request->query->getInt('reservation'))) !== null) {
+            // like a customer/project row, a reservation's row pre-selects the reservation
+            $activity->setReservation($reservation);
         } else {
             $this->prefillCustomerAndProject($activity, $request);
         }
@@ -294,9 +300,19 @@ final class WeeklyPlannerController extends AbstractController
             $activity->setUser($user);
         }
 
-        // time off has no customer or project, it only moves in time and between users
+        // time off has no customer, project or reservation, it only moves in time and between users; dropped on a
+        // reservation's row, other planning becomes that reservation, and on a project's row project work again
+        $reservationId = $request->request->getInt('reservation');
+        if ($reservationId > 0 && !$activity->isTimeOff()) {
+            $reservation = $this->findSelectableReservation($reservationId);
+            if ($reservation === null) {
+                return new JsonResponse([], Response::HTTP_BAD_REQUEST);
+            }
+            $activity->setReservation($reservation);
+        }
+
         $customerId = $request->request->getInt('customer');
-        if ($customerId > 0 && !$activity->isTimeOff()) {
+        if ($customerId > 0 && $reservationId === 0 && !$activity->isTimeOff()) {
             $customer = $this->repository->findCustomer($customerId);
             $projectId = $request->request->getInt('project');
             $project = $projectId > 0 ? $this->repository->findProject($projectId) : null;
@@ -306,6 +322,7 @@ final class WeeklyPlannerController extends AbstractController
                 throw $this->createAccessDeniedException();
             }
 
+            $activity->setReservation(null);
             $activity->setCustomer($customer);
             $activity->setProject($project);
         }
@@ -323,7 +340,7 @@ final class WeeklyPlannerController extends AbstractController
         // a drag or stretch onto the same customer/project is a slip far more often than a plan: the dialog and the
         // API, where planning twice is typed on purpose, have no such rule
         if ($this->repository->countOverlapping($activity) > 0) {
-            return new JsonResponse(['message' => $translator->trans('planner.overlapping', [], 'validators')], Response::HTTP_UNPROCESSABLE_ENTITY);
+            return new JsonResponse(['message' => $translator->trans($activity->getReservation() !== null ? 'planner.overlapping_reservation' : 'planner.overlapping', [], 'validators')], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         try {
@@ -546,6 +563,20 @@ final class WeeklyPlannerController extends AbstractController
             'confirmation' => $confirmation,
             'date' => $date,
         ]);
+    }
+
+    /**
+     * A reservation that may be planned: it exists and is not archived.
+     */
+    private function findSelectableReservation(int $id): ?Reservation
+    {
+        if ($id <= 0) {
+            return null;
+        }
+
+        $reservation = $this->reservations->find($id);
+
+        return $reservation instanceof Reservation && !$reservation->isArchived() ? $reservation : null;
     }
 
     /**

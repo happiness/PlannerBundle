@@ -15,6 +15,7 @@ use App\Entity\ColorTrait;
 use App\Entity\Customer;
 use App\Entity\Project;
 use App\Entity\User;
+use App\Utils\Color;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use JMS\Serializer\Annotation as Serializer;
@@ -28,6 +29,7 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 #[ORM\Index(columns: ['recurrence_group'], name: 'IDX_PLANNED_ACTIVITY_RECURRENCE')]
 #[ORM\Index(columns: ['customer_id'], name: 'IDX_PLANNED_ACTIVITY_CUSTOMER')]
 #[ORM\Index(columns: ['project_id'], name: 'IDX_PLANNED_ACTIVITY_PROJECT')]
+#[ORM\Index(columns: ['reservation_id'], name: 'IDX_PLANNED_ACTIVITY_RESERVATION_ID')]
 #[ORM\Entity(repositoryClass: PlannedActivityRepository::class)]
 #[ORM\ChangeTrackingPolicy('DEFERRED_EXPLICIT')]
 #[Serializer\ExclusionPolicy('all')]
@@ -120,6 +122,16 @@ class PlannedActivity
     #[Serializer\Expose]
     #[Serializer\Groups(['Default'])]
     private bool $tentative = false;
+
+    /**
+     * Reserved time instead of a customer and project: held, planned and counted like project work, never loggable.
+     * A reservation with planning can only be archived, the foreign key refuses to delete it.
+     */
+    #[ORM\ManyToOne(targetEntity: Reservation::class)]
+    #[ORM\JoinColumn(name: 'reservation_id', nullable: true, onDelete: 'RESTRICT')]
+    #[Serializer\Expose]
+    #[Serializer\Groups(['Default'])]
+    private ?Reservation $reservation = null;
 
     public function __construct()
     {
@@ -220,7 +232,7 @@ class PlannedActivity
             return $this->customer->getName();
         }
 
-        return $this->title;
+        return $this->reservation?->getName() ?? $this->title;
     }
 
     #[Assert\Callback]
@@ -230,7 +242,7 @@ class PlannedActivity
             return;
         }
 
-        if ($this->customer === null) {
+        if ($this->isProjectWork() && $this->customer === null) {
             $context->buildViolation('This value should not be null.')
                 ->atPath('customer')
                 ->setTranslationDomain('validators')
@@ -285,13 +297,81 @@ class PlannedActivity
         $this->timeOff = $timeOff;
 
         if ($timeOff) {
-            $this->customer = null;
-            $this->project = null;
-            $this->title = null;
-            $this->tentative = false;
+            $this->clearProjectWork();
+            $this->reservation = null;
         }
 
         return $this;
+    }
+
+    public function getReservation(): ?Reservation
+    {
+        return $this->reservation;
+    }
+
+    /**
+     * Reserved time belongs to no customer or project and is never tentative or time off, setting it drops them. The
+     * colour goes too: its bars take the reservation's colour.
+     */
+    public function setReservation(?Reservation $reservation): self
+    {
+        $this->reservation = $reservation;
+
+        if ($reservation !== null) {
+            $this->clearProjectWork();
+            $this->color = null;
+            $this->timeOff = false;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Work for a customer or project, the planner's usual kind: neither time off nor reserved time. Only project work
+     * has a customer, a project, a title or a tentative state.
+     */
+    public function isProjectWork(): bool
+    {
+        return !$this->timeOff && $this->reservation === null;
+    }
+
+    /**
+     * What time off and reserved time have in common: no customer, project, title or tentative state.
+     */
+    private function clearProjectWork(): void
+    {
+        $this->customer = null;
+        $this->project = null;
+        $this->title = null;
+        $this->tentative = false;
+    }
+
+    /**
+     * Copies everything but the dates and the recurrence group to another activity, for splitting, repeating and
+     * "all future" edits: one place that knows every field, so no copy forgets one.
+     */
+    public function copyPlanningTo(self $target): self
+    {
+        $target->user = $this->user;
+        $target->customer = $this->customer;
+        $target->project = $this->project;
+        $target->title = $this->title;
+        $target->reservation = $this->reservation;
+        $target->timeOff = $this->timeOff;
+        $target->hoursPerDay = $this->hoursPerDay;
+        $target->color = $this->color;
+        $target->comment = $this->comment;
+        $target->tentative = $this->tentative;
+
+        return $target;
+    }
+
+    /**
+     * Reserved time takes the reservation's colour, everything else its own or one derived from the name.
+     */
+    public function getColorSafe(): string
+    {
+        return $this->reservation?->getColorSafe() ?? $this->getColor() ?? (new Color())->getRandom($this->getName());
     }
 
     public function isWholeDay(): bool
@@ -333,14 +413,17 @@ class PlannedActivity
         return $this->recurrenceGroup !== null && $this->recurrenceGroup !== '';
     }
 
+    /**
+     * Only project work can be tentative.
+     */
     public function isTentative(): bool
     {
-        return $this->tentative;
+        return $this->tentative && $this->isProjectWork();
     }
 
     public function setTentative(bool $tentative): self
     {
-        $this->tentative = $tentative;
+        $this->tentative = $tentative && $this->isProjectWork();
 
         return $this;
     }
@@ -392,6 +475,7 @@ class PlannedActivity
         return $this->user === $next->getUser()
             && $this->customer === $next->getCustomer()
             && $this->project === $next->getProject()
+            && $this->reservation === $next->getReservation()
             && $this->title === $next->getTitle()
             && $this->hoursPerDay === $next->getHoursPerDay()
             && $this->timeOff === $next->isTimeOff()

@@ -14,6 +14,7 @@ namespace KimaiPlugin\PlannerBundle\Planner;
 use App\Entity\Customer;
 use App\Entity\Project;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Entity\Reservation;
 
 /**
  * All planned activities of one user for one customer/project within the displayed week.
@@ -33,7 +34,8 @@ final class WeeklyPlannerGroup
         private readonly string $key,
         private readonly ?Customer $customer,
         private readonly ?Project $project,
-        private readonly ?string $legacyTitle
+        private readonly ?string $legacyTitle,
+        private readonly ?Reservation $reservation = null
     ) {
     }
 
@@ -41,6 +43,11 @@ final class WeeklyPlannerGroup
     {
         if ($activity->isTimeOff()) {
             return self::TIME_OFF_KEY;
+        }
+
+        $reservation = $activity->getReservation();
+        if ($reservation !== null) {
+            return 'r' . ($reservation->getId() ?? 'o' . spl_object_id($reservation));
         }
 
         if ($activity->getCustomer() === null) {
@@ -57,7 +64,7 @@ final class WeeklyPlannerGroup
 
     public static function createFor(PlannedActivity $activity): self
     {
-        return new self(self::keyFor($activity), $activity->getCustomer(), $activity->getProject(), $activity->getTitle());
+        return new self(self::keyFor($activity), $activity->getCustomer(), $activity->getProject(), $activity->getTitle(), $activity->getReservation());
     }
 
     public function getKey(): string
@@ -68,6 +75,14 @@ final class WeeklyPlannerGroup
     public function isTimeOff(): bool
     {
         return $this->key === self::TIME_OFF_KEY;
+    }
+
+    /**
+     * The reserved time this row plans, null for time off and project work.
+     */
+    public function getReservation(): ?Reservation
+    {
+        return $this->reservation;
     }
 
     public function getCustomer(): ?Customer
@@ -82,7 +97,7 @@ final class WeeklyPlannerGroup
 
     public function getCustomerName(): string
     {
-        return $this->customer?->getName() ?? $this->legacyTitle ?? '';
+        return $this->customer?->getName() ?? $this->reservation?->getName() ?? $this->legacyTitle ?? '';
     }
 
     public function getProjectName(): ?string
