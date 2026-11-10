@@ -64,16 +64,17 @@ final class WeeklyPlannerWeek
     }
 
     /**
-     * Share of the expected hours the tentative work would add on top of the confirmed planning.
+     * Share of the capacity the tentative work would add on top of the confirmed planning, measured like
+     * getPlannedPercentage(), so the two add up to what the week would be once the tentative work is confirmed.
      */
     public function getTentativePercentage(): int
     {
-        $expected = $this->getTotalExpectedHours();
-        if ($expected <= 0.0) {
+        $capacity = $this->getTotalCapacityHours();
+        if ($capacity <= 0.0) {
             return 0;
         }
 
-        return (int) round(($this->getTotalTentativeHours() / $expected) * 100);
+        return (int) round(($this->getTotalTentativeHours() / $capacity) * 100);
     }
 
     public function getTotalActualHours(): float
