@@ -328,7 +328,7 @@ final class WeeklyPlannerController extends AbstractController
         }
 
         // the voter looks at the (possibly new) owner, so a user may not move planning to somebody they cannot plan for
-        if (!$this->isGranted(PlannedActivityVoter::EDIT, $activity)) {
+        if (!$this->canEdit($activity)) {
             throw $this->createAccessDeniedException();
         }
 
@@ -566,9 +566,6 @@ final class WeeklyPlannerController extends AbstractController
     }
 
     /**
-     * @phpstan-impure the voter looks at the activity, which is changed between two checks
-     */
-    /**
      * A reservation that may be planned: it exists and is not archived.
      */
     private function findSelectableReservation(int $id): ?Reservation
@@ -582,6 +579,9 @@ final class WeeklyPlannerController extends AbstractController
         return $reservation instanceof Reservation && !$reservation->isArchived() ? $reservation : null;
     }
 
+    /**
+     * @phpstan-impure the voter looks at the activity, which is changed between two checks
+     */
     private function canEdit(PlannedActivity $activity): bool
     {
         return $this->isGranted(PlannedActivityVoter::EDIT, $activity);
