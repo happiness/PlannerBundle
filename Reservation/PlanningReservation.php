@@ -23,13 +23,13 @@ final class PlanningReservation
      * @param string $key stable identifier stored on the planning, never shown
      * @param string $name shown as the row label
      * @param string|null $color hex colour of the bars, one is derived from the name when empty
-     * @param bool $hidden plannings of a hidden (e.g. archived) reservation are left out of the planner altogether
+     * @param bool $archived no longer offered for new planning; its existing plannings are still shown and counted
      */
     public function __construct(
         public readonly string $key,
         public readonly string $name,
         public readonly ?string $color = null,
-        public readonly bool $hidden = false,
+        public readonly bool $archived = false,
     ) {
         if ($key === '' || \strlen($key) > PlanningReservations::MAX_KEY_LENGTH) {
             throw new \InvalidArgumentException(\sprintf('A reservation key must have 1 to %d characters, got "%s"', PlanningReservations::MAX_KEY_LENGTH, $key));
@@ -51,8 +51,8 @@ final class PlanningReservation
         return $this->color ?? (new Color())->getRandom($this->name);
     }
 
-    public function isHidden(): bool
+    public function isArchived(): bool
     {
-        return $this->hidden;
+        return $this->archived;
     }
 }

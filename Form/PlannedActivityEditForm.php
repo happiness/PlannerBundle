@@ -243,7 +243,7 @@ class PlannedActivityEditForm extends AbstractType
         }
 
         if ($current !== null && !\array_key_exists($current, $names)) {
-            $names[$current] = $this->reservations?->get($current)?->name ?? $current;
+            $names[$current] = $this->reservations?->get($current)->name ?? $current;
         }
 
         // choices are keyed by label, two reservations of the same name must not swallow each other

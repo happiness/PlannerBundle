@@ -176,7 +176,7 @@ Time off is returned with `"timeOff": true`, `customer` and `project` set to `nu
 
 ## Reserved time
 
-Reserved time holds hours in someone's planning for something that is not a customer or project: a daily buffer, tech leading, internal work that must not be logged as project time. The planner has none of its own: another plugin offers them by decorating `KimaiPlugin\PlannerBundle\Reservation\PlanningReservationProviderInterface`, whose `getReservations()` returns `PlanningReservation` objects (a stable `key` stored on the planning, a `name`, an optional `color` and a `hidden` flag):
+Reserved time holds hours in someone's planning for something that is not a customer or project: a daily buffer, tech leading, internal work that must not be logged as project time. The planner has none of its own: another plugin offers them by decorating `KimaiPlugin\PlannerBundle\Reservation\PlanningReservationProviderInterface`, whose `getReservations()` returns `PlanningReservation` objects (a stable `key` stored on the planning, a `name`, an optional `color` and an `archived` flag):
 
 ```yaml
 services:
@@ -187,7 +187,7 @@ services:
 - The dialog shows a "Reserved time" field above the customer when there is at least one. Choosing one hides customer, project, colour and tentative; the bars take the reservation's colour.
 - A reservation counts as planned work in every gauge and in "Most free hours", like a project. It is never tentative, and one person cannot have the same reservation twice on one day.
 - Each reservation gets its own row under every person, below the projects, in the order the provider returns them. Clicking or dragging in that row plans it, and dropping other planning there turns it into that reservation (dropping it on a project row turns it back).
-- Return a reservation that is no longer used as `hidden` rather than leaving it out: its plannings are then left out of the planner, the API and the calendar feed until it is shown again. A key nobody returns is still shown, under the key itself and grey, and still counts.
+- Return a reservation that is no longer used as `archived` rather than leaving it out: it is then no longer offered for new planning, while the plannings it already has are still shown, under its name and colour, and still count, so nobody looks free while their time is held. Delete or shorten those plannings to free the time. A key nobody returns is treated the same way, but shown under the key itself and grey.
 - The API returns the key as `reservation` (`null` for everything else), and `GET /api/planner/activities` filters by `reservations[]`.
 
 ## Calendar feed

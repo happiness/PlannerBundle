@@ -18,8 +18,9 @@ namespace KimaiPlugin\PlannerBundle\Reservation;
 interface PlanningReservationProviderInterface
 {
     /**
-     * Every reservation the planner should know, in the order their rows are shown. Return retired ones as hidden
-     * rather than leaving them out: plannings with a key nobody returns are still shown and counted, under that key.
+     * Every reservation the planner should know, in the order their rows are shown. Return retired ones as archived
+     * rather than leaving them out: their plannings keep their name and colour, while a key nobody returns is shown
+     * grey under the key itself. Either way they are still shown and counted, so nobody looks free while time is held.
      *
      * @return array<PlanningReservation>
      */

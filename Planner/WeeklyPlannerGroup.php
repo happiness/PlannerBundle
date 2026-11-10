@@ -101,7 +101,7 @@ final class WeeklyPlannerGroup
 
     public function getReservationName(): ?string
     {
-        return $this->reservation?->name ?? $this->reservationKey;
+        return $this->reservation->name ?? $this->reservationKey;
     }
 
     public function getCustomer(): ?Customer

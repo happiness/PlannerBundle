@@ -54,28 +54,14 @@ final class PlanningReservations
      */
     public function getSelectable(): array
     {
-        return array_filter($this->all(), static fn (PlanningReservation $reservation): bool => !$reservation->hidden);
+        return array_filter($this->all(), static fn (PlanningReservation $reservation): bool => !$reservation->archived);
     }
 
     public function isSelectable(string $key): bool
     {
         $reservation = $this->get($key);
 
-        return $reservation !== null && !$reservation->hidden;
-    }
-
-    public function isHidden(?string $key): bool
-    {
-        return $this->get($key)?->hidden ?? false;
-    }
-
-    /**
-     * @return array<string>
-     */
-    public function getHiddenKeys(): array
-    {
-        // PHP turns array keys like "7" into integers: hand them back as the strings they are
-        return array_map('strval', array_keys(array_filter($this->all(), static fn (PlanningReservation $reservation): bool => $reservation->hidden)));
+        return $reservation !== null && !$reservation->archived;
     }
 
     /**

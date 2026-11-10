@@ -286,14 +286,15 @@
                                     </tr>
                                     {% set groups = row.groups %}
                                     {% for group in groups %}
-                                        {# a reservation the provider does not know (any more) is shown under its key, grey, and offers nothing new #}
-                                        <tr class="planner-row planner-row-details is-collapsed" data-user-id="{{ row.user.id }}"{% if group.timeOff %} data-planner-off="1"{% endif %}{% if group.reservation is not null %} data-reservation="{{ group.reservationKey }}"{% endif %}{% if group.customer %} data-customer-id="{{ group.customer.id }}"{% endif %}{% if group.project %} data-project-id="{{ group.project.id }}"{% endif %}>
+                                        {# an archived reservation keeps its name and colour, one the provider does not know is shown under its key and grey; both are still counted but offer nothing new #}
+                                        {% set offersReservation = group.reservation is not null and not group.reservation.archived %}
+                                        <tr class="planner-row planner-row-details is-collapsed" data-user-id="{{ row.user.id }}"{% if group.timeOff %} data-planner-off="1"{% endif %}{% if offersReservation %} data-reservation="{{ group.reservationKey }}"{% endif %}{% if group.customer %} data-customer-id="{{ group.customer.id }}"{% endif %}{% if group.project %} data-project-id="{{ group.project.id }}"{% endif %}>
                                             <td class="planner-group-cell p-1 border-top-0" colspan="2">
                                                 {% set groupName = group.timeOff ? 'planner.time_off'|trans : (group.reservationKey is not null ? group.reservationName : group.customerName) %}
                                                 {% set reservationColor = group.reservationKey is null ? null : (group.reservation is not null ? group.reservation.colorSafe : '#adb5bd') %}
                                                 <div class="d-flex justify-content-between align-items-center planner-group-label" title="{{ groupName }}{% if group.projectName %} / {{ group.projectName }}{% endif %}">
                                                     <div class="text-truncate">
-                                                        <span class="fw-bold small{% if group.reservationKey is not null and group.reservation is null %} text-muted{% endif %}">{{ groupName }}</span>{% if group.projectName %}<span class="text-muted small"> / {{ group.projectName }}</span>{% endif %}
+                                                        <span class="fw-bold small{% if group.reservationKey is not null and not offersReservation %} text-muted{% endif %}">{{ groupName }}</span>{% if group.projectName %}<span class="text-muted small"> / {{ group.projectName }}</span>{% endif %}
                                                     </div>
                                                     <span class="d-flex align-items-center flex-shrink-0 ms-2">
                                                         {% set groupTentative = group.getTentativeHours(row.days) %}
@@ -309,7 +310,7 @@
                                                 <td colspan="{{ segment.span }}" class="position-relative align-middle border-1 day{% if segment.span == 1 and holidays[date|date('Y-m-d')] is defined %} planner-holiday{% endif %}{% if date is weekend %} weekend{% endif %}{% if date is today %} today{% endif %} p-1 {{ segment.activities is not empty ? 'has-activities' : 'no-activities' }}"{% if canCreate and segment.activities is empty %} data-planner-date="{{ date|date('Y-m-d') }}"{% if confirmDaysOff and row.getDay(date) is not null and not row.getDay(date).workingDay %} data-planner-non-working{% if holidays[date|date('Y-m-d')] is defined %} data-planner-holiday="{{ holidays[date|date('Y-m-d')].name }}"{% endif %}{% endif %}{% endif %}>
                                                     {% if canCreate and segment.activities is empty %}
                                                         {# like dragging, a click in a customer/project row pre-selects them #}
-                                                        {% set createParams = {'user': row.user.id, 'date': date|date('Y-m-d')}|merge(group.timeOff ? {'off': 1} : {})|merge(group.reservation is not null ? {'reservation': group.reservationKey} : {}) %}
+                                                        {% set createParams = {'user': row.user.id, 'date': date|date('Y-m-d')}|merge(group.timeOff ? {'off': 1} : {})|merge(offersReservation ? {'reservation': group.reservationKey} : {}) %}
                                                         {% if group.customer %}
                                                             {% set createParams = createParams|merge({'customer': group.customer.id}) %}
                                                         {% endif %}

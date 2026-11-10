@@ -94,7 +94,7 @@ var/plugins/PlannerBundle/
 ├── Reservation/
 │   ├── PlanningReservationProviderInterface.php # Which reservations (reserved time) exist; decorate it to offer some
 │   ├── NoPlanningReservations.php     # Default provider: none, the planner works as without the feature
-│   ├── PlanningReservation.php        # One reservation: key (stored on the planning), name, colour, hidden
+│   ├── PlanningReservation.php        # One reservation: key (stored on the planning), name, colour, archived
 │   └── PlanningReservations.php       # The provider's reservations, asked once per request, with the lookups the planner needs
 ├── Twig/
 │   └── PlannerReservationExtension.php # planner_reservation(key) and planner_reservations() for the templates
@@ -179,9 +179,9 @@ var/plugins/PlannerBundle/
    - Time off is titled `planner.time_off` with its hours, or `planner.whole_day` when it has none.
 11. **Reserved Time**:
    - `PlannedActivity::$reservation` holds a provider's key (string, 64 at most) instead of a customer and project. `setReservation()` drops customer, project, title, tentative and time off; `setTimeOff(true)` drops the reservation. The entity requires a customer unless it is time off or a reservation, and never knows names: those come from `PlanningReservations`.
-   - The form adds the `reservation` choice only when there are selectable reservations or the planning already has one (kept as a choice even when hidden or unknown, so it stays editable). It is mapped after customer and project and before `timeOff`, and the POST_SUBMIT listener re-applies it, like time off. JS hides `.planner-project-field` (customer, project, colour, tentative, suggestions) while one is chosen.
-   - Groups key reservations as `reservation:<key>`; `WeeklyPlannerUserRow::getGroups()` sorts time off, then customers and projects, then reservations in provider order (unknown keys last). Rows of known, visible reservations carry `data-reservation`, which click/drag-create (`reservation` query parameter) and move (`reservation` POST field, 400 unless selectable) use.
-   - Hidden reservations are left out in the repository (`excludeHiddenReservations()` on the grid, API and feed queries), so they count nowhere until shown again. The overlap check compares user and reservation; copies, splits, joins and "all future" edits carry the key.
+   - The form adds the `reservation` choice only when there are selectable reservations or the planning already has one (kept as a choice even when archived or unknown, so it stays editable). It is mapped after customer and project and before `timeOff`, and the POST_SUBMIT listener re-applies it, like time off. JS hides `.planner-project-field` (customer, project, colour, tentative, suggestions) while one is chosen.
+   - Groups key reservations as `reservation:<key>`; `WeeklyPlannerUserRow::getGroups()` sorts time off, then customers and projects, then reservations in provider order (unknown keys last). Rows of known reservations that are not archived carry `data-reservation`, which click/drag-create (`reservation` query parameter) and move (`reservation` POST field, 400 unless selectable) use.
+   - Archived reservations are only no longer offered (`getSelectable()`): their plannings stay in every query and keep counting, as do plannings of a key nobody returns. The overlap check compares user and reservation; copies, splits, joins and "all future" edits carry the key.
 12. **Isolated Database Migrations**:
    - Always run and test migrations using the bundle's dedicated configuration file:
      `bin/console doctrine:migrations:migrate --configuration=var/plugins/PlannerBundle/Migrations/doctrine_migrations.yaml --no-interaction`

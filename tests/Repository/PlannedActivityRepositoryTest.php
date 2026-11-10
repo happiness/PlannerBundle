@@ -22,9 +22,6 @@ use Doctrine\ORM\UnitOfWork;
 use Doctrine\Persistence\ManagerRegistry;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
-use KimaiPlugin\PlannerBundle\Reservation\PlanningReservation;
-use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
-use KimaiPlugin\PlannerBundle\Tests\Reservation\PlanningReservationsTest;
 use PHPUnit\Framework\TestCase;
 
 class PlannedActivityRepositoryTest extends TestCase
@@ -947,7 +944,7 @@ class PlannedActivityRepositoryTest extends TestCase
     /**
      * @param array<string> $conditions filled with the conditions of the query
      */
-    private function createRecordingRepository(array &$conditions, mixed $result, ?PlanningReservations $reservations = null): PlannedActivityRepository
+    private function createRecordingRepository(array &$conditions, mixed $result): PlannedActivityRepository
     {
         $query = $this->createMock(Query::class);
         $query->method('getResult')->willReturn($result);
@@ -974,35 +971,21 @@ class PlannedActivityRepositoryTest extends TestCase
         $registry = $this->createMock(ManagerRegistry::class);
         $registry->method('getManagerForClass')->willReturn($em);
 
-        return new PlannedActivityRepository($registry, $reservations);
+        return new PlannedActivityRepository($registry);
     }
 
-    public function testFindByFilterFiltersReservationsAndLeavesHiddenOnesOut(): void
+    public function testFindByFilterFiltersReservationsAndKeepsArchivedOnes(): void
     {
+        // archived reservations still hold time, so their plannings stay in every query
         $conditions = [];
-        $reservations = PlanningReservationsTest::create([new PlanningReservation('buffer', 'Buffer'), new PlanningReservation('old', 'Old', null, true)]);
-        $repository = $this->createRecordingRepository($conditions, [], $reservations);
+        $repository = $this->createRecordingRepository($conditions, []);
 
         $repository->findByFilter([new User()], null, null, [], [], null, ['buffer']);
 
         $this->assertSame([
             'p.user IN (:users)',
             'p.reservation IN (:reservations)',
-            'p.reservation IS NULL OR p.reservation NOT IN (:hiddenReservations)',
         ], $conditions);
-    }
-
-    public function testThePlannerLeavesHiddenReservationsOut(): void
-    {
-        $conditions = [];
-        $reservations = PlanningReservationsTest::create([new PlanningReservation('old', 'Old', null, true)]);
-        $this->createRecordingRepository($conditions, [], $reservations)->findPlannedActivitiesForUsersAndRange([new User()], new \DateTime('2026-11-02'), new \DateTime('2026-11-08'));
-        $this->assertContains('p.reservation IS NULL OR p.reservation NOT IN (:hiddenReservations)', $conditions);
-
-        // nothing hidden, nothing to leave out
-        $conditions = [];
-        $this->createRecordingRepository($conditions, [])->findPlannedActivitiesForUsersAndRange([new User()], new \DateTime('2026-11-02'), new \DateTime('2026-11-08'));
-        $this->assertNotContains('p.reservation IS NULL OR p.reservation NOT IN (:hiddenReservations)', $conditions);
     }
 
     public function testOverlapOfAReservationIsTheSameReservation(): void

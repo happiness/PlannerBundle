@@ -45,7 +45,6 @@ class PlanningReservationsTest extends TestCase
 
         $this->assertSame([], $reservations->all());
         $this->assertSame([], $reservations->getSelectable());
-        $this->assertSame([], $reservations->getHiddenKeys());
         $this->assertNull($reservations->get('buffer'));
         $this->assertFalse($reservations->isSelectable('buffer'));
     }
@@ -59,14 +58,12 @@ class PlanningReservationsTest extends TestCase
 
         $this->assertSame(['buffer' => $buffer, 'old' => $old, 'lead' => $lead], $reservations->all());
         $this->assertSame(['buffer' => $buffer, 'lead' => $lead], $reservations->getSelectable());
-        $this->assertSame(['old'], $reservations->getHiddenKeys());
         $this->assertSame($buffer, $reservations->get('buffer'));
         $this->assertNull($reservations->get(null));
         $this->assertTrue($reservations->isSelectable('lead'));
         $this->assertFalse($reservations->isSelectable('old'));
         $this->assertFalse($reservations->isSelectable('unknown'));
-        $this->assertTrue($reservations->isHidden('old'));
-        $this->assertFalse($reservations->isHidden('unknown'));
+        $this->assertTrue($reservations->get('old')?->isArchived());
         $this->assertSame(0, $reservations->getPosition('buffer'));
         $this->assertSame(2, $reservations->getPosition('lead'));
         $this->assertSame(\PHP_INT_MAX, $reservations->getPosition('unknown'));
@@ -98,7 +95,7 @@ class PlanningReservationsTest extends TestCase
 
     public function testKeysThatLookLikeNumbersStayStrings(): void
     {
-        // PHP makes integer array keys of them, which would bind a hidden list as integers and compare 'buffer' = 0
+        // PHP makes integer array keys of them, which must not leak out as integers
         $reservations = self::create([
             new PlanningReservation('42', 'Forty-two'),
             new PlanningReservation('buffer', 'Buffer'),
@@ -106,10 +103,9 @@ class PlanningReservationsTest extends TestCase
             new PlanningReservation('old', 'Old', null, true),
         ]);
 
-        $this->assertSame(['7', 'old'], $reservations->getHiddenKeys());
         $this->assertSame(0, $reservations->getPosition('42'));
         $this->assertSame(1, $reservations->getPosition('buffer'));
         $this->assertTrue($reservations->isSelectable('42'));
-        $this->assertTrue($reservations->isHidden('7'));
+        $this->assertFalse($reservations->isSelectable('7'));
     }
 }

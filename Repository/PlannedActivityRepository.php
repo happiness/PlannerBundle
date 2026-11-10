@@ -16,17 +16,15 @@ use App\Entity\Project;
 use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\DBAL\ArrayParameterType;
-use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
-use KimaiPlugin\PlannerBundle\Reservation\PlanningReservations;
 
 /**
  * @extends ServiceEntityRepository<PlannedActivity>
  */
 class PlannedActivityRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry, private readonly ?PlanningReservations $reservations = null)
+    public function __construct(ManagerRegistry $registry)
     {
         parent::__construct($registry, PlannedActivity::class);
     }
@@ -603,8 +601,6 @@ class PlannedActivityRepository extends ServiceEntityRepository
             ->setParameter('users', $users)
             ->setParameter('start', $start->format('Y-m-d'))
             ->setParameter('end', $end->format('Y-m-d'));
-        $this->excludeHiddenReservations($qb);
-
         /** @var array<PlannedActivity> $result */
         $result = $qb->getQuery()->getResult();
 
@@ -674,8 +670,6 @@ class PlannedActivityRepository extends ServiceEntityRepository
             $qb->andWhere('p.reservation IN (:reservations)')->setParameter('reservations', array_map('strval', $reservations), ArrayParameterType::STRING);
         }
 
-        $this->excludeHiddenReservations($qb);
-
         /** @var array<PlannedActivity> $result */
         $result = $qb->getQuery()->getResult();
 
@@ -705,17 +699,5 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $result = $qb->getQuery()->getResult();
 
         return $result;
-    }
-
-    /**
-     * Plannings of a hidden (e.g. archived) reservation are left out of the planner as if they did not exist.
-     */
-    private function excludeHiddenReservations(QueryBuilder $qb): void
-    {
-        $hidden = $this->reservations?->getHiddenKeys() ?? [];
-        if ($hidden !== []) {
-            $qb->andWhere('p.reservation IS NULL OR p.reservation NOT IN (:hiddenReservations)')
-                ->setParameter('hiddenReservations', $hidden, ArrayParameterType::STRING);
-        }
     }
 }
