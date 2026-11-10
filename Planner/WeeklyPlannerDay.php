@@ -21,6 +21,13 @@ final class WeeklyPlannerDay
      */
     private array $activities = [];
 
+    /**
+     * Activities whose every day is a day off, planned there on purpose (weekend work): they count on this day too.
+     *
+     * @var array<int, true> by spl_object_id()
+     */
+    private array $plannedOnDaysOff = [];
+
     public function __construct(
         private readonly \DateTimeImmutable $date,
         private readonly float $expectedHours = 0.0,
@@ -71,10 +78,33 @@ final class WeeklyPlannerDay
     }
 
     /**
-     * The hours an activity takes on this day: time off without hours is the whole working day.
+     * Counts the activity on this day although it is a day off: none of its days is a working day, so it was planned
+     * there on purpose, like weekend work.
+     */
+    public function countOnDayOff(PlannedActivity $activity): void
+    {
+        $this->plannedOnDaysOff[spl_object_id($activity)] = true;
+    }
+
+    /**
+     * Whether the activity takes hours on this day. Work planned across a day without contract hours (a weekend, a
+     * public holiday) does not, unless every day of it is such a day (see countOnDayOff()).
+     */
+    public function counts(PlannedActivity $activity): bool
+    {
+        return $this->expectedHours > 0.0 || $activity->isTimeOff() || isset($this->plannedOnDaysOff[spl_object_id($activity)]);
+    }
+
+    /**
+     * The hours an activity takes on this day: time off without hours is the whole working day, and work on a day off
+     * takes none unless counts() says otherwise.
      */
     public function getHoursOf(PlannedActivity $activity): float
     {
+        if (!$this->counts($activity)) {
+            return 0.0;
+        }
+
         return $activity->getHoursPerDay() ?? ($activity->isTimeOff() ? $this->expectedHours : 0.0);
     }
 

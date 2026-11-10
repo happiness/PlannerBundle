@@ -11,16 +11,20 @@
   - Automatically calculates expected capacity from each user's working time contracts.
   - Highlights over-allocated, under-allocated, and balanced days with clear visual badges.
 - **Public Holidays**: Each user's public holidays count as days off, named in their day cell (see [Public holidays](#public-holidays)).
+- **Days Off Don't Count**: A planning across days the user does not work takes no hours on them. Friday to Tuesday at 4 hours a day is 12 hours, not 20, and stays one planning. Days off are days without contract hours, such as weekends and public holidays. Planning that covers only days off, such as weekend work, was planned there on purpose and counts in full.
 - **Actual vs Planned Hours**: Directly compares planned allocations against actual recorded timesheet hours.
 - **Lightweight Scheduling**: Plan time blocks for a customer (and optionally a project) with daily hours, date ranges, comments, and color badges.
 - **Time Off**: Mark a user as not available with the "Time off" switch in the planning dialog, or by dragging in the user's "Time off" row. Time off has no customer or project and is not counted as planned work: its hours are taken off the day's capacity, so 4 hours off on an 8 hour day leaves 4 hours to plan. Leave the hours empty to take the whole day off, whatever the user's contract expects for that day. Why someone is away stays with the absence they record in Kimai.
 - **Reserved Time**: Hold hours in someone's planning for something that is not a customer or project, such as a daily buffer or tech leading, from a list admins keep under *Administration > Reserved time*. It is planned and counted like project work, but nobody can log time to it (see [Reserved time](#reserved-time)).
 - **Drag to Plan**: Drag across empty day cells of a row to create a planning spanning several days. A transparent preview block is shown while dragging and stays visible while the dialog is open.
-- **Move and Resize**: Drag a planned activity to another day or row, or drag its left/right handle to extend or shorten it.
+- **Move and Resize**: Drag a planned activity to another day or row, or drag its left/right handle to extend or shorten it. A move or resize that would put the same project twice on one of the user's days is refused, since that is usually a slip of the mouse. Planning it twice on purpose in the dialog or through the API still works, and such days get a small warning mark in the grid.
+- **Split and Join**: Hover the border between two days of a planning and click the scissors to split it into two. Two side-by-side parts that are the same planning show a link icon on the gap between them; a click joins them again.
+- **Days off Confirmation**: Planning only on days the user does not work by their contract asks for confirmation first.
 - **Shortcuts**: Frequently used projects (with their customer) are offered as shortcuts when creating a planning, unless the dialog was opened from a project's row and already has it selected.
 - **Multiple Weeks**: Show 1, 2, 4 (default) or 8 weeks at once; capacity is summarized per week.
 - **Tentative Planning**: Mark planning that isn't confirmed yet, such as work for a deal that isn't signed. Tentative blocks are faded with a dashed border, and their hours are shown on top of the confirmed capacity ("+ 8 hrs tentative") without changing its colour. A "Planning" filter shows all, confirmed only or tentative only (the capacity always counts everything; "tentative only" also hides users without tentative work). "Confirm all for this project" (on the project row or in the dialog) confirms the ongoing and future tentative planning of a project for everyone you may edit, after showing how many plans, people and which period it changes.
 - **Who's Free**: "Order by" in the search offers "Most free hours": the people with the most contract hours left unplanned across the shown weeks, from today on, come first, overbooked people last, and each name shows its free hours ("16h free" or "4h over"). Switch to one week to ask about a single week. It is kept in the URL and can be bookmarked like the other filters.
+- **Calendar Feed**: Subscribe to your own planning in Google Calendar, Outlook or Apple Calendar through a private address (see [Calendar feed](#calendar-feed)).
 - **REST API**: Create, read, update and delete planned activities via `/api/planner/activities` (see the Kimai API docs under the "Planner" tag).
 - **Quick Modal Editing**: Create, update, or delete planned blocks seamlessly via modal dialogs.
 - **Date Navigation**: Fast week switcher controls (`Previous Week`, `Today`, `Next Week`, and date picker jump).
@@ -93,6 +97,7 @@ The plugin registers dedicated permissions that integrate seamlessly into Kimai'
 | `view_other_planner` | View other team members in the weekly planner | `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `manage_reservations_planner` | Manage the reserved time list (*Administration > Reserved time*) | `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `edit_other_planner` | Create, edit, and delete activities for other users | `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
+| `calendar_feed_planner` | Subscribe to your own planning as a calendar feed, together with `view_planner` (see [Calendar feed](#calendar-feed)) | `ROLE_USER`, `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 
 Permissions can be customized anytime via the Kimai UI under **System > Role permissions**.
 
@@ -184,6 +189,21 @@ Reserved time holds hours in someone's planning for something that is not a cust
 - **Counting**: like project work, in every gauge and in "Most free hours". It is never tentative, and time off replaces it.
 - **API**: activities carry `reservation` (the reservation, or `null`), create and update take a reservation ID, and `GET /api/planner/activities` filters by `reservations[]`.
 
+## Calendar feed
+
+Everyone with both `view_planner` and `calendar_feed_planner` (every role has the latter by default; take it away under *System > Role permissions*) can subscribe to their own planned work from a calendar app. The "Calendar feed" button above the planner opens a page with a private address to add as a calendar subscription ("From URL" in Google Calendar, "Subscribe from web" in Outlook, "New Calendar Subscription" in Apple Calendar).
+
+- Each planned activity is an all-day event over its days, titled with the project (or customer) and the hours per day; the description has customer, project and hours, and the event links back to that week in the planner. Events are marked as free, so planned work never makes you look busy for meetings. Tentative work is titled "Tentative: …" and marked tentative, and time off without hours shows as a whole day.
+- The feed covers 60 days back to a year ahead. Calendar apps refresh subscriptions on their own schedule, Google can take up to a day.
+- Run the plugin's migrations after updating: the addresses are kept in a new table, `kimai2_planner_calendar_tokens`.
+- The address carries a random 64-character token and needs no login, which is how calendar apps can fetch it. Renewing the address on the same page makes the old one stop working; "Switch off" removes it. The feed also stops for users who are deactivated or lose either permission.
+
+Three settings under *System > Settings > Weekly Planner* decide what leaves Kimai once someone subscribes:
+
+- **Notes in calendar feeds** (default: leave out). Comments often hold details meant for colleagues only, and the feed hands everything in it to whichever calendar service each person subscribes from. Set it to "Include" to add them to the event description.
+- **Let people choose for their own feed** (default: no). With it on, the feed page gets an "Include notes in my feed" switch that starts from the setting above. Only a choice that differs from the organisation's is kept, so everyone else follows it if it changes.
+- **Store feed addresses hashed** (default: yes). Only a SHA-256 hash of the token is kept, so a leaked database backup reveals no working address. The address is then shown once, right after it is created; whoever loses it renews it and subscribes again. Addresses created while the setting was off are hashed as soon as it is saved as on (and, on update, by the migration that brings the setting), and keep working.
+
 ## Upgrading
 
 ### Reserved time
@@ -206,6 +226,7 @@ What changed:
 - **Multi-week grid**: The planner shows 1, 2, 4 (default) or 8 weeks, with capacity summarized per week. Activities of the same customer/project are grouped in sub-rows per user, and consecutive days are merged into one block.
 - **Always an empty row per user**, so new plannings can be dragged out even when a user has no activities.
 - **Drag to plan**: Dragging over empty days opens the create dialog with the whole date range, showing a transparent preview of the planning.
+- **Confirm days off**: Clicking or dragging over a day the user's work contract has no hours for asks "<name> doesn't usually work on this day. Plan work anyway?" before the create dialog opens. A drag that also covers working days is not asked about, and neither is time off. Users without any working day in the displayed period (no work contract) are never asked.
 - **Move and resize**: Drag a planned activity to another day or row (other user, customer/project). Drag the handle on its left or right edge to extend or shorten it. Whole days only, the hours per day stay the same. Requires the edit permission for the activity.
 - **Shortcuts** for frequently used customers and projects when creating a planning; they no longer depend on HappinessBundle.
 - **Recurring activities**: Edit or delete only one instance or all upcoming activities of a series.

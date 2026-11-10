@@ -452,6 +452,38 @@ class PlannedActivity
         return (int) $interval->days + 1;
     }
 
+    /**
+     * Whether $next starts the day after this one ends and is the same planning in everything but its dates,
+     * so the two can be joined into one again (as after a split).
+     */
+    public function isJoinableWith(PlannedActivity $next): bool
+    {
+        if ($next === $this || $this->end === null || $next->getBegin() === null) {
+            return false;
+        }
+
+        if ((clone $this->end)->modify('+1 day')->format('Y-m-d') !== $next->getBegin()->format('Y-m-d')) {
+            return false;
+        }
+
+        // weekly instances of a seven-day series also sit side by side; parts of one instance span a week at most
+        if ($this->isRecurring() && $this->begin !== null && $next->getEnd() !== null
+            && $this->begin->diff($next->getEnd())->days >= 7) {
+            return false;
+        }
+
+        return $this->user === $next->getUser()
+            && $this->customer === $next->getCustomer()
+            && $this->project === $next->getProject()
+            && $this->title === $next->getTitle()
+            && $this->hoursPerDay === $next->getHoursPerDay()
+            && $this->timeOff === $next->isTimeOff()
+            && $this->tentative === $next->isTentative()
+            && $this->getColor() === $next->getColor()
+            && ($this->comment ?? '') === ($next->getComment() ?? '')
+            && $this->recurrenceGroup === $next->getRecurrenceGroup();
+    }
+
     public function getTotalHours(): float
     {
         return $this->getDaysCount() * ($this->hoursPerDay ?? 0.0);

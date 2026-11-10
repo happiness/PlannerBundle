@@ -123,6 +123,126 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $this->savePlannedActivity($splitActivity);
     }
 
+    /**
+     * Other activities of the same user and customer/project sharing at least one day with this one, confirmed or
+     * tentative like it (confirmed and tentative work on the same project may well sit side by side). Legacy
+     * activities without a customer, and time off, are not checked: they have nothing to compare.
+     */
+    public function countOverlapping(PlannedActivity $activity): int
+    {
+        $begin = $activity->getBegin();
+        $end = $activity->getEnd();
+        if ($begin === null || $end === null) {
+            return 0;
+        }
+
+        return $this->countOverlappingFor($activity, $begin, $end, $activity->getId() === null ? [] : [$activity->getId()]);
+    }
+
+    /**
+     * @param array<int> $excludeIds
+     */
+    private function countOverlappingFor(PlannedActivity $activity, \DateTimeInterface $begin, \DateTimeInterface $end, array $excludeIds): int
+    {
+        if ($activity->getUser() === null || $activity->getCustomer() === null) {
+            return 0;
+        }
+
+        $qb = $this->createQueryBuilder('p');
+        $qb->select('COUNT(p.id)')
+            ->where('p.user = :user')
+            ->andWhere('p.customer = :customer')
+            ->andWhere('p.begin <= :end')
+            ->andWhere('p.end >= :begin')
+            ->andWhere('p.tentative = :tentative')
+            ->setParameter('user', $activity->getUser())
+            ->setParameter('tentative', $activity->isTentative())
+            ->setParameter('customer', $activity->getCustomer())
+            ->setParameter('begin', $begin->format('Y-m-d'))
+            ->setParameter('end', $end->format('Y-m-d'));
+
+        if ($activity->getProject() === null) {
+            $qb->andWhere('p.project IS NULL');
+        } else {
+            $qb->andWhere('p.project = :project')->setParameter('project', $activity->getProject());
+        }
+
+        if ($excludeIds !== []) {
+            $qb->andWhere('p.id NOT IN (:ids)')->setParameter('ids', $excludeIds);
+        }
+
+        return (int) $qb->getQuery()->getSingleScalarResult();
+    }
+
+    /**
+     * Splits a multi-day activity in two: the original ends the day before $secondBegin, a copy with
+     * everything else (see createCopy()) covers $secondBegin to the old end.
+     * Both are written in one flush, so a failure leaves the activity as it was.
+     *
+     * @return PlannedActivity|null the new second part, null when $secondBegin is not a day after the begin within the range
+     */
+    public function splitActivity(PlannedActivity $activity, \DateTimeInterface $secondBegin): ?PlannedActivity
+    {
+        $begin = $activity->getBegin();
+        $end = $activity->getEnd();
+        $day = $secondBegin->format('Y-m-d');
+        if ($begin === null || $end === null || $day <= $begin->format('Y-m-d') || $day > $end->format('Y-m-d')) {
+            return null;
+        }
+
+        $second = $this->createCopy($activity);
+        $second->setBegin(new \DateTime($day));
+        $second->setEnd(new \DateTime($end->format('Y-m-d')));
+
+        $activity->setEnd((new \DateTime($day))->modify('-1 day'));
+
+        $entityManager = $this->getEntityManager();
+        $entityManager->persist($activity);
+        $entityManager->persist($second);
+        $entityManager->flush();
+
+        return $second;
+    }
+
+    /**
+     * Joins two adjacent parts of the same planning (see PlannedActivity::isJoinableWith()) back into the first one.
+     */
+    public function joinActivities(PlannedActivity $first, PlannedActivity $second): bool
+    {
+        if (!$first->isJoinableWith($second) || $second->getEnd() === null) {
+            return false;
+        }
+
+        $first->setEnd(new \DateTime($second->getEnd()->format('Y-m-d')));
+
+        $entityManager = $this->getEntityManager();
+        $entityManager->persist($first);
+        $entityManager->remove($second);
+        $entityManager->flush();
+
+        return true;
+    }
+
+    /**
+     * Everything but the dates, which the caller sets.
+     */
+    private function createCopy(PlannedActivity $activity): PlannedActivity
+    {
+        $copy = new PlannedActivity();
+        $copy->setUser($activity->getUser());
+        $copy->setCustomer($activity->getCustomer());
+        $copy->setProject($activity->getProject());
+        $copy->setTitle($activity->getTitle());
+        $copy->setHoursPerDay($activity->getHoursPerDay());
+        $copy->setTimeOff($activity->isTimeOff());
+        $copy->setColor($activity->getColor());
+        $copy->setComment($activity->getComment());
+        $copy->setTentative($activity->isTentative());
+        $copy->setRecurrenceGroup($activity->getRecurrenceGroup());
+
+        return $copy;
+    }
+
     public function deleteRecurringActivities(string $recurrenceGroup): void
     {
         $activities = $this->findBy(['recurrenceGroup' => $recurrenceGroup]);

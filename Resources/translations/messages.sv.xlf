@@ -86,6 +86,14 @@
                 <source>planner.move_error</source>
                 <target>Den planerade aktiviteten kunde inte flyttas.</target>
             </trans-unit>
+            <trans-unit id="planner.day_off_question">
+                <source>planner.day_off_question</source>
+                <target>%name% brukar inte arbeta den här dagen. Planera arbete ändå?</target>
+            </trans-unit>
+            <trans-unit id="planner.days_off_question">
+                <source>planner.days_off_question</source>
+                <target>%name% brukar inte arbeta de här dagarna. Planera arbete ändå?</target>
+            </trans-unit>
             <trans-unit id="planner.add_activity">
                 <source>planner.add_activity</source>
                 <target>Planera aktivitet för denna dag</target>
@@ -97,6 +105,18 @@
             <trans-unit id="planner.add_another_project">
                 <source>planner.add_another_project</source>
                 <target>Lägg till ett projekt till</target>
+            </trans-unit>
+            <trans-unit id="planner.split_here">
+                <source>planner.split_here</source>
+                <target>Dela här</target>
+            </trans-unit>
+            <trans-unit id="planner.join_here">
+                <source>planner.join_here</source>
+                <target>Slå ihop</target>
+            </trans-unit>
+            <trans-unit id="planner.planned_twice">
+                <source>planner.planned_twice</source>
+                <target>Projektet är planerat mer än en gång den här dagen.</target>
             </trans-unit>
             <trans-unit id="planner.recurrent_weeks">
                 <source>planner.recurrent_weeks</source>
@@ -205,6 +225,114 @@
             <trans-unit id="planner.suggestions">
                 <source>planner.suggestions</source>
                 <target>Ofta använda</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.button">
+                <source>planner.calendar.button</source>
+                <target>Kalenderflöde</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.title">
+                <source>planner.calendar.title</source>
+                <target>Kalenderflöde</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.name">
+                <source>planner.calendar.name</source>
+                <target>Planering: %name%</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.intro">
+                <source>planner.calendar.intro</source>
+                <target>Prenumerera på ditt planerade arbete i Google Kalender, Outlook eller Apple Kalender, så syns det bredvid dina möten. Kalenderappen uppdaterar det själv, oftast inom några timmar.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.copy">
+                <source>planner.calendar.copy</source>
+                <target>Kopiera</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.copied">
+                <source>planner.calendar.copied</source>
+                <target>Kopierad</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.secret">
+                <source>planner.calendar.secret</source>
+                <target>Alla som har den här adressen kan se din planering. Om du har delat den av misstag, förnya den: den gamla adressen slutar då fungera.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto">
+                <source>planner.calendar.howto</source>
+                <target>Lägg till den i din kalender</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto_google">
+                <source>planner.calendar.howto_google</source>
+                <target>Google Kalender: klicka på + bredvid &quot;Andra kalendrar&quot; och välj &quot;Från webbadress&quot;.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto_outlook">
+                <source>planner.calendar.howto_outlook</source>
+                <target>Outlook: välj &quot;Lägg till kalender&quot; och sedan &quot;Prenumerera från webben&quot;.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.howto_apple">
+                <source>planner.calendar.howto_apple</source>
+                <target>Apple Kalender: välj Arkiv och sedan &quot;Ny kalenderprenumeration&quot;.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.create">
+                <source>planner.calendar.create</source>
+                <target>Skapa kalenderadress</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.renew">
+                <source>planner.calendar.renew</source>
+                <target>Förnya adressen</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.renew_confirm">
+                <source>planner.calendar.renew_confirm</source>
+                <target>Den nuvarande adressen slutar fungera och kalendrar som använder den behöver den nya. Förnya den?</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.remove">
+                <source>planner.calendar.remove</source>
+                <target>Stäng av</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.remove_confirm">
+                <source>planner.calendar.remove_confirm</source>
+                <target>Den nuvarande adressen slutar fungera. Stänga av kalenderflödet?</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.shown_once">
+                <source>planner.calendar.shown_once</source>
+                <target>Kopiera adressen nu. Den sparas hashad och visas inte igen: tappar du bort den förnyar du den och prenumererar igen.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.hidden">
+                <source>planner.calendar.hidden</source>
+                <target>Ditt kalenderflöde är aktivt. Adressen sparas hashad och kan inte visas igen: förnya den för att få en ny och prenumerera sedan på den.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar.include_comments">
+                <source>planner.calendar.include_comments</source>
+                <target>Ta med anteckningar i mitt flöde</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments">
+                <source>planner.calendar_feed.comments</source>
+                <target>Anteckningar i kalenderflöden</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_help">
+                <source>planner.calendar_feed.comments_help</source>
+                <target>Anteckningar innehåller ofta detaljer som bara är menade för kollegor. Ett kalenderflöde lämnar ut allt det innehåller till den kalendertjänst var och en prenumererar från, till exempel Google eller Microsoft.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_exclude">
+                <source>planner.calendar_feed.comments_exclude</source>
+                <target>Utelämna</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_include">
+                <source>planner.calendar_feed.comments_include</source>
+                <target>Ta med</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_user">
+                <source>planner.calendar_feed.comments_user</source>
+                <target>Låt var och en välja för sitt eget flöde</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.comments_user_help">
+                <source>planner.calendar_feed.comments_user_help</source>
+                <target>Var och en kan då slå på eller av anteckningar i sitt eget flöde, med valet ovan som utgångsläge.</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.hash">
+                <source>planner.calendar_feed.hash</source>
+                <target>Spara flödesadresser hashade</target>
+            </trans-unit>
+            <trans-unit id="planner.calendar_feed.hash_help">
+                <source>planner.calendar_feed.hash_help</source>
+                <target>En läckt databaskopia avslöjar då ingen fungerande flödesadress. En adress visas bara en gång, direkt när den skapas: den som tappar bort sin förnyar den och prenumererar igen. Befintliga adresser hashas nästa gång en kalender hämtar dem.</target>
             </trans-unit>
             <trans-unit id="planner.tentative">
                 <source>planner.tentative</source>

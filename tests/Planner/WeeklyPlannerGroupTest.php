@@ -27,8 +27,9 @@ class WeeklyPlannerGroupTest extends TestCase
     {
         $days = [];
         $monday = new \DateTimeImmutable('2026-10-19');
+        // a working week: eight hours Monday to Friday, the weekend off
         for ($i = 0; $i < 7; ++$i) {
-            $days[] = new WeeklyPlannerDay($monday->modify('+' . $i . ' day'));
+            $days[] = new WeeklyPlannerDay($monday->modify('+' . $i . ' day'), $i < 5 ? 8.0 : 0.0);
         }
 
         return $days;
@@ -119,6 +120,22 @@ class WeeklyPlannerGroupTest extends TestCase
         $this->assertSame(6.0, $group->getPlannedHours($this->createWeek()));
     }
 
+    public function testJoinableAfterFindsTheNextPartOfTheSamePlanning(): void
+    {
+        $customer = new Customer('ACME');
+        $first = $this->createActivity('2026-10-19', '2026-10-20')->setCustomer($customer);
+        $second = $this->createActivity('2026-10-21', '2026-10-22')->setCustomer($customer);
+        $other = $this->createActivity('2026-10-21', '2026-10-21', 2.0)->setCustomer($customer);
+
+        $group = WeeklyPlannerGroup::createFor($first);
+        foreach ([$first, $other, $second] as $activity) {
+            $group->addActivity($activity);
+        }
+
+        $this->assertSame($second, $group->getJoinableAfter($first));
+        $this->assertNull($group->getJoinableAfter($second));
+    }
+
     public function testTentativeHoursAreCountedApart(): void
     {
         $confirmed = $this->createActivity('2026-10-19', '2026-10-20', 4.0);
@@ -161,5 +178,23 @@ class WeeklyPlannerGroupTest extends TestCase
 
         $work = $this->createActivity('2026-10-19', '2026-10-19')->setCustomer(new Customer('ACME'));
         $this->assertFalse(WeeklyPlannerGroup::createFor($work)->isTimeOff());
+    }
+
+    public function testTheSameProjectPlannedTwiceOnADayIsMarked(): void
+    {
+        $customer = new Customer('ACME');
+        $week = $this->createActivity('2026-10-19', '2026-10-23')->setCustomer($customer);
+        $extra = $this->createActivity('2026-10-21', '2026-10-21', 2.0)->setCustomer($customer);
+        $tentative = $this->createActivity('2026-10-22', '2026-10-22', 2.0)->setCustomer($customer)->setTentative(true);
+
+        $group = WeeklyPlannerGroup::createFor($week);
+        foreach ([$week, $extra, $tentative] as $activity) {
+            $group->addActivity($activity);
+        }
+
+        $this->assertTrue($group->isPlannedTwiceOn(new \DateTimeImmutable('2026-10-21')));
+        $this->assertFalse($group->isPlannedTwiceOn(new \DateTimeImmutable('2026-10-20')));
+        // confirmed and tentative work side by side is a reasonable combination, not a slip
+        $this->assertFalse($group->isPlannedTwiceOn(new \DateTimeImmutable('2026-10-22')));
     }
 }

@@ -1,0 +1,93 @@
+{% extends 'page_setup.html.twig' %}
+
+{% block main %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">{{ 'planner.calendar.title'|trans }}</h3>
+        </div>
+        <div class="card-body">
+            <p>{{ 'planner.calendar.intro'|trans }}</p>
+            {% if feedUrl %}
+                {% if shownOnce %}
+                    <div class="alert alert-warning">{{ 'planner.calendar.shown_once'|trans }}</div>
+                {% endif %}
+                <div class="input-group mb-2">
+                    <input type="text" class="form-control" id="planner-calendar-url" value="{{ feedUrl }}" readonly aria-label="{{ 'planner.calendar.title'|trans }}">
+                    <button type="button" class="btn" id="planner-calendar-copy" data-copied="{{ 'planner.calendar.copied'|trans }}">
+                        {{ icon('copy', true) }}{{ 'planner.calendar.copy'|trans }}
+                    </button>
+                </div>
+                <p class="text-muted small">{{ 'planner.calendar.secret'|trans }}</p>
+                <h4 class="mt-4">{{ 'planner.calendar.howto'|trans }}</h4>
+                <ul>
+                    <li>{{ 'planner.calendar.howto_google'|trans }}</li>
+                    <li>{{ 'planner.calendar.howto_outlook'|trans }}</li>
+                    <li>{{ 'planner.calendar.howto_apple'|trans }}</li>
+                </ul>
+            {% elseif hasFeed %}
+                <div class="alert alert-info">{{ 'planner.calendar.hidden'|trans }}</div>
+            {% endif %}
+        </div>
+        <form method="post" action="{{ path('planner_calendar_update') }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('planner_calendar') }}">
+            {% if canChooseComments %}
+                <div class="card-body border-top">
+                    <label class="form-check form-switch mb-1">
+                        <input class="form-check-input" type="checkbox" name="include_comments" value="1"{% if includeComments %} checked{% endif %}>
+                        <span class="form-check-label">{{ 'planner.calendar.include_comments'|trans }}</span>
+                    </label>
+                    <div class="form-hint">{{ 'planner.calendar_feed.comments_help'|trans }}</div>
+                </div>
+            {% endif %}
+            <div class="card-footer d-flex gap-2">
+                {% if hasFeed %}
+                    {% if canChooseComments %}
+                        <button type="submit" name="action" value="save" class="btn btn-primary">
+                            {{ icon('save', true) }}{{ 'action.save'|trans }}
+                        </button>
+                    {% endif %}
+                    <button type="submit" name="action" value="reset" class="btn" data-confirm="{{ 'planner.calendar.renew_confirm'|trans }}">
+                        {{ icon('repeat', true) }}{{ 'planner.calendar.renew'|trans }}
+                    </button>
+                    <button type="submit" name="action" value="remove" class="btn btn-ghost-danger" data-confirm="{{ 'planner.calendar.remove_confirm'|trans }}">
+                        {{ icon('delete', true) }}{{ 'planner.calendar.remove'|trans }}
+                    </button>
+                {% else %}
+                    <button type="submit" name="action" value="reset" class="btn btn-primary">
+                        {{ icon('create', true) }}{{ 'planner.calendar.create'|trans }}
+                    </button>
+                {% endif %}
+                <a href="{{ path('planner') }}" class="btn btn-link ms-auto">{{ 'planner.title'|trans }}</a>
+            </div>
+        </form>
+    </div>
+    <script>
+        (function () {
+            // the old address stops working, so renewing and switching off ask first
+            document.querySelectorAll('button[data-confirm]').forEach(function (button) {
+                button.addEventListener('click', function (e) {
+                    if (!window.confirm(button.dataset.confirm)) {
+                        e.preventDefault();
+                    }
+                });
+            });
+
+            const copy = document.getElementById('planner-calendar-copy');
+            if (copy === null) {
+                return;
+            }
+            copy.addEventListener('click', function () {
+                const input = document.getElementById('planner-calendar-url');
+                input.select();
+                const done = function () {
+                    copy.lastChild.textContent = copy.dataset.copied;
+                };
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(input.value).then(done);
+                } else if (document.execCommand('copy')) {
+                    done();
+                }
+            });
+        })();
+    </script>
+{% endblock %}
