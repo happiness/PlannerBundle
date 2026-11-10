@@ -38,8 +38,12 @@ final class HolidayObservancesType extends AbstractType
     {
         $builder->addModelTransformer(new CallbackTransformer(
             static fn ($stored): array => HolidayCalendars::parseObservances($stored),
-            // null deletes the setting
-            static fn ($keys): ?string => \is_array($keys) && $keys !== [] ? implode(',', $keys) : null
+            static function ($keys): ?string {
+                $keys = \is_array($keys) ? array_filter($keys, '\is_string') : [];
+
+                // null deletes the setting
+                return $keys !== [] ? implode(',', $keys) : null;
+            }
         ));
     }
 

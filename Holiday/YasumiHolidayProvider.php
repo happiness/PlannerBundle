@@ -106,7 +106,7 @@ final class YasumiHolidayProvider implements HolidayProviderInterface
         $calendarName = $this->calendars->getCalendarName($calendar, $locale);
 
         $days = [];
-        foreach ($this->calendars->createProvider($calendar, $year, $locale) ?? [] as $holiday) {
+        foreach ($this->calendars->createProvider($calendar, $year, $locale)?->getHolidays() ?? [] as $holiday) {
             if (!$this->isDayOff($holiday, $observances)) {
                 continue;
             }

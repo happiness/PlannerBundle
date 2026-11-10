@@ -59,8 +59,8 @@ final class PublicHolidayController extends BaseApiController
     #[Rest\QueryParam(name: 'end', requirements: [new Constraints\DateTime(format: 'Y-m-d', message: 'This value is not a valid date, expected format: Y-m-d (2026-10-19).')], strict: true, nullable: false, description: 'Last day, at most one year after the first. Format: Y-m-d')]
     public function cgetAction(ParamFetcherInterface $paramFetcher): Response
     {
-        $begin = new \DateTimeImmutable((string) $paramFetcher->get('begin'));
-        $end = new \DateTimeImmutable((string) $paramFetcher->get('end'));
+        $begin = $this->getDate($paramFetcher, 'begin');
+        $end = $this->getDate($paramFetcher, 'end');
 
         if ($end < $begin) {
             throw new BadRequestHttpException('The end must not be before the begin');
@@ -95,5 +95,18 @@ final class PublicHolidayController extends BaseApiController
         }
 
         return $this->viewHandler->handle(new View($result, Response::HTTP_OK));
+    }
+
+    /**
+     * The route already checks the format; this only narrows the fetched value to the string it is.
+     */
+    private function getDate(ParamFetcherInterface $paramFetcher, string $name): \DateTimeImmutable
+    {
+        $value = $paramFetcher->get($name);
+        if (!\is_string($value) || $value === '') {
+            throw new BadRequestHttpException(\sprintf('The "%s" parameter is required, format: Y-m-d', $name));
+        }
+
+        return new \DateTimeImmutable($value);
     }
 }

@@ -13,6 +13,7 @@ namespace KimaiPlugin\PlannerBundle\Holiday;
 
 use Symfony\Component\Intl\Countries;
 use Yasumi\Holiday;
+use Yasumi\ProviderInterface;
 use Yasumi\Yasumi;
 
 /**
@@ -98,7 +99,7 @@ class HolidayCalendars
         $countries = [];
         foreach (array_keys(Yasumi::getProviders()) as $code) {
             for ($y = $year; $y <= $year + 1; $y++) {
-                foreach ($this->createProvider($code, $y, $locale) ?? [] as $holiday) {
+                foreach ($this->createProvider($code, $y, $locale)?->getHolidays() ?? [] as $holiday) {
                     if ($holiday->getType() !== Holiday::TYPE_OBSERVANCE) {
                         continue;
                     }
@@ -148,9 +149,9 @@ class HolidayCalendars
     /**
      * Creates the Yasumi provider for a calendar, with the holiday names in the closest language Yasumi has.
      *
-     * @return iterable<Holiday>|null null for an unknown calendar or year
+     * @return ProviderInterface|null null for an unknown calendar or year
      */
-    public function createProvider(string $code, int $year, string $locale): ?iterable
+    public function createProvider(string $code, int $year, string $locale): ?ProviderInterface
     {
         try {
             return Yasumi::createByISO3166_2($code, $year, $this->getYasumiLocale($code, $locale));

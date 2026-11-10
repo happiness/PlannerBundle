@@ -59,7 +59,7 @@ class HolidayCalendarsTest extends TestCase
     public function testEnglishReadersOfAnEnglishCalendarGetTheLocalName(): void
     {
         $names = [];
-        foreach ((new HolidayCalendars())->createProvider('GB-ENG', 2026, 'en') ?? [] as $holiday) {
+        foreach ((new HolidayCalendars())->createProvider('GB-ENG', 2026, 'en')?->getHolidays() ?? [] as $holiday) {
             $names[$holiday->getKey()] = HolidayCalendars::getHolidayName($holiday);
         }
 
@@ -69,7 +69,7 @@ class HolidayCalendarsTest extends TestCase
     public function testMissingTranslationFallsBackToTheCountrysLanguage(): void
     {
         $names = [];
-        foreach ((new HolidayCalendars())->createProvider('SE', 2026, 'en') ?? [] as $holiday) {
+        foreach ((new HolidayCalendars())->createProvider('SE', 2026, 'en')?->getHolidays() ?? [] as $holiday) {
             $names[$holiday->getKey()] = HolidayCalendars::getHolidayName($holiday);
         }
 
@@ -81,7 +81,7 @@ class HolidayCalendarsTest extends TestCase
     public function testTheCalendarsCountryVariantWinsOverTheReadersRegion(): void
     {
         $names = [];
-        foreach ((new HolidayCalendars())->createProvider('DE', 2026, 'de_AT') ?? [] as $holiday) {
+        foreach ((new HolidayCalendars())->createProvider('DE', 2026, 'de_AT')?->getHolidays() ?? [] as $holiday) {
             $names[$holiday->getKey()] = HolidayCalendars::getHolidayName($holiday);
         }
 
