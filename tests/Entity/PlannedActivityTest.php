@@ -15,6 +15,7 @@ use App\Entity\Customer;
 use App\Entity\Project;
 use App\Entity\User;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Entity\Reservation;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
 use Symfony\Component\Validator\Violation\ConstraintViolationBuilderInterface;
@@ -209,5 +210,90 @@ class PlannedActivityTest extends TestCase
 
         (new PlannedActivity())->setTimeOff(true)->setHoursPerDay(null)->validateRequiredFields($context);
         (new PlannedActivity())->setCustomer(new Customer('ACME'))->validateRequiredFields($context);
+    }
+
+    private static function reservation(string $name, ?string $color = null): Reservation
+    {
+        $reservation = (new Reservation())->setName($name);
+        $reservation->setColor($color);
+
+        return $reservation;
+    }
+
+    public function testReservationDropsCustomerProjectTimeOffAndTentative(): void
+    {
+        $customer = new Customer('ACME');
+        $activity = (new PlannedActivity())->setCustomer($customer)->setTitle('Legacy')->setTentative(true);
+        $activity->setColor('#123456');
+        $this->assertTrue($activity->isProjectWork());
+
+        $buffer = self::reservation('Agency buffer', '#ff0000');
+        $activity->setReservation($buffer);
+
+        $this->assertSame($buffer, $activity->getReservation());
+        $this->assertFalse($activity->isProjectWork());
+        $this->assertNull($activity->getCustomer());
+        $this->assertNull($activity->getTitle());
+        $this->assertFalse($activity->isTentative());
+        $this->assertNull($activity->getColor());
+        $this->assertSame('Agency buffer', $activity->getName());
+        // its bars take the reservation's colour
+        $this->assertSame('#ff0000', $activity->getColorSafe());
+
+        // never tentative, and time off takes its place
+        $activity->setTentative(true);
+        $this->assertFalse($activity->isTentative());
+        $activity->setTimeOff(true);
+        $this->assertNull($activity->getReservation());
+    }
+
+    public function testReservationNeedsNoCustomerButHours(): void
+    {
+        $violations = [];
+        $context = $this->createMock(ExecutionContextInterface::class);
+        $context->method('buildViolation')->willReturnCallback(function (string $message) use (&$violations): ConstraintViolationBuilderInterface {
+            $builder = $this->createMock(ConstraintViolationBuilderInterface::class);
+            $builder->method('atPath')->willReturnCallback(static function (string $path) use (&$violations, $builder): ConstraintViolationBuilderInterface {
+                $violations[] = $path;
+
+                return $builder;
+            });
+            $builder->method('setTranslationDomain')->willReturnSelf();
+
+            return $builder;
+        });
+
+        (new PlannedActivity())->setReservation(self::reservation('Buffer'))->setHoursPerDay(null)->validateRequiredFields($context);
+
+        $this->assertSame(['hoursPerDay'], $violations);
+    }
+
+    public function testCopyPlanningToCopiesEverythingButTheDates(): void
+    {
+        $user = new User();
+        $buffer = self::reservation('Buffer');
+        $source = (new PlannedActivity())
+            ->setUser($user)
+            ->setReservation($buffer)
+            ->setHoursPerDay(1.5)
+            ->setComment('Daily')
+            ->setRecurrenceGroup('series')
+            ->setBegin(new \DateTime('2026-11-02'))
+            ->setEnd(new \DateTime('2026-11-06'));
+
+        $copy = $source->copyPlanningTo(new PlannedActivity());
+
+        $this->assertSame($user, $copy->getUser());
+        $this->assertSame($buffer, $copy->getReservation());
+        $this->assertSame(1.5, $copy->getHoursPerDay());
+        $this->assertSame('Daily', $copy->getComment());
+        $this->assertNull($copy->getRecurrenceGroup());
+        $this->assertNotSame('2026-11-02', $copy->getBegin()?->format('Y-m-d'));
+
+        $tentative = (new PlannedActivity())->setCustomer(new Customer('ACME'))->setTentative(true);
+        $tentative->setColor('#123456');
+        $copy = $tentative->copyPlanningTo(new PlannedActivity());
+        $this->assertTrue($copy->isTentative());
+        $this->assertSame('#123456', $copy->getColor());
     }
 }

@@ -47,11 +47,13 @@ var/plugins/PlannerBundle/
 │   ├── PlannedActivityController.php # REST API (GET/POST/PATCH/DELETE /api/planner/activities)
 │   └── PublicHolidayController.php   # REST API (GET /api/planner/holidays)
 ├── Controller/
+│   ├── ReservationController.php      # Administration > Reserved time: list, create, edit, archive, delete, order
 │   └── WeeklyPlannerController.php    # Weekly planner routes, week switching, modal CRUD actions
 ├── DependencyInjection/
 │   └── PlannerExtension.php          # Container configuration (prepends roles, sets, views)
 ├── Entity/
-│   └── PlannedActivity.php           # Planned time block entity (user, customer, project, date range, daily hours, comments, color)
+│   ├── PlannedActivity.php           # Planned time block entity (user, customer, project, date range, daily hours, comments, color)
+│   └── Reservation.php               # Reserved time: name, colour, archived, position (kimai2_planner_reservations)
 ├── EventSubscriber/
 │   ├── HolidayPreferenceSubscriber.php # Per-user holiday calendar preference (contract permission)
 │   ├── HolidaySettingsSubscriber.php # System settings: default holiday calendar, observance days off
@@ -60,6 +62,7 @@ var/plugins/PlannerBundle/
 ├── Form/
 │   ├── PlannedActivityEditForm.php    # Modal form for creating/editing planned activities
 │   ├── PlannedActivityApiForm.php     # API variant: ISO dates, no CSRF
+│   ├── ReservationForm.php            # Name and colour of a reservation
 │   └── Type/                          # HolidayCalendarType (+Preference), HolidayObservancesType (settings and preference fields)
 ├── Holiday/
 │   ├── HolidayProviderInterface.php   # Which public holidays a user has off; decorate it to replace the source
@@ -71,7 +74,8 @@ var/plugins/PlannerBundle/
 │   ├── Version20260909000000.php      # Initial planner schema (kimai2_planned_activities table)
 │   ├── Version20260914000000.php      # Schema updates (recurring activities support)
 │   ├── Version20261019000000.php      # customer_id/project_id columns, title becomes nullable
-│   └── Version20261102120000.php      # tentative flag
+│   ├── Version20261102120000.php      # tentative flag
+│   └── Version20261111000000.php      # kimai2_planner_reservations and the reservation_id foreign key
 ├── Planner/
 │   ├── PlannerUserProvider.php        # Resolves which users' plans the current user may see (web + API)
 │   ├── TentativeConfirmer.php         # "Confirm all for this project": ongoing/future tentative plans the user may edit (web + API)
@@ -83,7 +87,8 @@ var/plugins/PlannerBundle/
 │   ├── WeeklyPlannerGroup.php         # One user's activities for one customer/project; builds merged day segments (one sub-row in the grid)
 │   └── WeeklyPlannerDay.php           # Daily metrics (planned hours, actual hours, contract hours, status)
 ├── Repository/
-│   └── PlannedActivityRepository.php  # PlannedActivity queries (date ranges, user filtering)
+│   ├── PlannedActivityRepository.php  # PlannedActivity queries (date ranges, user filtering)
+│   └── ReservationRepository.php      # Reservations in order, the selectable ones, planning counts, reordering
 ├── Resources/
 │   ├── config/
 │   │   ├── routes.yaml                # Plugin route definitions (/planner, /planner/week/{date}, etc.)
@@ -149,7 +154,12 @@ var/plugins/PlannerBundle/
    - The preference is only enabled for those granted `contract` on the user. Core renders a disabled preference as a `HiddenType` with the same options, so a preference must not pass options only its own form type knows: that is why `HolidayCalendarPreferenceType` exists instead of an option on `HolidayCalendarType`.
    - Names come in the current request language, preferring the calendar's country variant (`en_GB` for an English reader of `GB-ENG`, so "Boxing Day"). Where Yasumi has no translation it would return the key, so `HolidayCalendars::getHolidayName()` falls back to any translation it has.
    - The template marks holiday cells with `planner-holiday` (striped tint) on every row of that user; the day summary cell shows the name truncated, with name and calendar in the tooltip.
-10. **Isolated Database Migrations**:
+10. **Reserved Time**:
+   - `PlannedActivity::$reservation` is a ManyToOne to `Reservation` (`reservation_id`, `onDelete: RESTRICT`): one with planning can only be archived. `isProjectWork()` (neither time off nor reserved time) is the one check for "has a customer, project, title and tentative state": validation asks for a customer only then, tentative only exists then, and `clearProjectWork()` drops those fields for both time off and reservations. `setReservation()` also drops colour and time off; `setTimeOff(true)` drops the reservation. `getName()` and `getColorSafe()` fall back to the reservation, so templates, the delete dialog and feeds need no special case.
+   - `copyPlanningTo()` copies every field but dates and recurrence group; the repository's split, repeat and "all future" code use it instead of their own setter lists.
+   - The form adds a `reservation` ChoiceType (Reservation objects, value = ID) when there are selectable reservations or the planning already has one (kept even when archived). It is mapped after customer and project and before `timeOff`, and the POST_SUBMIT listener re-applies it, like time off. JS hides `.planner-project-field` (customer, project, colour, tentative, suggestions) while one is chosen.
+   - `WeeklyPlannerGroup` keys reservations as `r<id>`; `WeeklyPlannerUserRow::getGroups()` sorts time off, then customers and projects, then reservations by position. Rows of reservations that are not archived carry `data-reservation-id`, which click/drag-create (`reservation` query parameter) and move (`reservation` POST field, 400 unless selectable) use; a drop on a project row clears the reservation.
+11. **Isolated Database Migrations**:
    - Always run and test migrations using the bundle's dedicated configuration file:
      `bin/console doctrine:migrations:migrate --configuration=var/plugins/PlannerBundle/Migrations/doctrine_migrations.yaml --no-interaction`
 

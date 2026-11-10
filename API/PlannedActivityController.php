@@ -24,6 +24,7 @@ use KimaiPlugin\PlannerBundle\Form\PlannedActivityApiForm;
 use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
 use KimaiPlugin\PlannerBundle\Planner\TentativeConfirmer;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
+use KimaiPlugin\PlannerBundle\Repository\ReservationRepository;
 use KimaiPlugin\PlannerBundle\Voter\PlannedActivityVoter;
 use Nelmio\ApiDocBundle\Attribute\Model;
 use OpenApi\Attributes as OA;
@@ -61,7 +62,8 @@ final class PlannedActivityController extends BaseApiController
     #[Rest\QueryParam(name: 'begin', requirements: [new Constraints\DateTime(format: 'Y-m-d', message: 'This value is not a valid date, expected format: Y-m-d (2026-10-19).')], strict: true, nullable: true, description: 'Only activities ending on or after this day are returned. Format: Y-m-d')]
     #[Rest\QueryParam(name: 'end', requirements: [new Constraints\DateTime(format: 'Y-m-d', message: 'This value is not a valid date, expected format: Y-m-d (2026-10-19).')], strict: true, nullable: true, description: 'Only activities beginning on or before this day are returned. Format: Y-m-d')]
     #[Rest\QueryParam(name: 'tentative', requirements: '0|1', strict: true, nullable: true, description: 'Pass 1 for tentative activities only, 0 for confirmed ones only (default: both)')]
-    public function cgetAction(ParamFetcherInterface $paramFetcher, CustomerRepository $customerRepository, ProjectRepository $projectRepository): Response
+    #[Rest\QueryParam(name: 'reservations', map: true, requirements: '\d+', strict: true, nullable: true, default: [], description: 'List of reservation IDs (reserved time) to filter, e.g.: reservations[]=1&reservations[]=2')]
+    public function cgetAction(ParamFetcherInterface $paramFetcher, CustomerRepository $customerRepository, ProjectRepository $projectRepository, ReservationRepository $reservationRepository): Response
     {
         /** @var User $currentUser */
         $currentUser = $this->getUser();
@@ -90,6 +92,11 @@ final class PlannedActivityController extends BaseApiController
             }
         }
 
+        // reserved time is shared by the whole planner, everyone who sees the planner may filter by it
+        /** @var array<int|string> $reservationIds */
+        $reservationIds = $paramFetcher->get('reservations');
+        $reservations = $reservationIds === [] ? [] : $reservationRepository->findBy(['id' => array_unique(array_map('intval', $reservationIds))]);
+
         $begin = $paramFetcher->get('begin');
         $end = $paramFetcher->get('end');
         $tentative = $paramFetcher->get('tentative');
@@ -100,7 +107,8 @@ final class PlannedActivityController extends BaseApiController
             \is_string($end) && $end !== '' ? new \DateTimeImmutable($end) : null,
             $customers,
             $projects,
-            \is_string($tentative) && $tentative !== '' ? $tentative === '1' : null
+            \is_string($tentative) && $tentative !== '' ? $tentative === '1' : null,
+            $reservations
         );
 
         $view = new View($activities, Response::HTTP_OK);

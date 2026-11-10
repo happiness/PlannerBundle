@@ -82,7 +82,7 @@ final class WeeklyPlannerUserRow
     }
 
     /**
-     * Activities grouped by customer/project, ordered by customer and project name, with time off first.
+     * Activities grouped by customer/project or reservation, ordered as sortKey() says.
      *
      * @return array<WeeklyPlannerGroup>
      */
@@ -95,9 +95,23 @@ final class WeeklyPlannerUserRow
             $groups[$key]->addActivity($activity);
         }
 
-        uasort($groups, static fn (WeeklyPlannerGroup $a, WeeklyPlannerGroup $b): int => [!$a->isTimeOff(), $a->getCustomerName(), $a->getProjectName() ?? ''] <=> [!$b->isTimeOff(), $b->getCustomerName(), $b->getProjectName() ?? '']);
+        uasort($groups, static fn (WeeklyPlannerGroup $a, WeeklyPlannerGroup $b): int => self::sortKey($a) <=> self::sortKey($b));
 
         return array_values($groups);
+    }
+
+    /**
+     * Time off first, then customers and projects by name, then reserved time in the order the admin set: it holds
+     * standing time, which matters less at a glance than the project work.
+     *
+     * @return array{int, int, string, string}
+     */
+    private static function sortKey(WeeklyPlannerGroup $group): array
+    {
+        $reservation = $group->getReservation();
+        $kind = $group->isTimeOff() ? 0 : ($reservation !== null ? 2 : 1);
+
+        return [$kind, $reservation?->getPosition() ?? 0, $group->getCustomerName(), $group->getProjectName() ?? ''];
     }
 
     public function getTotalExpectedHours(): float

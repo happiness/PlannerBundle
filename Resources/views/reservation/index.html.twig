@@ -1,0 +1,88 @@
+{% extends 'page_setup.html.twig' %}
+
+{% block main %}
+    <div class="page-header d-print-none mb-3">
+        <div class="row align-items-center">
+            <div class="col">
+                <div class="page-pretitle">{{ 'planner.title'|trans }}</div>
+                <h2 class="page-title">{{ 'planner.reservations'|trans }}</h2>
+            </div>
+            <div class="col-auto ms-auto">
+                <a href="{{ path('planner_reservation_create') }}" class="btn btn-primary modal-ajax-form">
+                    {{ icon('create', true) }}{{ 'planner.reservation.create'|trans }}
+                </a>
+            </div>
+        </div>
+    </div>
+
+
+    <p class="text-secondary">{{ 'planner.reservation.intro'|trans }}</p>
+
+    <div class="card">
+        {% if reservations is empty %}
+            <div class="card-body text-secondary">{{ 'planner.reservation.none'|trans }}</div>
+        {% else %}
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table">
+                    <thead>
+                        <tr>
+                            <th class="w-1"></th>
+                            <th>{{ 'name'|trans }}</th>
+                            <th class="text-end">{{ 'planner.reservation.plannings'|trans }}</th>
+                            <th>{{ 'status'|trans }}</th>
+                            <th class="w-1 text-end">{{ 'actions'|trans }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for reservation in reservations %}
+                            {% set count = plannings[reservation.id] ?? 0 %}
+                            <tr{% if reservation.archived %} class="text-secondary"{% endif %}>
+                                <td><span class="avatar avatar-xs rounded" style="background-color: {{ reservation.colorSafe }}" aria-hidden="true"></span></td>
+                                <td>
+                                    <a href="{{ path('planner_reservation_edit', {id: reservation.id}) }}" class="modal-ajax-form{% if reservation.archived %} text-secondary{% endif %}">{{ reservation.name }}</a>
+                                </td>
+                                <td class="text-end">{{ count }}</td>
+                                <td>
+                                    {% if reservation.archived %}
+                                        <span class="badge" title="{{ 'planner.reservation.archived_help'|trans }}">{{ 'planner.reservation.archived'|trans }}</span>
+                                    {% else %}
+                                        <span class="badge bg-green-lt">{{ 'planner.reservation.active'|trans }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end text-nowrap">
+                                    <div class="btn-list flex-nowrap justify-content-end">
+                                        {% for direction in ['up', 'down'] %}
+                                            {% set disabled = (direction == 'up' and loop.parent.loop.first) or (direction == 'down' and loop.parent.loop.last) %}
+                                            <form method="post" action="{{ path('planner_reservation_move', {id: reservation.id, direction: direction}) }}" class="d-inline">
+                                                <input type="hidden" name="_token" value="{{ csrf_token(token) }}">
+                                                <button type="submit" class="btn btn-sm btn-icon btn-ghost-secondary"{% if disabled %} disabled{% endif %} title="{{ ('planner.reservation.move_' ~ direction)|trans }}" aria-label="{{ ('planner.reservation.move_' ~ direction)|trans }}"><i class="fas fa-arrow-{{ direction }}" aria-hidden="true"></i></button>
+                                            </form>
+                                        {% endfor %}
+                                        <a href="{{ path('planner_reservation_edit', {id: reservation.id}) }}" class="btn btn-sm modal-ajax-form">{{ 'action.edit'|trans }}</a>
+                                        <form method="post" action="{{ path('planner_reservation_archive', {id: reservation.id}) }}" class="d-inline">
+                                            <input type="hidden" name="_token" value="{{ csrf_token(token) }}">
+                                            <button type="submit" class="btn btn-sm" title="{{ (reservation.archived ? 'planner.reservation.restore_help' : 'planner.reservation.archive_help')|trans({'%count%': count}) }}">
+                                                {{ (reservation.archived ? 'planner.reservation.restore' : 'planner.reservation.archive')|trans }}
+                                            </button>
+                                        </form>
+                                        <form method="post" action="{{ path('planner_reservation_delete', {id: reservation.id}) }}" class="d-inline">
+                                            <input type="hidden" name="_token" value="{{ csrf_token(token) }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger"{% if count > 0 %} disabled title="{{ 'planner.reservation.delete_in_use'|trans }}"{% endif %}>{{ 'action.delete'|trans }}</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script>
+        document.addEventListener('kimai.plannerReservationUpdate', function () { window.location.reload(); });
+    </script>
+{% endblock %}

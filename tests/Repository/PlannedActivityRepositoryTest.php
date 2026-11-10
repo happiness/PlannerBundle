@@ -20,6 +20,7 @@ use Doctrine\ORM\Query;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Entity\Reservation;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use PHPUnit\Framework\TestCase;
 
@@ -589,7 +590,7 @@ class PlannedActivityRepositoryTest extends TestCase
         $repository = $this->createRepository($em);
 
         $project = new Project();
-        $result = $repository->findByFilter([new User()], new \DateTime('2026-10-01'), new \DateTime('2026-10-31'), [new Customer('ACME')], [$project], true);
+        $result = $repository->findByFilter([new User()], new \DateTime('2026-10-01'), new \DateTime('2026-10-31'), [new Customer('ACME')], [$project], true, [(new Reservation())->setName('Buffer')]);
 
         $this->assertSame([$activity], $result);
         $this->assertSame([
@@ -598,6 +599,7 @@ class PlannedActivityRepositoryTest extends TestCase
             'p.customer IN (:customers)',
             'p.project IN (:projects)',
             'p.tentative = :tentative',
+            'p.reservation IN (:reservations)',
         ], $conditions);
     }
 

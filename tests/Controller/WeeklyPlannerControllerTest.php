@@ -19,6 +19,7 @@ use App\Repository\BookmarkRepository;
 use App\Repository\UserRepository;
 use KimaiPlugin\PlannerBundle\Controller\WeeklyPlannerController;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Entity\Reservation;
 use KimaiPlugin\PlannerBundle\Planner\PlannerUserProvider;
 use KimaiPlugin\PlannerBundle\Planner\TentativeConfirmation;
 use KimaiPlugin\PlannerBundle\Planner\TentativeConfirmer;
@@ -26,6 +27,7 @@ use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerData;
 use KimaiPlugin\PlannerBundle\Planner\WeeklyPlannerService;
 use KimaiPlugin\PlannerBundle\Repository\PlannedActivityRepository;
 use KimaiPlugin\PlannerBundle\Repository\Query\PlannerQuery;
+use KimaiPlugin\PlannerBundle\Repository\ReservationRepository;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Form\FormFactoryInterface;
@@ -62,7 +64,7 @@ class WeeklyPlannerControllerTest extends TestCase
             ->method('getPlannerData')
             ->willReturn($plannerData);
 
-        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class), $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturn(false);
@@ -120,7 +122,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $userProvider = $this->createMock(PlannerUserProvider::class);
         $userProvider->method('getVisibleUsers')->with($user)->willReturn([$user]);
 
-        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $userProvider);
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $userProvider, $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturn(false);
@@ -200,7 +202,7 @@ class WeeklyPlannerControllerTest extends TestCase
             ->method('getPlannerData')
             ->willReturn($plannerData);
 
-        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class), $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturn(false);
@@ -257,7 +259,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
 
-        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class), $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturn(true);
@@ -325,7 +327,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
 
-        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class), $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturn(true);
@@ -391,7 +393,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
 
-        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class), $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturn(true);
@@ -465,7 +467,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
 
-        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class), $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturn(true);
@@ -526,7 +528,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
 
-        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class), $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturn(true);
@@ -598,7 +600,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
 
-        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class), $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturn(true);
@@ -673,7 +675,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
 
-        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class), $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturn(true);
@@ -748,7 +750,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
 
-        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class), $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturn(true);
@@ -819,7 +821,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
 
-        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class), $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturn(true);
@@ -895,7 +897,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
 
-        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class), $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturn(true);
@@ -958,7 +960,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
 
-        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class), $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturn(true);
@@ -1040,7 +1042,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
 
-        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class), $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturn(true);
@@ -1123,7 +1125,7 @@ class WeeklyPlannerControllerTest extends TestCase
         $plannerService = $this->createMock(WeeklyPlannerService::class);
         $userRepo = $this->createMock(UserRepository::class);
 
-        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo, $plannerService, $userRepo, $this->createMock(PlannerUserProvider::class), $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturn(true);
@@ -1215,7 +1217,8 @@ class WeeklyPlannerControllerTest extends TestCase
             $this->createMock(PlannedActivityRepository::class),
             $plannerService,
             $this->createMock(UserRepository::class),
-            $this->createMock(PlannerUserProvider::class)
+            $this->createMock(PlannerUserProvider::class),
+            $this->createStub(ReservationRepository::class)
         );
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
@@ -1318,7 +1321,8 @@ class WeeklyPlannerControllerTest extends TestCase
             $this->createMock(PlannedActivityRepository::class),
             $plannerService,
             $this->createMock(UserRepository::class),
-            $userProvider
+            $userProvider,
+            $this->createStub(ReservationRepository::class)
         );
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
@@ -1399,7 +1403,8 @@ class WeeklyPlannerControllerTest extends TestCase
             $this->createMock(PlannedActivityRepository::class),
             $plannerService,
             $this->createMock(UserRepository::class),
-            $this->createMock(PlannerUserProvider::class)
+            $this->createMock(PlannerUserProvider::class),
+            $this->createStub(ReservationRepository::class)
         );
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
@@ -1472,7 +1477,7 @@ class WeeklyPlannerControllerTest extends TestCase
      * @param array<string, string> $query
      * @param callable(PlannedActivity): void $assertions
      */
-    private function runCreateActivity(array $query, bool $accessGranted, ?PlannedActivityRepository $repo, callable $assertions): void
+    private function runCreateActivity(array $query, bool $accessGranted, ?PlannedActivityRepository $repo, callable $assertions, ?ReservationRepository $reservations = null): void
     {
         $user = new User();
         $ref = new \ReflectionProperty(User::class, 'id');
@@ -1480,7 +1485,7 @@ class WeeklyPlannerControllerTest extends TestCase
 
         $repo ??= $this->createMock(PlannedActivityRepository::class);
 
-        $controller = new WeeklyPlannerController($repo, $this->createMock(WeeklyPlannerService::class), $this->createMock(UserRepository::class), $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo, $this->createMock(WeeklyPlannerService::class), $this->createMock(UserRepository::class), $this->createMock(PlannerUserProvider::class), $reservations ?? $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturnCallback(static fn (string $attribute): bool => $attribute !== 'access' || $accessGranted);
@@ -1606,12 +1611,13 @@ class WeeklyPlannerControllerTest extends TestCase
         ?UserRepository $userRepo = null,
         bool $validToken = true,
         ?callable $isGranted = null,
-        int $violations = 0
+        int $violations = 0,
+        ?ReservationRepository $reservations = null
     ): JsonResponse {
         $repo ??= $this->createMock(PlannedActivityRepository::class);
         $userRepo ??= $this->createMock(UserRepository::class);
 
-        $controller = new WeeklyPlannerController($repo, $this->createMock(WeeklyPlannerService::class), $userRepo, $this->createMock(PlannerUserProvider::class));
+        $controller = new WeeklyPlannerController($repo, $this->createMock(WeeklyPlannerService::class), $userRepo, $this->createMock(PlannerUserProvider::class), $reservations ?? $this->createStub(ReservationRepository::class));
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
         $authChecker->method('isGranted')->willReturnCallback($isGranted ?? static fn (): bool => true);
@@ -1813,7 +1819,8 @@ class WeeklyPlannerControllerTest extends TestCase
             $this->createMock(PlannedActivityRepository::class),
             $this->createMock(WeeklyPlannerService::class),
             $this->createMock(UserRepository::class),
-            $this->createMock(PlannerUserProvider::class)
+            $this->createMock(PlannerUserProvider::class),
+            $this->createStub(ReservationRepository::class)
         );
 
         $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
@@ -1898,5 +1905,61 @@ class WeeklyPlannerControllerTest extends TestCase
         $this->expectException(AccessDeniedException::class);
 
         $this->runConfirmTentative(true, false, $confirmer);
+    }
+
+    /**
+     * @param array<int, Reservation> $byId
+     */
+    private function createReservations(array $byId): ReservationRepository
+    {
+        $repository = $this->createStub(ReservationRepository::class);
+        $repository->method('find')->willReturnCallback(static fn (mixed $id): ?Reservation => $byId[(int) $id] ?? null);
+
+        return $repository;
+    }
+
+    public function testClickInAReservationRowPlansThatReservation(): void
+    {
+        $buffer = (new Reservation())->setName('Agency buffer');
+        $old = (new Reservation())->setName('Old')->setArchived(true);
+        $reservations = $this->createReservations([3 => $buffer, 4 => $old]);
+
+        $this->runCreateActivity(['date' => '2026-10-19', 'reservation' => '3'], true, null, function (PlannedActivity $activity) use ($buffer): void {
+            $this->assertSame($buffer, $activity->getReservation());
+            $this->assertNull($activity->getCustomer());
+        }, $reservations);
+
+        // an archived one is no longer offered: the dialog opens empty
+        $this->runCreateActivity(['date' => '2026-10-19', 'reservation' => '4'], true, null, function (PlannedActivity $activity): void {
+            $this->assertNull($activity->getReservation());
+        }, $reservations);
+    }
+
+    public function testDropOnAReservationRowAndBackOnAProjectRow(): void
+    {
+        $buffer = (new Reservation())->setName('Agency buffer');
+        $reservations = $this->createReservations([3 => $buffer, 4 => (new Reservation())->setName('Old')->setArchived(true)]);
+        $activity = $this->createMovableActivity();
+        $activity->setCustomer(new Customer('ACME'));
+
+        $repo = $this->createMock(PlannedActivityRepository::class);
+        $repo->expects($this->exactly(2))->method('savePlannedActivity');
+        $customer = new Customer('Other');
+        (new \ReflectionProperty(Customer::class, 'id'))->setValue($customer, 9);
+        $repo->method('findCustomer')->willReturn($customer);
+
+        $response = $this->runMoveActivity($activity, ['begin' => '2026-10-19', 'end' => '2026-10-20', 'reservation' => '3'], $repo, null, true, null, 0, $reservations);
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame($buffer, $activity->getReservation());
+        $this->assertNull($activity->getCustomer());
+
+        // dropped on a project's row it is project work again
+        $this->runMoveActivity($activity, ['begin' => '2026-10-19', 'end' => '2026-10-20', 'customer' => '9'], $repo, null, true, null, 0, $reservations);
+        $this->assertNull($activity->getReservation());
+        $this->assertSame($customer, $activity->getCustomer());
+
+        // an archived reservation is not offered
+        $response = $this->runMoveActivity($activity, ['begin' => '2026-10-19', 'end' => '2026-10-20', 'reservation' => '4'], $repo, null, true, null, 0, $reservations);
+        $this->assertSame(400, $response->getStatusCode());
     }
 }

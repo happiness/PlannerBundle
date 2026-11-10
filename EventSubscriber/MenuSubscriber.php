@@ -31,6 +31,12 @@ final class MenuSubscriber implements EventSubscriberInterface
 
     public function onMenuConfigure(ConfigureMainMenuEvent $event): void
     {
+        if ($this->security->isGranted('manage_reservations_planner')) {
+            $reservations = new MenuItemModel('planner_reservations', 'planner.reservations', 'planner_reservations', [], 'fas fa-business-time');
+            $reservations->setChildRoutes(['planner_reservation_create', 'planner_reservation_edit']);
+            $event->getAdminMenu()->addChild($reservations);
+        }
+
         if (!$this->security->isGranted('view_planner')) {
             return;
         }

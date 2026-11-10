@@ -17,6 +17,7 @@ use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Entity\Reservation;
 
 /**
  * @extends ServiceEntityRepository<PlannedActivity>
@@ -114,16 +115,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $activity->setEnd(new \DateTime($firstEnd->format('Y-m-d')));
         $this->savePlannedActivity($activity);
 
-        $splitActivity = new PlannedActivity();
-        $splitActivity->setUser($activity->getUser());
-        $splitActivity->setCustomer($activity->getCustomer());
-        $splitActivity->setProject($activity->getProject());
-        $splitActivity->setTitle($activity->getTitle());
-        $splitActivity->setHoursPerDay($activity->getHoursPerDay());
-        $splitActivity->setTimeOff($activity->isTimeOff());
-        $splitActivity->setColor($activity->getColor());
-        $splitActivity->setComment($activity->getComment());
-        $splitActivity->setTentative($activity->isTentative());
+        $splitActivity = $activity->copyPlanningTo(new PlannedActivity());
         $splitActivity->setRecurrenceGroup($activity->getRecurrenceGroup());
         $splitActivity->setBegin(new \DateTime($secondBegin->format('Y-m-d')));
         $splitActivity->setEnd(new \DateTime($originalEnd->format('Y-m-d')));
@@ -201,15 +193,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
         $entityManager = $this->getEntityManager();
         foreach ($futureActivities as $future) {
             $this->shiftDates($future, $beginShift, $endShift);
-            $future->setUser($activity->getUser());
-            $future->setCustomer($activity->getCustomer());
-            $future->setProject($activity->getProject());
-            $future->setTitle($activity->getTitle());
-            $future->setHoursPerDay($activity->getHoursPerDay());
-            $future->setTimeOff($activity->isTimeOff());
-            $future->setColor($activity->getColor());
-            $future->setComment($activity->getComment());
-            $future->setTentative($activity->isTentative());
+            $activity->copyPlanningTo($future);
             $entityManager->persist($future);
         }
         $entityManager->flush();
@@ -260,16 +244,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
 
         $created = [];
         for ($i = 1; $i <= $weeks; $i++) {
-            $recurring = new PlannedActivity();
-            $recurring->setUser($activity->getUser());
-            $recurring->setCustomer($activity->getCustomer());
-            $recurring->setProject($activity->getProject());
-            $recurring->setTitle($activity->getTitle());
-            $recurring->setHoursPerDay($activity->getHoursPerDay());
-            $recurring->setTimeOff($activity->isTimeOff());
-            $recurring->setColor($activity->getColor());
-            $recurring->setComment($activity->getComment());
-            $recurring->setTentative($activity->isTentative());
+            $recurring = $activity->copyPlanningTo(new PlannedActivity());
             $recurring->setRecurrenceGroup($activity->getRecurrenceGroup());
 
             $recBegin = (clone $begin)->modify(\sprintf('+%d week', $i));
@@ -330,6 +305,7 @@ class PlannedActivityRepository extends ServiceEntityRepository
      * @param array<Customer> $customers
      * @param array<Project> $projects
      * @param bool|null $tentative true for tentative activities only, false for confirmed ones only, null for both
+     * @param array<Reservation> $reservations
      * @return array<PlannedActivity>
      */
     public function findByFilter(
@@ -338,7 +314,8 @@ class PlannedActivityRepository extends ServiceEntityRepository
         ?\DateTimeInterface $end = null,
         array $customers = [],
         array $projects = [],
-        ?bool $tentative = null
+        ?bool $tentative = null,
+        array $reservations = []
     ): array {
         if ($users === []) {
             return [];
@@ -372,6 +349,10 @@ class PlannedActivityRepository extends ServiceEntityRepository
 
         if ($tentative !== null) {
             $qb->andWhere('p.tentative = :tentative')->setParameter('tentative', $tentative);
+        }
+
+        if ($reservations !== []) {
+            $qb->andWhere('p.reservation IN (:reservations)')->setParameter('reservations', $reservations);
         }
 
         /** @var array<PlannedActivity> $result */
