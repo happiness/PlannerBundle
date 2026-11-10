@@ -55,23 +55,71 @@ final class WeeklyPlannerDay
         return $this->activities;
     }
 
+    /**
+     * The hours an activity takes on this day: time off without hours is the whole working day.
+     */
+    public function getHoursOf(PlannedActivity $activity): float
+    {
+        return $activity->getHoursPerDay() ?? ($activity->isTimeOff() ? $this->expectedHours : 0.0);
+    }
+
+    /**
+     * Planned work only, time off is not planned but reduces the capacity.
+     */
     public function getPlannedHours(): float
     {
         $total = 0.0;
         foreach ($this->activities as $activity) {
-            $total += $activity->getHoursPerDay();
+            if (!$activity->isTimeOff()) {
+                $total += $this->getHoursOf($activity);
+            }
         }
 
         return $total;
     }
 
+    /**
+     * Time off on this day, never more than the contract expects.
+     */
+    public function getTimeOffHours(): float
+    {
+        $total = 0.0;
+        foreach ($this->activities as $activity) {
+            if ($activity->isTimeOff()) {
+                $total += $this->getHoursOf($activity);
+            }
+        }
+
+        return min($total, $this->expectedHours);
+    }
+
+    public function hasTimeOff(): bool
+    {
+        foreach ($this->activities as $activity) {
+            if ($activity->isTimeOff()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The contract hours minus time off: what is left to plan.
+     */
+    public function getCapacityHours(): float
+    {
+        return round($this->expectedHours - $this->getTimeOffHours(), 2);
+    }
+
     public function getPlannedPercentage(): int
     {
-        if ($this->expectedHours <= 0.0) {
+        $capacity = $this->getCapacityHours();
+        if ($capacity <= 0.0) {
             return 0;
         }
 
-        return (int) round(($this->getPlannedHours() / $this->expectedHours) * 100);
+        return (int) round(($this->getPlannedHours() / $capacity) * 100);
     }
 
     public function isWorkingDay(): bool
@@ -79,30 +127,41 @@ final class WeeklyPlannerDay
         return $this->expectedHours > 0.0;
     }
 
+    /**
+     * A working day the user has taken off completely.
+     */
+    public function isDayOff(): bool
+    {
+        return $this->isWorkingDay() && $this->getCapacityHours() <= 0.0;
+    }
+
     public function isOverAllocated(): bool
     {
-        if ($this->expectedHours <= 0.0) {
+        $capacity = $this->getCapacityHours();
+        if ($capacity <= 0.0) {
             return $this->getPlannedHours() > 0.0;
         }
 
-        return $this->getPlannedHours() > $this->expectedHours;
+        return $this->getPlannedHours() > $capacity;
     }
 
     public function isUnderAllocated(): bool
     {
-        if ($this->expectedHours <= 0.0) {
+        $capacity = $this->getCapacityHours();
+        if ($capacity <= 0.0) {
             return false;
         }
 
-        return $this->getPlannedHours() < $this->expectedHours;
+        return $this->getPlannedHours() < $capacity;
     }
 
     public function isBalanced(): bool
     {
-        if ($this->expectedHours <= 0.0) {
+        $capacity = $this->getCapacityHours();
+        if ($capacity <= 0.0) {
             return $this->getPlannedHours() === 0.0;
         }
 
-        return abs($this->getPlannedHours() - $this->expectedHours) < 0.001;
+        return abs($this->getPlannedHours() - $capacity) < 0.001;
     }
 }

@@ -17,6 +17,7 @@ use App\Form\Type\ColorPickerType;
 use App\Form\Type\CustomerType;
 use App\Form\Type\DatePickerType;
 use App\Form\Type\UserType;
+use App\Form\Type\YesNoType;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
@@ -58,7 +59,7 @@ class PlannedActivityEditForm extends AbstractType
 
         $builder->add('customer', CustomerType::class, [
             'label' => 'customer',
-            'required' => true,
+            'required' => !$activity?->isTimeOff(),
             'placeholder' => '',
             'query_builder_for_user' => true,
             'customers' => $activity?->getCustomer(),
@@ -74,6 +75,13 @@ class PlannedActivityEditForm extends AbstractType
             'activity_enabled' => false,
         ]);
 
+        // after customer and project: switching time off on drops them while the data is mapped
+        $builder->add('timeOff', YesNoType::class, [
+            'label' => 'planner.time_off',
+            'help' => 'planner.time_off_help',
+            'required' => false,
+        ]);
+
         $builder
             ->add('begin', DatePickerType::class, [
                 'label' => 'label.begin',
@@ -85,7 +93,8 @@ class PlannedActivityEditForm extends AbstractType
             ])
             ->add('hoursPerDay', NumberType::class, [
                 'label' => 'planner.hours_per_day',
-                'required' => true,
+                // time off may leave it empty for the whole day, the entity validates everything else
+                'required' => !$activity?->isTimeOff(),
                 'html5' => true,
                 'scale' => 2,
                 'attr' => [
@@ -139,6 +148,32 @@ class PlannedActivityEditForm extends AbstractType
                 'rows' => 3,
             ],
         ]);
+
+        // switching to time off without sending hours (the API) takes the whole day, like the dialog does
+        $builder->addEventListener(FormEvents::PRE_SUBMIT, static function (FormEvent $event): void {
+            $data = $event->getData();
+            $activity = $event->getForm()->getData();
+            if (!\is_array($data) || !\array_key_exists('timeOff', $data) || \array_key_exists('hoursPerDay', $data)) {
+                return;
+            }
+            if (\in_array($data['timeOff'], [null, false, '', '0', 0, 'false'], true)) {
+                return;
+            }
+            if ($activity instanceof PlannedActivity && $activity->isTimeOff()) {
+                return;
+            }
+            $data['hoursPerDay'] = '';
+            $event->setData($data);
+        });
+
+        // the flag is only written when it changes, so a customer or project submitted for existing time off
+        // would stick: drop them before the validation listener (priority 0) runs
+        $builder->addEventListener(FormEvents::POST_SUBMIT, static function (FormEvent $event): void {
+            $activity = $event->getData();
+            if ($activity instanceof PlannedActivity && $activity->isTimeOff()) {
+                $activity->setTimeOff(true);
+            }
+        }, 10);
 
         $builder->addEventListener(FormEvents::SUBMIT, [self::class, 'fillCustomerFromProject']);
     }
