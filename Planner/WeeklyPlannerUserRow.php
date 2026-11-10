@@ -154,8 +154,8 @@ final class WeeklyPlannerUserRow
     }
 
     /**
-     * Expected hours left after the planning from today on, negative when overbooked. Days that have passed are not
-     * free any more, so they don't count.
+     * Capacity left (contract hours minus time off) after the planning from today on, negative when overbooked. Days
+     * that have passed are not free any more, so they don't count, and neither does time off.
      */
     public function getFreeHours(?\DateTimeInterface $today = null): float
     {
@@ -164,7 +164,7 @@ final class WeeklyPlannerUserRow
         $total = 0.0;
         foreach ($this->days as $date => $day) {
             if ($date >= $from) {
-                $total += $day->getExpectedHours() - $day->getPlannedHours();
+                $total += $day->getCapacityHours() - $day->getPlannedHours();
             }
         }
 
