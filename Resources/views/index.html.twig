@@ -9,7 +9,14 @@
             <div class="row align-items-center">
                 <div class="col">
                     <div class="btn-group week-picker-btn-group" role="group" aria-label="{{ 'planner.title'|trans }}">
-                        <a href="{{ path('planner_week', {'date': prevWeek}) }}" class="btn btn-left btn-icon">
+                        {# with one week shown, a period is a week and the single arrows already do it #}
+                        {% if weeks > 1 %}
+                            {% set periodLabel = 'planner.previous_period'|trans({'%count%': weeks}) %}
+                            <a href="{{ path('planner_week', {'date': prevPeriod}) }}" class="btn btn-icon" data-toggle="tooltip" data-placement="top" title="{{ periodLabel }}" aria-label="{{ periodLabel }}">
+                                {{ icon('left2') }}
+                            </a>
+                        {% endif %}
+                        <a href="{{ path('planner_week', {'date': prevWeek}) }}" class="btn btn-left btn-icon" data-toggle="tooltip" data-placement="top" title="{{ 'planner.previous_week'|trans }}" aria-label="{{ 'planner.previous_week'|trans }}">
                             {{ icon('left') }}
                         </a>
                         <span class="btn btn-default pe-none">
@@ -21,9 +28,15 @@
                                 &ndash; {{ 'stats.workingTimeWeekShort'|trans({'%week%': lastWeek|date('W')}) }}
                             {% endif %}
                         </span>
-                        <a href="{{ path('planner_week', {'date': nextWeek}) }}" class="btn btn-right btn-icon">
+                        <a href="{{ path('planner_week', {'date': nextWeek}) }}" class="btn btn-right btn-icon" data-toggle="tooltip" data-placement="top" title="{{ 'planner.next_week'|trans }}" aria-label="{{ 'planner.next_week'|trans }}">
                             {{ icon('right') }}
                         </a>
+                        {% if weeks > 1 %}
+                            {% set periodLabel = 'planner.next_period'|trans({'%count%': weeks}) %}
+                            <a href="{{ path('planner_week', {'date': nextPeriod}) }}" class="btn btn-icon" data-toggle="tooltip" data-placement="top" title="{{ periodLabel }}" aria-label="{{ periodLabel }}">
+                                {{ icon('right2') }}
+                            </a>
+                        {% endif %}
                     </div>
                     <a href="{{ path('planner_week', {'date': todayWeek}) }}" class="btn">
                         {{ icon('calendar', true) }}
@@ -152,7 +165,14 @@
                                         <td class="w-avatar align-middle p-1 planner-user-cell">{{ widgets.user_avatar(row.user, false, 'avatar-sm') }}</td>
                                         <td class="text-nowrap align-middle p-1 planner-user-cell">
                                             <div class="d-flex justify-content-between align-items-center">
-                                                <div>{{ row.user.displayName }}</div>
+                                                <div>
+                                                    <div>{{ row.user.displayName }}</div>
+                                                    {# explains the order while sorting by free hours #}
+                                                    {% if query.orderedByFreeHours %}
+                                                        {% set freeHours = row.freeHours %}
+                                                        <div class="small {{ freeHours < 0 ? 'text-danger' : 'text-muted' }} planner-free-hours">{{ (freeHours < 0 ? 'planner.over_hours' : 'planner.free_hours')|trans({'%hours%': freeHours|abs}) }}</div>
+                                                    {% endif %}
+                                                </div>
                                                 <button type="button" class="btn btn-sm btn-icon btn-ghost-secondary planner-user-toggle m-2 p-0" aria-expanded="false" title="{{ 'planner.toggle_activities'|trans }}">
                                                     <span class="toggle-icon d-inline-block">{{ icon('right') }}</span>
                                                 </button>
@@ -227,7 +247,10 @@
                                                 {% set date = segment.date %}
                                                 <td colspan="{{ segment.span }}" class="position-relative align-middle border-1 day{% if date is weekend %} weekend{% endif %}{% if date is today %} today{% endif %} p-1 {{ segment.activities is not empty ? 'has-activities' : 'no-activities' }}"{% if canCreate and segment.activities is empty %} data-planner-date="{{ date|date('Y-m-d') }}"{% endif %}>
                                                     {% if canCreate and segment.activities is empty %}
-                                                        <a href="{{ path('planner_activity_create', {'user': row.user.id, 'date': date|date('Y-m-d')}) }}"
+                                                        {% set createParams = {'user': row.user.id, 'date': date|date('Y-m-d')} %}
+                                                        {% if group.customer %}{% set createParams = createParams|merge({'customer': group.customer.id}) %}{% endif %}
+                                                        {% if group.project %}{% set createParams = createParams|merge({'project': group.project.id}) %}{% endif %}
+                                                        <a href="{{ path('planner_activity_create', createParams) }}"
                                                            class="stretched-link cursor-crosshair modal-ajax-form"
                                                            title="{{ 'planner.planned_activity'|trans }}"></a>
                                                     {% endif %}
@@ -250,7 +273,18 @@
                                     {% endfor %}
                                     {# always keep one empty row per user, so new planning can be dragged out #}
                                     <tr class="planner-row planner-row-details is-collapsed" data-user-id="{{ row.user.id }}">
-                                        <td colspan="2" class="planner-group-cell p-1 border-top-0"></td>
+                                        <td colspan="2" class="planner-group-cell p-1 border-top-0">
+                                            {% if canCreate %}
+                                                {# opens the same dialog as an empty day of this row: today when it is shown, else the first day #}
+                                                {% set addDate = row.days[('now'|date('Y-m-d'))] is defined ? 'now'|date('Y-m-d') : (row.days|first).date|date('Y-m-d') %}
+                                                <div class="planner-group-label">
+                                                    <a href="{{ path('planner_activity_create', {'user': row.user.id, 'date': addDate}) }}"
+                                                       class="btn btn-sm modal-ajax-form planner-add-project">
+                                                        {{ icon('create', true) }}{{ (groups is empty ? 'planner.add_project' : 'planner.add_another_project')|trans }}
+                                                    </a>
+                                                </div>
+                                            {% endif %}
+                                        </td>
                                         {% for day in row.days %}
                                             <td class="position-relative border-1 day{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %} p-1 no-activities"{% if canCreate %} data-planner-date="{{ day.date|date('Y-m-d') }}"{% endif %}>
                                                 {% if canCreate %}
@@ -278,7 +312,7 @@
                             </tbody>
                             {% if plannerData.rows|length > 0 %}
                                 <tfoot>
-                                    <tr class="bg-light fw-bold">
+                                    <tr class="summary">
                                         <td class="text-right p-1" colspan="2">
                                             <div>{{ plannerData.totalPlannedHours }}h / {{ plannerData.totalExpectedHours }}h</div>
                                             {% if plannerData.totalActualHours > 0 %}
