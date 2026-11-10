@@ -163,4 +163,24 @@ class WeeklyPlannerDayTest extends TestCase
         $this->assertSame(0.0, $day->getPlannedHours());
         $this->assertFalse($day->isDayOff());
     }
+
+    public function testWorkOnADayOffCountsOnlyWhenPlannedThereOnPurpose(): void
+    {
+        $saturday = new WeeklyPlannerDay(new \DateTimeImmutable('2026-11-14'), 0.0);
+        $acrossTheWeekend = (new PlannedActivity())->setHoursPerDay(4.0);
+        $weekendWork = (new PlannedActivity())->setHoursPerDay(5.0);
+        $saturday->addActivity($acrossTheWeekend);
+        $saturday->addActivity($weekendWork);
+        $saturday->countOnDayOff($weekendWork);
+
+        $this->assertFalse($saturday->counts($acrossTheWeekend));
+        $this->assertSame(0.0, $saturday->getHoursOf($acrossTheWeekend));
+        $this->assertTrue($saturday->counts($weekendWork));
+        $this->assertSame(5.0, $saturday->getPlannedHours());
+
+        // on a working day everything counts
+        $monday = new WeeklyPlannerDay(new \DateTimeImmutable('2026-11-16'), 8.0);
+        $this->assertTrue($monday->counts($acrossTheWeekend));
+        $this->assertSame(4.0, $monday->getHoursOf($acrossTheWeekend));
+    }
 }

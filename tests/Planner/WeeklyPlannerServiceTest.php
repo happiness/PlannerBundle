@@ -263,4 +263,101 @@ class WeeklyPlannerServiceTest extends TestCase
         $this->assertFalse($thursday->isHoliday());
         $this->assertSame(8.0, $thursday->getExpectedHours());
     }
+
+    /**
+     * @param array<PlannedActivity> $activities
+     * @param array<string, PublicHoliday> $holidays
+     */
+    private function createWeekdayService(User $user, array $activities, array $holidays = []): WeeklyPlannerService
+    {
+        $repo = $this->createStub(PlannedActivityRepository::class);
+        $repo->method('findPlannedActivitiesForUsersAndRange')->willReturn($activities);
+
+        // eight hours Monday to Friday
+        $calculator = $this->createStub(WorkingTimeCalculator::class);
+        $calculator->method('getWorkHoursForDay')->willReturnCallback(static fn (\DateTimeInterface $day): int => (int) $day->format('N') <= 5 ? 28800 : 0);
+
+        $mode = $this->createStub(WorkingTimeMode::class);
+        $mode->method('getCalculator')->willReturn($calculator);
+
+        $wtService = $this->createStub(WorkingTimeService::class);
+        $wtService->method('getContractMode')->willReturn($mode);
+
+        $provider = $this->createStub(HolidayProviderInterface::class);
+        $provider->method('getHolidays')->willReturn($holidays);
+
+        return new WeeklyPlannerService($repo, $wtService, $this->createStatisticService(), $provider);
+    }
+
+    private function createWork(User $user, string $begin, string $end, float $hours): PlannedActivity
+    {
+        return (new PlannedActivity())
+            ->setUser($user)
+            ->setCustomer(new \App\Entity\Customer('Acme'))
+            ->setBegin(new \DateTime($begin))
+            ->setEnd(new \DateTime($end))
+            ->setHoursPerDay($hours);
+    }
+
+    public function testWorkAcrossAWeekendCountsOnlyOnWorkingDays(): void
+    {
+        $user = new User();
+        (new \ReflectionProperty(User::class, 'id'))->setValue($user, 42);
+        // Friday to Tuesday, one row as entered
+        $work = $this->createWork($user, '2026-11-13', '2026-11-17', 4.0);
+
+        $data = $this->createWeekdayService($user, [$work])->getPlannerData([$user], new \DateTimeImmutable('2026-11-09'), 2);
+        $row = $data->getRowForUser($user);
+        $this->assertNotNull($row);
+
+        $this->assertSame(4.0, $row->getDay(new \DateTimeImmutable('2026-11-13'))?->getPlannedHours());
+        $this->assertSame(0.0, $row->getDay(new \DateTimeImmutable('2026-11-14'))?->getPlannedHours());
+        $this->assertSame(0.0, $row->getDay(new \DateTimeImmutable('2026-11-15'))?->getPlannedHours());
+        $this->assertSame(4.0, $row->getDay(new \DateTimeImmutable('2026-11-16'))?->getPlannedHours());
+        // three working days of four hours, the weekend not counted
+        $this->assertSame(12.0, $row->getTotalPlannedHours());
+        $this->assertSame(12.0, $row->getGroups()[0]->getPlannedHours($row->getDays()));
+    }
+
+    public function testWorkOnlyOnDaysOffIsPlannedOnPurpose(): void
+    {
+        $user = new User();
+        (new \ReflectionProperty(User::class, 'id'))->setValue($user, 42);
+        $weekend = $this->createWork($user, '2026-11-14', '2026-11-15', 5.0);
+
+        $row = $this->createWeekdayService($user, [$weekend])->getPlannerData([$user], new \DateTimeImmutable('2026-11-09'))->getRowForUser($user);
+        $this->assertNotNull($row);
+
+        $this->assertSame(5.0, $row->getDay(new \DateTimeImmutable('2026-11-14'))?->getPlannedHours());
+        $this->assertSame(10.0, $row->getTotalPlannedHours());
+    }
+
+    public function testAWorkingDayOutsideTheShownWeekStillDecides(): void
+    {
+        $user = new User();
+        (new \ReflectionProperty(User::class, 'id'))->setValue($user, 42);
+        // Saturday to the following Monday: only the weekend is on screen
+        $work = $this->createWork($user, '2026-11-14', '2026-11-16', 3.0);
+
+        $row = $this->createWeekdayService($user, [$work])->getPlannerData([$user], new \DateTimeImmutable('2026-11-09'))->getRowForUser($user);
+        $this->assertNotNull($row);
+
+        $this->assertSame(0.0, $row->getTotalPlannedHours());
+    }
+
+    public function testAPublicHolidayIsADayOffForPlannedWork(): void
+    {
+        $user = new User();
+        (new \ReflectionProperty(User::class, 'id'))->setValue($user, 42);
+        $christmas = new PublicHoliday(new \DateTimeImmutable('2026-12-25'), 'Christmas Day', 'SE', 'Sweden', 'official');
+        $work = $this->createWork($user, '2026-12-24', '2026-12-25', 8.0);
+        // only the holiday: on purpose, counted
+        $onCall = $this->createWork($user, '2026-12-25', '2026-12-25', 2.0);
+
+        $row = $this->createWeekdayService($user, [$work, $onCall], ['2026-12-25' => $christmas])->getPlannerData([$user], new \DateTimeImmutable('2026-12-21'))->getRowForUser($user);
+        $this->assertNotNull($row);
+
+        $this->assertSame(8.0, $row->getDay(new \DateTimeImmutable('2026-12-24'))?->getPlannedHours());
+        $this->assertSame(2.0, $row->getDay(new \DateTimeImmutable('2026-12-25'))?->getPlannedHours());
+    }
 }
