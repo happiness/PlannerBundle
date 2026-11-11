@@ -682,6 +682,19 @@ final class WeeklyPlannerController extends AbstractController
         $nextPeriod = $currentWeekMonday->modify('+' . $weeks . ' weeks')->format('Y-m-d');
         $todayWeek = (new \DateTimeImmutable('today'))->modify('this week monday')->format('Y-m-d');
 
+        // seeing a user's plans does not mean planning for them ("view_all_planner"): only their rows offer new planning
+        $canCreate = $this->isGranted('create_planner');
+        $creatableUsers = [];
+        if ($canCreate) {
+            foreach ($users as $user) {
+                $probe = new PlannedActivity();
+                $probe->setUser($user);
+                if ($this->isGranted(PlannedActivityVoter::CREATE, $probe)) {
+                    $creatableUsers[] = $user->getId();
+                }
+            }
+        }
+
         return $this->render('@Planner/index.html.twig', [
             'page_setup' => $page,
             'toolbarForm' => $form->createView(),
@@ -696,7 +709,8 @@ final class WeeklyPlannerController extends AbstractController
             'todayWeek' => $todayWeek,
             'weeks' => $weeks,
             'weekOptions' => self::WEEK_OPTIONS,
-            'canCreate' => $this->isGranted('create_planner'),
+            'canCreate' => $canCreate,
+            'creatableUsers' => $creatableUsers,
         ]);
     }
 }

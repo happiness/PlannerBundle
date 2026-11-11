@@ -172,6 +172,8 @@
                             </thead>
                             <tbody>
                                 {% for row in plannerData.rows %}
+                                    {# rows of users you may only look at offer no new planning #}
+                                    {% set canCreateRow = canCreate and row.user.id in creatableUsers %}
                                     {# without a work contract every day counts as a day off, so nothing is worth confirming #}
                                     {% set confirmDaysOff = row.days|filter(day => day.workingDay) is not empty %}
                                     <tr class="planner-row planner-row-summary is-collapsed" data-user-id="{{ row.user.id }}" data-planner-user-name="{{ row.user.displayName }}">
@@ -292,8 +294,8 @@
                                             </td>
                                             {% for segment in group.getSegments(row.days) %}
                                                 {% set date = segment.date %}
-                                                <td colspan="{{ segment.span }}" class="position-relative align-middle border-1 day{% if segment.span == 1 and holidays[date|date('Y-m-d')] is defined %} planner-holiday{% endif %}{% if date is weekend %} weekend{% endif %}{% if date is today %} today{% endif %} p-1 {{ segment.activities is not empty ? 'has-activities' : 'no-activities' }}"{% if canCreate and segment.activities is empty %} data-planner-date="{{ date|date('Y-m-d') }}"{% if confirmDaysOff and row.getDay(date) is not null and not row.getDay(date).workingDay %} data-planner-non-working{% endif %}{% endif %}>
-                                                    {% if canCreate and segment.activities is empty %}
+                                                <td colspan="{{ segment.span }}" class="position-relative align-middle border-1 day{% if segment.span == 1 and holidays[date|date('Y-m-d')] is defined %} planner-holiday{% endif %}{% if date is weekend %} weekend{% endif %}{% if date is today %} today{% endif %} p-1 {{ segment.activities is not empty ? 'has-activities' : 'no-activities' }}"{% if canCreateRow and segment.activities is empty %} data-planner-date="{{ date|date('Y-m-d') }}"{% if confirmDaysOff and row.getDay(date) is not null and not row.getDay(date).workingDay %} data-planner-non-working{% endif %}{% endif %}>
+                                                    {% if canCreateRow and segment.activities is empty %}
                                                         {% set createParams = {'user': row.user.id, 'date': date|date('Y-m-d')}|merge(group.timeOff ? {'off': 1} : {})|merge(offersReservation ? {'reservation': group.reservation.id} : {}) %}
                                                         {% if group.customer %}{% set createParams = createParams|merge({'customer': group.customer.id}) %}{% endif %}
                                                         {% if group.project %}{% set createParams = createParams|merge({'project': group.project.id}) %}{% endif %}
@@ -330,7 +332,7 @@
                                     {# always keep one empty row per user, so new planning can be dragged out #}
                                     <tr class="planner-row planner-row-details is-collapsed" data-user-id="{{ row.user.id }}">
                                         <td colspan="2" class="planner-group-cell p-1 border-top-0">
-                                            {% if canCreate %}
+                                            {% if canCreateRow %}
                                                 {# opens the same dialog as an empty day of this row: today when it is shown, else the first day #}
                                                 {% set addDate = row.days[('now'|date('Y-m-d'))] is defined ? 'now'|date('Y-m-d') : (row.days|first).date|date('Y-m-d') %}
                                                 <div class="planner-group-label">
@@ -342,8 +344,8 @@
                                             {% endif %}
                                         </td>
                                         {% for day in row.days %}
-                                            <td class="position-relative border-1 day{% if day.holiday %} planner-holiday{% endif %}{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %} p-1 no-activities"{% if canCreate %} data-planner-date="{{ day.date|date('Y-m-d') }}"{% if confirmDaysOff and not day.workingDay %} data-planner-non-working{% endif %}{% endif %}>
-                                                {% if canCreate %}
+                                            <td class="position-relative border-1 day{% if day.holiday %} planner-holiday{% endif %}{% if day.date is weekend %} weekend{% endif %}{% if day.date is today %} today{% endif %} p-1 no-activities"{% if canCreateRow %} data-planner-date="{{ day.date|date('Y-m-d') }}"{% if confirmDaysOff and not day.workingDay %} data-planner-non-working{% endif %}{% endif %}>
+                                                {% if canCreateRow %}
                                                     <a href="{{ path('planner_activity_create', {'user': row.user.id, 'date': day.date|date('Y-m-d')}) }}"
                                                        class="stretched-link cursor-crosshair modal-ajax-form"
                                                        title="{{ 'planner.planned_activity'|trans }}"></a>

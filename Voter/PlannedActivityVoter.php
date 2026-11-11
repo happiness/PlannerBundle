@@ -69,7 +69,9 @@ final class PlannedActivityVoter extends Voter
         return match ($attribute) {
             self::VIEW => $isOwner
                 ? $this->permissionManager->hasRolePermission($user, 'view_planner')
-                : ($hasViewAllData || ($isTeamlead && $this->permissionManager->hasRolePermission($user, 'view_other_planner'))),
+                : ($hasViewAllData
+                    || $this->permissionManager->hasRolePermission($user, 'view_all_planner')
+                    || ($isTeamlead && $this->permissionManager->hasRolePermission($user, 'view_other_planner'))),
 
             self::CREATE => $isOwner
                 ? $this->permissionManager->hasRolePermission($user, 'create_planner')
