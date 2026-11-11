@@ -171,6 +171,7 @@
                                 </tr>
                             </thead>
                             <tbody>
+                                {% set canPlanReservations = is_granted('plan_reservations_planner') %}
                                 {% for row in plannerData.rows %}
                                     {# without a work contract every day counts as a day off, so nothing is worth confirming #}
                                     {% set confirmDaysOff = row.days|filter(day => day.workingDay) is not empty %}
@@ -273,13 +274,15 @@
                                     {% set groups = row.groups %}
                                     {% for group in groups %}
                                         {# an archived reservation keeps its row and keeps counting, but offers nothing new #}
-                                        {% set offersReservation = group.reservation is not null and not group.reservation.archived %}
+                                        {% set offersReservation = group.reservation is not null and not group.reservation.archived and canPlanReservations %}
+                                        {# reserved time you may not plan offers no new planning at all, rather than project work in its row #}
+                                        {% set offersPlanning = group.reservation is null or canPlanReservations %}
                                         <tr class="planner-row planner-row-details is-collapsed" data-user-id="{{ row.user.id }}"{% if group.timeOff %} data-planner-off="1"{% endif %}{% if offersReservation %} data-reservation-id="{{ group.reservation.id }}"{% endif %}{% if group.customer %} data-customer-id="{{ group.customer.id }}"{% endif %}{% if group.project %} data-project-id="{{ group.project.id }}"{% endif %}>
                                             <td class="planner-group-cell p-1 border-top-0" colspan="2">
                                                 {% set groupName = group.timeOff ? 'planner.time_off'|trans : group.customerName %}
                                                 <div class="d-flex justify-content-between align-items-center planner-group-label" title="{{ groupName }}{% if group.projectName %} / {{ group.projectName }}{% endif %}">
                                                     <div class="text-truncate">
-                                                        <span class="fw-bold small{% if group.reservation is not null and not offersReservation %} text-muted{% endif %}">{{ groupName }}</span>{% if group.projectName %}<span class="text-muted small"> / {{ group.projectName }}</span>{% endif %}
+                                                        <span class="fw-bold small{% if group.reservation is not null and group.reservation.archived %} text-muted{% endif %}">{{ groupName }}</span>{% if group.projectName %}<span class="text-muted small"> / {{ group.projectName }}</span>{% endif %}
                                                     </div>
                                                     <span class="d-flex align-items-center flex-shrink-0 ms-2">
                                                         {% set groupTentative = group.getTentativeHours(row.days) %}
@@ -292,8 +295,8 @@
                                             </td>
                                             {% for segment in group.getSegments(row.days) %}
                                                 {% set date = segment.date %}
-                                                <td colspan="{{ segment.span }}" class="position-relative align-middle border-1 day{% if segment.span == 1 and holidays[date|date('Y-m-d')] is defined %} planner-holiday{% endif %}{% if date is weekend %} weekend{% endif %}{% if date is today %} today{% endif %} p-1 {{ segment.activities is not empty ? 'has-activities' : 'no-activities' }}"{% if canCreate and segment.activities is empty %} data-planner-date="{{ date|date('Y-m-d') }}"{% if confirmDaysOff and row.getDay(date) is not null and not row.getDay(date).workingDay %} data-planner-non-working{% endif %}{% endif %}>
-                                                    {% if canCreate and segment.activities is empty %}
+                                                <td colspan="{{ segment.span }}" class="position-relative align-middle border-1 day{% if segment.span == 1 and holidays[date|date('Y-m-d')] is defined %} planner-holiday{% endif %}{% if date is weekend %} weekend{% endif %}{% if date is today %} today{% endif %} p-1 {{ segment.activities is not empty ? 'has-activities' : 'no-activities' }}"{% if canCreate and offersPlanning and segment.activities is empty %} data-planner-date="{{ date|date('Y-m-d') }}"{% if confirmDaysOff and row.getDay(date) is not null and not row.getDay(date).workingDay %} data-planner-non-working{% endif %}{% endif %}>
+                                                    {% if canCreate and offersPlanning and segment.activities is empty %}
                                                         {% set createParams = {'user': row.user.id, 'date': date|date('Y-m-d')}|merge(group.timeOff ? {'off': 1} : {})|merge(offersReservation ? {'reservation': group.reservation.id} : {}) %}
                                                         {% if group.customer %}{% set createParams = createParams|merge({'customer': group.customer.id}) %}{% endif %}
                                                         {% if group.project %}{% set createParams = createParams|merge({'project': group.project.id}) %}{% endif %}

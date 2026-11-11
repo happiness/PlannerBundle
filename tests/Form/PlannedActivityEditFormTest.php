@@ -27,6 +27,7 @@ use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\Forms;
 use Symfony\Component\Form\Test\TypeTestCase;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 
 class PlannedActivityEditFormTest extends TypeTestCase
 {
@@ -213,11 +214,11 @@ class PlannedActivityEditFormTest extends TypeTestCase
         $this->assertNull($activity->getCustomer());
     }
 
-    private function createFormFactoryWith(ReservationRepository $reservations): FormFactoryInterface
+    private function createFormFactoryWith(ReservationRepository $reservations, ?AuthorizationCheckerInterface $authorizationChecker = null): FormFactoryInterface
     {
         return Forms::createFormFactoryBuilder()
             ->addExtensions($this->getExtensions())
-            ->addType(new PlannedActivityEditForm($reservations))
+            ->addType(new PlannedActivityEditForm($reservations, $authorizationChecker))
             // the API documentation option, which NelmioApiDocBundle adds in the application
             ->addTypeExtension(new class() extends AbstractTypeExtension {
                 public function configureOptions(OptionsResolver $resolver): void
@@ -249,6 +250,22 @@ class PlannedActivityEditFormTest extends TypeTestCase
         // an archived reservation a planning already has stays choosable, so it can be edited without moving it
         $builder = $this->createFormFactoryWith($repository)->createBuilder(PlannedActivityEditForm::class, (new PlannedActivity())->setReservation($old), ['user' => new User()]);
         $this->assertSame([$buffer, $old], $builder->get('reservation')->getOption('choices'));
+    }
+
+    public function testReservationIsOnlyOfferedWithThePermission(): void
+    {
+        $repository = $this->createStub(ReservationRepository::class);
+        $repository->method('findSelectable')->willReturn([(new Reservation())->setName('Agency buffer')]);
+
+        $denied = $this->createStub(AuthorizationCheckerInterface::class);
+        $denied->method('isGranted')->willReturn(false);
+        $builder = $this->createFormFactoryWith($repository, $denied)->createBuilder(PlannedActivityEditForm::class, new PlannedActivity(), ['user' => new User()]);
+        $this->assertFalse($builder->has('reservation'));
+
+        $granted = $this->createMock(AuthorizationCheckerInterface::class);
+        $granted->method('isGranted')->with('plan_reservations_planner')->willReturn(true);
+        $builder = $this->createFormFactoryWith($repository, $granted)->createBuilder(PlannedActivityEditForm::class, new PlannedActivity(), ['user' => new User()]);
+        $this->assertTrue($builder->has('reservation'));
     }
 
     public function testReservationNeverKeepsASubmittedCustomer(): void
