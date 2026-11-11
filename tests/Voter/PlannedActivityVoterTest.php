@@ -130,4 +130,32 @@ class PlannedActivityVoterTest extends AbstractVoterTestCase
         $this->assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($token, $activity, ['edit']));
         $this->assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($token, $activity, ['delete']));
     }
+
+    public function testViewAllPlannerOnlyViewsOthers(): void
+    {
+        $owner = self::getUser(1, User::ROLE_USER);
+        $viewer = self::getUser(2, User::ROLE_USER);
+
+        $activity = new PlannedActivity();
+        $activity->setUser($owner);
+
+        $token = new UsernamePasswordToken($viewer, 'main', $viewer->getRoles());
+
+        $manager = $this->getRolePermissionManager([
+            'ROLE_USER' => [
+                'view_planner',
+                'view_all_planner',
+                'create_planner',
+                'edit_planner',
+                'delete_planner',
+            ],
+        ], true);
+
+        $voter = new PlannedActivityVoter($manager);
+
+        $this->assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($token, $activity, ['view']));
+        $this->assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($token, $activity, ['create']));
+        $this->assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($token, $activity, ['edit']));
+        $this->assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($token, $activity, ['delete']));
+    }
 }

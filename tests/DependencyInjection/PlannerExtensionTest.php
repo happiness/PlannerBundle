@@ -44,6 +44,7 @@ class PlannerExtensionTest extends TestCase
             ],
             'PLANNER_OTHER' => [
                 'view_other_planner',
+                'view_all_planner',
                 'edit_other_planner',
             ],
         ], $kimaiConfig['permissions']['sets']);
@@ -73,6 +74,7 @@ class PlannerExtensionTest extends TestCase
                 'delete_planner',
                 'calendar_feed_planner',
                 'view_other_planner',
+                'view_all_planner',
                 'edit_other_planner',
                 'manage_reservations_planner',
             ],
@@ -83,6 +85,7 @@ class PlannerExtensionTest extends TestCase
                 'delete_planner',
                 'calendar_feed_planner',
                 'view_other_planner',
+                'view_all_planner',
                 'edit_other_planner',
                 'manage_reservations_planner',
             ],

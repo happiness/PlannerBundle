@@ -185,6 +185,63 @@ class WeeklyPlannerControllerTest extends TestCase
         $this->assertSame('<html>Planner View</html>', $response->getContent());
     }
 
+    public function testOnlyRowsOfPlannableUsersOfferNewPlanning(): void
+    {
+        $user = new User();
+        (new \ReflectionProperty(User::class, 'id'))->setValue($user, 1);
+        $colleague = new User();
+        (new \ReflectionProperty(User::class, 'id'))->setValue($colleague, 2);
+
+        $plannerService = $this->createMock(WeeklyPlannerService::class);
+        $plannerService->method('getPlannerData')
+            ->willReturn(new WeeklyPlannerData(new \DateTimeImmutable('2026-08-17'), new \DateTimeImmutable('2026-08-23')));
+
+        $userProvider = $this->createMock(PlannerUserProvider::class);
+        $userProvider->method('getVisibleUsers')->willReturn([$user, $colleague]);
+
+        $controller = new WeeklyPlannerController($this->createMock(PlannedActivityRepository::class), $plannerService, $this->createMock(UserRepository::class), $userProvider, $this->createStub(ReservationRepository::class));
+
+        // allowed to see the colleague (view_all_planner), but to plan only for yourself
+        $authChecker = $this->createMock(AuthorizationCheckerInterface::class);
+        $authChecker->method('isGranted')->willReturnCallback(static fn (mixed $attribute, mixed $subject = null): bool => match (true) {
+            $attribute === 'create_planner' => true,
+            $attribute === 'create' && $subject instanceof PlannedActivity => $subject->getUser() === $user,
+            default => false,
+        });
+
+        $tokenStorage = $this->createMock(TokenStorageInterface::class);
+        $tokenStorage->method('getToken')->willReturn(new UsernamePasswordToken($user, 'main', $user->getRoles()));
+
+        $twig = $this->createMock(Environment::class);
+        $twig->expects($this->once())
+            ->method('render')
+            ->with('@Planner/index.html.twig', $this->callback(function (array $context): bool {
+                $this->assertTrue($context['canCreate']);
+                $this->assertSame([1], $context['creatableUsers']);
+
+                return true;
+            }))
+            ->willReturn('<html>Planner View</html>');
+
+        $formServices = $this->createFormServices();
+        $container = $this->createMock(ContainerInterface::class);
+        $container->method('has')->willReturnMap([
+            ['security.authorization_checker', true],
+            ['security.token_storage', true],
+            ...$this->formServiceMap('has', $formServices),
+            ['twig', true],
+        ]);
+        $container->method('get')->willReturnMap([
+            ['security.authorization_checker', $authChecker],
+            ['security.token_storage', $tokenStorage],
+            ...$this->formServiceMap('get', $formServices),
+            ['twig', $twig],
+        ]);
+        $controller->setContainer($container);
+
+        $controller->week('2026-08-17');
+    }
+
     public function testWeekWithInvalidDateFallsBackToToday(): void
     {
         $user = new User();
