@@ -96,6 +96,7 @@ The plugin registers dedicated permissions that integrate seamlessly into Kimai'
 | `delete_planner` | Delete own planned activities | `ROLE_USER`, `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `view_other_planner` | View other team members in the weekly planner | `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `manage_reservations_planner` | Manage the reserved time list (*Administration > Reserved time*) | `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
+| `plan_reservations_planner` | Plan reserved time: create, change and remove planning against a reservation (see [Reserved time](#reserved-time)) | `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `edit_other_planner` | Create, edit, and delete activities for other users | `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `calendar_feed_planner` | Subscribe to your own planning as a calendar feed, together with `view_planner` (see [Calendar feed](#calendar-feed)) | `ROLE_USER`, `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 
@@ -185,6 +186,7 @@ Reserved time holds hours in someone's planning for something that is not a cust
 - **Managing it**: *Administration > Reserved time*, for whoever holds `manage_reservations_planner` (admins and super admins by default). Each one has a name and a colour for its bars, and the arrows set the order of its rows. Renaming is safe: plannings reference it by ID.
 - **Archiving** stops offering it for new planning. Plannings it already has stay in the planner and keep counting, so nobody looks free while their time is held; delete or shorten them to free the time. Restoring offers it again.
 - **Deleting** is only possible while nothing is planned on it. The foreign key refuses the rest, which is what archiving is for.
+- **Who may plan it**: whoever holds `plan_reservations_planner` (admins and super admins by default), on top of the usual planning permissions. Everyone else sees reserved time in the planner but cannot create, change or remove it: the dialog has no "Reserved time" field and the reservation rows offer no new planning.
 - **Planning it**: the dialog shows a "Reserved time" field above the customer when there is at least one. Choosing one hides customer, project, colour and tentative. Each reservation gets its own row under every person, below the projects; clicking or dragging in that row plans it, and dropping other planning there turns it into that reservation (dropping it on a project's row turns it back).
 - **Counting**: like project work, in every gauge and in "Most free hours", and like project work it takes no hours on a day off unless all its days are days off. It is never tentative, and time off replaces it. Moving or stretching it onto the same reservation on one of the person's days is refused, as for projects.
 - **API**: activities carry `reservation` (the reservation, or `null`), create and update take a reservation ID, and `GET /api/planner/activities` filters by `reservations[]`.
@@ -205,6 +207,10 @@ Three settings under *System > Settings > Weekly Planner* decide what leaves Kim
 - **Store feed addresses hashed** (default: yes). Only a SHA-256 hash of the token is kept, so a leaked database backup reveals no working address. The address is then shown once, right after it is created; whoever loses it renews it and subscribes again. Addresses created while the setting was off are hashed as soon as it is saved as on (and, on update, by the migration that brings the setting), and keep working.
 
 ## Upgrading
+
+### Permission to plan reserved time
+
+Planning against reserved time now needs `plan_reservations_planner`, which only admins and super admins have by default. Before, anyone who could plan could plan reserved time too. To keep that, tick the permission for the other roles under *System > Role permissions*.
 
 ### Reserved time
 
