@@ -77,7 +77,8 @@ class PlannerUserProvider
             /** @var array<Team> $ledTeams */
             $ledTeams = array_values(array_filter($currentUser->getTeams(), static fn (Team $team): bool => $currentUser->isTeamleadOf($team)));
             if ($ledTeams === []) {
-                return [];
+                // leading no team leaves nobody else to see, but never takes away the own plans
+                return [$currentUser];
             }
             $ledTeamIds = array_map(static fn (Team $team): ?int => $team->getId(), $ledTeams);
             $query->setSearchTeams($ledTeams);
