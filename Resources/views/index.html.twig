@@ -176,7 +176,7 @@
                                     {% set confirmDaysOff = row.days|filter(day => day.workingDay) is not empty %}
                                     <tr class="planner-row planner-row-summary is-collapsed" data-user-id="{{ row.user.id }}" data-planner-user-name="{{ row.user.displayName }}">
                                         <td class="w-avatar align-middle p-1 planner-user-cell">{{ widgets.user_avatar(row.user, false, 'avatar-sm') }}</td>
-                                        <td class="text-nowrap align-middle p-1 planner-user-cell">
+                                        <td class="text-nowrap align-middle p-1 planner-user-cell planner-user-name">
                                             <div class="d-flex justify-content-between align-items-center">
                                                 <div>
                                                     <div>{{ row.user.displayName }}</div>
@@ -457,9 +457,15 @@
             cursor: crosshair;
             user-select: none;
         }
+        /* The label takes the width of the name columns but adds none to them: the table sizes its columns by content,
+           so a long customer name would widen them when the details open and move the whole grid. */
         .planner-group-label {
-            padding-left: 2.5rem;
-            max-width: 18rem;
+            width: 0;
+            min-width: 100%;
+        }
+        /* room for the labels below, about what a name needs, so they are not cut off to nothing for short names */
+        .planner-user-name {
+            min-width: 11rem;
         }
         col.today {
             background-color: var(--tblr-highlight-bg);
