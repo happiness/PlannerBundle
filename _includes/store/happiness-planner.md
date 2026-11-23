@@ -43,7 +43,8 @@ bin/console cache:clear
 | `create_planner` | Create plannings for yourself | User, Teamlead, Admin, Super-Admin |
 | `edit_planner` | Edit your own plannings | User, Teamlead, Admin, Super-Admin |
 | `delete_planner` | Delete your own plannings | User, Teamlead, Admin, Super-Admin |
-| `view_other_planner` | View other team members | Teamlead, Admin, Super-Admin |
+| `view_other_planner` | View the members of the teams you lead | Teamlead, Admin, Super-Admin |
+| `view_all_planner` | View everyone's plans, read-only | Admin, Super-Admin |
 | `edit_other_planner` | Create, edit and delete plannings for other users | Teamlead, Admin, Super-Admin |
 
 Permissions can be adjusted under **System > Role permissions**.

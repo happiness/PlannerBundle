@@ -33,8 +33,9 @@ class PlannerUserProvider
     }
 
     /**
-     * Users without "view_all_data" only see the members of the teams they lead,
-     * the optional planner query narrows the result further by teams and users.
+     * Users with "view_all_data" or "view_all_planner" see everyone, users with "view_other_planner" the members
+     * of the teams they lead, everyone else only themselves. The optional planner query narrows the result
+     * further by teams and users.
      *
      * Plugins can leave users out through {@see PlannerUsersEvent}.
      *
@@ -58,7 +59,8 @@ class PlannerUserProvider
      */
     private function findVisibleUsers(User $currentUser, ?PlannerQuery $plannerQuery): array
     {
-        $canSeeOther = $this->security->isGranted('view_other_planner') || $this->security->isGranted('view_all_data');
+        $seesEveryone = $this->security->isGranted('view_all_data') || $this->security->isGranted('view_all_planner');
+        $canSeeOther = $seesEveryone || $this->security->isGranted('view_other_planner');
 
         if (!$canSeeOther) {
             return [$currentUser];
@@ -70,10 +72,9 @@ class PlannerUserProvider
         $query->setOrder(UserQuery::ORDER_ASC);
         $query->setOrderBy('username');
 
-        $hasViewAllData = $this->security->isGranted('view_all_data');
         $ledTeamIds = [];
 
-        if (!$hasViewAllData) {
+        if (!$seesEveryone) {
             /** @var array<Team> $ledTeams */
             $ledTeams = array_values(array_filter($currentUser->getTeams(), static fn (Team $team): bool => $currentUser->isTeamleadOf($team)));
             if ($ledTeams === []) {
@@ -86,7 +87,7 @@ class PlannerUserProvider
 
         if ($plannerQuery !== null && $plannerQuery->hasTeams()) {
             $selectedTeams = $plannerQuery->getTeams();
-            if (!$hasViewAllData) {
+            if (!$seesEveryone) {
                 $selectedTeams = array_values(array_filter($selectedTeams, static fn (Team $team): bool => \in_array($team->getId(), $ledTeamIds, true)));
                 if ($selectedTeams === []) {
                     return [];

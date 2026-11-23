@@ -81,6 +81,42 @@ class PlannerUserProviderTest extends TestCase
         $this->assertSame([$user, $other], $provider->getVisibleUsers($user));
     }
 
+    public function testViewAllPlannerUserSeesEveryoneWithoutLeadingATeam(): void
+    {
+        $user = $this->createUser(1);
+        $user->addTeam($this->createTeam(10));
+        $other = $this->createUser(2);
+
+        $repository = $this->createMock(UserRepository::class);
+        $repository->expects($this->once())
+            ->method('getUsersForQuery')
+            ->with($this->callback(static fn (UserQuery $query): bool => $query->getSearchTeams() === []))
+            ->willReturn([$user, $other]);
+
+        $provider = new PlannerUserProvider($repository, $this->createSecurity(['view_all_planner']));
+
+        $this->assertSame([$user, $other], $provider->getVisibleUsers($user));
+    }
+
+    public function testViewAllPlannerUserCanFilterByAnyTeam(): void
+    {
+        $user = $this->createUser(1);
+        $foreign = $this->createTeam(99);
+
+        $repository = $this->createMock(UserRepository::class);
+        $repository->expects($this->once())
+            ->method('getUsersForQuery')
+            ->with($this->callback(static fn (UserQuery $query): bool => $query->getSearchTeams() === [$foreign]))
+            ->willReturn([$user]);
+
+        $plannerQuery = new PlannerQuery();
+        $plannerQuery->setTeams([$foreign]);
+
+        $provider = new PlannerUserProvider($repository, $this->createSecurity(['view_all_planner']));
+
+        $this->assertSame([$user], $provider->getVisibleUsers($user, $plannerQuery));
+    }
+
     public function testListenersCanLeaveUsersOut(): void
     {
         $user = $this->createUser(1);

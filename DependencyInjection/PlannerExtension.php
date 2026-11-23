@@ -39,6 +39,7 @@ class PlannerExtension extends AbstractPluginExtension implements PrependExtensi
                     ],
                     'PLANNER_OTHER' => [
                         'view_other_planner',
+                        'view_all_planner',
                         'edit_other_planner',
                     ],
                 ],
@@ -66,6 +67,7 @@ class PlannerExtension extends AbstractPluginExtension implements PrependExtensi
                         'delete_planner',
                         'calendar_feed_planner',
                         'view_other_planner',
+                        'view_all_planner',
                         'edit_other_planner',
                         'manage_reservations_planner',
                     ],
@@ -76,6 +78,7 @@ class PlannerExtension extends AbstractPluginExtension implements PrependExtensi
                         'delete_planner',
                         'calendar_feed_planner',
                         'view_other_planner',
+                        'view_all_planner',
                         'edit_other_planner',
                         'manage_reservations_planner',
                     ],
