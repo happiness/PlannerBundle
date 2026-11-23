@@ -98,7 +98,7 @@ class PlannerUserProviderTest extends TestCase
         $this->assertSame([$user], $provider->getVisibleUsers($user));
     }
 
-    public function testUserWithoutLedTeamsSeesNobody(): void
+    public function testUserWithoutLedTeamsOnlySeesSelf(): void
     {
         $user = $this->createUser(1);
         $user->addTeam($this->createTeam(10));
@@ -108,7 +108,19 @@ class PlannerUserProviderTest extends TestCase
 
         $provider = new PlannerUserProvider($repository, $this->createSecurity(['view_other_planner']));
 
-        $this->assertSame([], $provider->getVisibleUsers($user));
+        $this->assertSame([$user], $provider->getVisibleUsers($user));
+    }
+
+    public function testUserWithoutAnyTeamOnlySeesSelf(): void
+    {
+        $user = $this->createUser(1);
+
+        $repository = $this->createMock(UserRepository::class);
+        $repository->expects($this->never())->method('getUsersForQuery');
+
+        $provider = new PlannerUserProvider($repository, $this->createSecurity(['view_other_planner']));
+
+        $this->assertSame([$user], $provider->getVisibleUsers($user));
     }
 
     public function testTeamleadIsRestrictedToLedTeams(): void
