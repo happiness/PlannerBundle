@@ -360,4 +360,71 @@ class WeeklyPlannerServiceTest extends TestCase
         $this->assertSame(8.0, $row->getDay(new \DateTimeImmutable('2026-12-24'))?->getPlannedHours());
         $this->assertSame(2.0, $row->getDay(new \DateTimeImmutable('2026-12-25'))?->getPlannedHours());
     }
+
+    public function testBookingHoursCountOnlyWorkingDays(): void
+    {
+        $user = new User();
+        (new \ReflectionProperty(User::class, 'id'))->setValue($user, 42);
+        // Friday to Tuesday: three working days of four hours, not five calendar days
+        $work = $this->createWork($user, '2026-11-13', '2026-11-17', 4.0);
+
+        $row = $this->createWeekdayService($user, [$work])->getPlannerData([$user], new \DateTimeImmutable('2026-11-09'), 2)->getRowForUser($user);
+        $this->assertNotNull($row);
+
+        $this->assertSame(12.0, $row->getBookingHours($work));
+    }
+
+    public function testBookingHoursIncludeTheDaysBeyondTheShownWeeks(): void
+    {
+        $user = new User();
+        (new \ReflectionProperty(User::class, 'id'))->setValue($user, 42);
+        // Thursday to the following Tuesday, only the first week is shown: Thursday and Friday are on screen
+        $work = $this->createWork($user, '2026-11-12', '2026-11-17', 4.0);
+
+        $row = $this->createWeekdayService($user, [$work])->getPlannerData([$user], new \DateTimeImmutable('2026-11-09'))->getRowForUser($user);
+        $this->assertNotNull($row);
+
+        // two days on screen and Monday and Tuesday beyond them, the weekend not counted
+        $this->assertSame(16.0, $row->getBookingHours($work));
+    }
+
+    public function testBookingHoursLeaveOutAPublicHolidayBeyondTheShownWeeks(): void
+    {
+        $user = new User();
+        (new \ReflectionProperty(User::class, 'id'))->setValue($user, 42);
+        $holiday = new PublicHoliday(new \DateTimeImmutable('2026-11-16'), 'Day off', 'SE', 'Sweden', 'official');
+        $work = $this->createWork($user, '2026-11-12', '2026-11-17', 4.0);
+
+        $row = $this->createWeekdayService($user, [$work], ['2026-11-16' => $holiday])->getPlannerData([$user], new \DateTimeImmutable('2026-11-09'))->getRowForUser($user);
+        $this->assertNotNull($row);
+
+        // Thursday and Friday on screen, then only the Tuesday: Monday is a holiday
+        $this->assertSame(12.0, $row->getBookingHours($work));
+    }
+
+    public function testBookingHoursOfWorkOnlyOnDaysOffCountInFull(): void
+    {
+        $user = new User();
+        (new \ReflectionProperty(User::class, 'id'))->setValue($user, 42);
+        $weekend = $this->createWork($user, '2026-11-14', '2026-11-15', 5.0);
+
+        $row = $this->createWeekdayService($user, [$weekend])->getPlannerData([$user], new \DateTimeImmutable('2026-11-09'))->getRowForUser($user);
+        $this->assertNotNull($row);
+
+        $this->assertSame(10.0, $row->getBookingHours($weekend));
+    }
+
+    public function testBookingHoursOnlyForWorkOverSeveralDays(): void
+    {
+        $user = new User();
+        (new \ReflectionProperty(User::class, 'id'))->setValue($user, 42);
+        $oneDay = $this->createWork($user, '2026-11-10', '2026-11-10', 4.0);
+        $timeOff = $this->createWork($user, '2026-11-11', '2026-11-12', 4.0)->setTimeOff(true);
+
+        $row = $this->createWeekdayService($user, [$oneDay, $timeOff])->getPlannerData([$user], new \DateTimeImmutable('2026-11-09'))->getRowForUser($user);
+        $this->assertNotNull($row);
+
+        $this->assertNull($row->getBookingHours($oneDay));
+        $this->assertNull($row->getBookingHours($timeOff));
+    }
 }
