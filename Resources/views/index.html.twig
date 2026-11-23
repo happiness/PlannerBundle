@@ -186,7 +186,8 @@
                                                         {# tentative work is not subtracted, so it is named next to the free hours #}
                                                         <div class="small {{ freeHours < 0 ? 'text-danger' : 'text-muted' }} planner-free-hours">
                                                             {{- (freeHours < 0 ? 'planner.over_hours' : 'planner.free_hours')|trans({'%hours%': freeHours|abs}) -}}
-                                                            {%- if row.totalTentativeHours > 0 %} ({{ 'planner.tentative_hours_short'|trans({'%hours%': row.totalTentativeHours}) }}){% endif -%}
+                                                            {%- set upcomingTentative = row.upcomingTentativeHours -%}
+                                                            {%- if upcomingTentative > 0 %} ({{ 'planner.tentative_hours_short'|trans({'%hours%': upcomingTentative}) }}){% endif -%}
                                                         </div>
                                                     {% endif %}
                                                 </div>

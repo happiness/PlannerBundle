@@ -73,6 +73,11 @@ class WeeklyPlannerUserRowTest extends TestCase
         $this->assertSame(0.0, $row->getFreeHours($d2));
         $this->assertSame(0.0, $row->getFreeHours(new \DateTimeImmutable('2026-09-10')));
 
+        // the tentative hours are counted from the same day as the free hours
+        $this->assertSame(2.0, $row->getUpcomingTentativeHours($past));
+        $this->assertSame(2.0, $row->getUpcomingTentativeHours($d2));
+        $this->assertSame(0.0, $row->getUpcomingTentativeHours(new \DateTimeImmutable('2026-09-10')));
+
         $over = (new PlannedActivity())->setHoursPerDay(6.5);
         $day2->addActivity($over);
         $this->assertSame(-2.5, $row->getFreeHours($past));
