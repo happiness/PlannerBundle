@@ -121,6 +121,7 @@ class WeeklyPlannerService
             }
 
             $this->countWorkPlannedOnDaysOff($user, $calculator, $userActivities[(int) $user->getId()] ?? [], $days, $start, $end);
+            $this->addBookingTotals($userRow, $user, $calculator, $userActivities[(int) $user->getId()] ?? [], $days, $start, $end);
 
             if ($planning === PlannerQuery::PLANNING_TENTATIVE && $userRow->getUniqueActivities() === []) {
                 continue;
@@ -166,6 +167,78 @@ class WeeklyPlannerService
                 $day->countOnDayOff($activity);
             }
         }
+    }
+
+    /**
+     * The hours of a whole booking that spans several days, also where it runs past the shown weeks, with the same
+     * rule as the grid: a day off takes no hours, unless every day of the booking is a day off.
+     *
+     * @param array<PlannedActivity> $activities
+     * @param array<WeeklyPlannerDay> $days
+     */
+    private function addBookingTotals(WeeklyPlannerUserRow $row, User $user, WorkingTimeCalculator $calculator, array $activities, array $days, \DateTimeImmutable $start, \DateTimeImmutable $end): void
+    {
+        foreach ($activities as $activity) {
+            $hoursPerDay = $activity->getHoursPerDay();
+            if ($activity->isTimeOff() || $hoursPerDay === null || $activity->getDaysCount() < 2) {
+                continue;
+            }
+
+            $covered = array_filter($days, static fn (WeeklyPlannerDay $day): bool => $activity->coversDate($day->getDate()));
+            if ($covered === []) {
+                continue;
+            }
+
+            $total = 0.0;
+            $workingOnScreen = false;
+            foreach ($covered as $day) {
+                $total += $day->getHoursOf($activity);
+                $workingOnScreen = $workingOnScreen || $day->getExpectedHours() > 0.0;
+            }
+
+            [$outside, $outsideWorking] = $this->countDaysOutside($user, $calculator, $activity, $start, $end);
+            // a booking with no working day at all was planned on days off on purpose and counts in full
+            $counted = $workingOnScreen || $outsideWorking > 0 ? $outsideWorking : $outside;
+
+            $row->setBookingHours($activity, round($total + $counted * $hoursPerDay, 2));
+        }
+    }
+
+    /**
+     * The days of the activity outside the shown range, and how many of those have contract hours and are no public
+     * holiday.
+     *
+     * @return array{int, int}
+     */
+    private function countDaysOutside(User $user, WorkingTimeCalculator $calculator, PlannedActivity $activity, \DateTimeImmutable $start, \DateTimeImmutable $end): array
+    {
+        $begin = $activity->getBegin();
+        $last = $activity->getEnd();
+        if ($begin === null || $last === null) {
+            return [0, 0];
+        }
+
+        $from = \DateTimeImmutable::createFromInterface($begin)->setTime(0, 0);
+        $to = \DateTimeImmutable::createFromInterface($last)->setTime(0, 0);
+        if ($from >= $start && $to <= $end) {
+            return [0, 0];
+        }
+
+        $holidays = $this->holidayProvider?->getHolidays($user, $from, $to) ?? [];
+        $outside = 0;
+        $working = 0;
+        for ($day = $from; $day <= $to; $day = $day->modify('+1 day')) {
+            if ($day >= $start && $day <= $end) {
+                continue;
+            }
+
+            ++$outside;
+            if (!\array_key_exists($day->format('Y-m-d'), $holidays) && $calculator->getWorkHoursForDay($day) > 0) {
+                ++$working;
+            }
+        }
+
+        return [$outside, $working];
     }
 
     /**

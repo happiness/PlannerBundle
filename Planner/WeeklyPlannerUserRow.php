@@ -35,6 +35,25 @@ final class WeeklyPlannerUserRow
         return $this->user;
     }
 
+    /**
+     * @var array<int, float> the hours of a whole multi-day booking, by spl_object_id() of the activity
+     */
+    private array $bookingHours = [];
+
+    public function setBookingHours(PlannedActivity $activity, float $hours): void
+    {
+        $this->bookingHours[spl_object_id($activity)] = $hours;
+    }
+
+    /**
+     * The hours of the whole booking, also beyond the shown weeks, or null for a booking of one day, time off and
+     * anything the service did not total.
+     */
+    public function getBookingHours(PlannedActivity $activity): ?float
+    {
+        return $this->bookingHours[spl_object_id($activity)] ?? null;
+    }
+
     public function addDay(WeeklyPlannerDay $day): void
     {
         $this->days[$day->getDate()->format('Y-m-d')] = $day;
