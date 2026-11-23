@@ -102,4 +102,25 @@ class WeeklyPlannerWeekTest extends TestCase
         $this->assertTrue($week->isBalanced());
         $this->assertFalse($week->isOverAllocated());
     }
+
+    public function testTentativeShareIsMeasuredAgainstTheCapacity(): void
+    {
+        // a day off in a two-day week leaves 8 of 16 contract hours, and 4 tentative hours are half of them
+        $monday = $this->createDay('2026-11-02', 8.0, 0.0, 4.0);
+        $monday->addActivity((new PlannedActivity())->setHoursPerDay(4.0)->setTentative(true));
+        $tuesday = $this->createDay('2026-11-03', 8.0, 0.0, 0.0);
+        $tuesday->addActivity((new PlannedActivity())->setTimeOff(true)->setHoursPerDay(null));
+
+        $week = new WeeklyPlannerWeek([$monday, $tuesday]);
+
+        $this->assertSame(8.0, $week->getTotalCapacityHours());
+        $this->assertSame(50, $week->getPlannedPercentage());
+        $this->assertSame(50, $week->getTentativePercentage());
+
+        // without capacity there is nothing to take a share of
+        $off = $this->createDay('2026-11-04', 8.0, 0.0, 0.0);
+        $off->addActivity((new PlannedActivity())->setTimeOff(true)->setHoursPerDay(null));
+        $off->addActivity((new PlannedActivity())->setHoursPerDay(2.0)->setTentative(true));
+        $this->assertSame(0, (new WeeklyPlannerWeek([$off]))->getTentativePercentage());
+    }
 }
