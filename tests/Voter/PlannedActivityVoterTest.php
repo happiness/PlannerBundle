@@ -15,6 +15,7 @@ use App\Entity\Team;
 use App\Entity\User;
 use App\Tests\Voter\AbstractVoterTestCase;
 use KimaiPlugin\PlannerBundle\Entity\PlannedActivity;
+use KimaiPlugin\PlannerBundle\Entity\Reservation;
 use KimaiPlugin\PlannerBundle\Voter\PlannedActivityVoter;
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use Symfony\Component\Security\Core\Authorization\Voter\VoterInterface;
@@ -126,6 +127,36 @@ class PlannedActivityVoterTest extends AbstractVoterTestCase
         $voter = new PlannedActivityVoter($manager);
 
         $this->assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($token, $activity, ['view']));
+        $this->assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($token, $activity, ['create']));
+        $this->assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($token, $activity, ['edit']));
+        $this->assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($token, $activity, ['delete']));
+    }
+
+    public function testReservedTimeNeedsItsPermissionToChange(): void
+    {
+        $user = self::getUser(1, User::ROLE_USER);
+
+        $activity = new PlannedActivity();
+        $activity->setUser($user);
+        $activity->setReservation((new Reservation())->setName('Agency buffer'));
+
+        $token = new UsernamePasswordToken($user, 'main', $user->getRoles());
+        $own = [
+            'view_planner',
+            'create_planner',
+            'edit_planner',
+            'delete_planner',
+        ];
+
+        $voter = new PlannedActivityVoter($this->getRolePermissionManager(['ROLE_USER' => $own], true));
+
+        $this->assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($token, $activity, ['view']));
+        $this->assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($token, $activity, ['create']));
+        $this->assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($token, $activity, ['edit']));
+        $this->assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($token, $activity, ['delete']));
+
+        $voter = new PlannedActivityVoter($this->getRolePermissionManager(['ROLE_USER' => [...$own, 'plan_reservations_planner']], true));
+
         $this->assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($token, $activity, ['create']));
         $this->assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($token, $activity, ['edit']));
         $this->assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($token, $activity, ['delete']));

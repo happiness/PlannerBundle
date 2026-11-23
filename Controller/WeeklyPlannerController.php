@@ -153,7 +153,8 @@ final class WeeklyPlannerController extends AbstractController
         if ($request->query->getBoolean('off')) {
             $activity->setTimeOff(true);
             $activity->setHoursPerDay(null);
-        } elseif (($reservation = $this->findSelectableReservation($request->query->getInt('reservation'))) !== null) {
+        } elseif ($this->isGranted('plan_reservations_planner')
+            && ($reservation = $this->findSelectableReservation($request->query->getInt('reservation'))) !== null) {
             // like a customer/project row, a reservation's row pre-selects the reservation
             $activity->setReservation($reservation);
         } else {

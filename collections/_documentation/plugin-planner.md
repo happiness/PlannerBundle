@@ -80,6 +80,7 @@ The plugin registers dedicated permissions that integrate seamlessly into Kimai'
 | `delete_planner` | Delete own planned activities | `ROLE_USER`, `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `view_other_planner` | View other team members in the weekly planner | `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `edit_other_planner` | Create, edit, and delete activities for other users | `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
+| `plan_reservations_planner` | Plan reserved time | `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 
 Permissions can be customized anytime via the Kimai UI under **System > Role permissions**.
 

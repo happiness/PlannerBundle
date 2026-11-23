@@ -66,6 +66,13 @@ final class PlannedActivityVoter extends Voter
         $isTeamlead = ($targetUser !== null && $user->isTeamleadOfUser($targetUser));
         $hasViewAllData = $this->permissionManager->hasRolePermission($user, 'view_all_data');
 
+        // planning against reserved time can be restricted to some roles: without the permission it can be seen,
+        // but not created, changed or removed
+        if ($attribute !== self::VIEW && $subject->getReservation() !== null
+            && !$this->permissionManager->hasRolePermission($user, 'plan_reservations_planner')) {
+            return false;
+        }
+
         return match ($attribute) {
             self::VIEW => $isOwner
                 ? $this->permissionManager->hasRolePermission($user, 'view_planner')

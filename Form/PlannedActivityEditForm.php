@@ -30,6 +30,7 @@ use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormEvent;
 use Symfony\Component\Form\FormEvents;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 use Symfony\Component\Validator\Constraints\GreaterThanOrEqual;
 use Symfony\Component\Validator\Constraints\LessThanOrEqual;
 
@@ -40,8 +41,10 @@ class PlannedActivityEditForm extends AbstractType
 {
     use FormTrait;
 
-    public function __construct(private readonly ?ReservationRepository $reservations = null)
-    {
+    public function __construct(
+        private readonly ?ReservationRepository $reservations = null,
+        private readonly ?AuthorizationCheckerInterface $authorizationChecker = null,
+    ) {
     }
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
@@ -82,7 +85,7 @@ class PlannedActivityEditForm extends AbstractType
         ]);
 
         // after customer and project: choosing a reservation drops them while the data is mapped
-        $reservations = $this->getReservationChoices($activity?->getReservation());
+        $reservations = $this->canPlanReservations() ? $this->getReservationChoices($activity?->getReservation()) : [];
         if ($reservations !== []) {
             $builder->add('reservation', ChoiceType::class, [
                 'label' => 'planner.reservation',
@@ -228,6 +231,11 @@ class PlannedActivityEditForm extends AbstractType
         if ($customer !== null) {
             $activity->setCustomer($customer);
         }
+    }
+
+    private function canPlanReservations(): bool
+    {
+        return $this->authorizationChecker === null || $this->authorizationChecker->isGranted('plan_reservations_planner');
     }
 
     /**

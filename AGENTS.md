@@ -199,6 +199,7 @@ var/plugins/PlannerBundle/
 | `delete_planner` | Delete own planned activities | `ROLE_USER`, `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `view_other_planner` | View other team members in the planner grid | `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 | `edit_other_planner` | Create, edit, and delete activities for others | `ROLE_TEAMLEAD`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
+| `plan_reservations_planner` | Plan reserved time; without it the voter refuses create, edit and delete on planning with a reservation, the form leaves out the reservation field and reservation rows offer nothing | `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
 
 The API additionally requires Kimai's core `API` permission. It reuses the same planner permissions and `PlannedActivityVoter`.
 
