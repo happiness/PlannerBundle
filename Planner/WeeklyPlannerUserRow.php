@@ -187,6 +187,23 @@ final class WeeklyPlannerUserRow
         return $total;
     }
 
+    /**
+     * The tentative hours from the given day on, the same span getFreeHours() counts, so the two can be shown together.
+     */
+    public function getUpcomingTentativeHours(?\DateTimeInterface $today = null): float
+    {
+        $from = ($today ?? new \DateTimeImmutable('today'))->format('Y-m-d');
+
+        $total = 0.0;
+        foreach ($this->days as $date => $day) {
+            if ($date >= $from) {
+                $total += $day->getTentativeHours();
+            }
+        }
+
+        return round($total, 2);
+    }
+
     public function getTotalActualHours(): float
     {
         $total = 0.0;

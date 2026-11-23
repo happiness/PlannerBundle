@@ -406,6 +406,10 @@
                 <source>planner.order_free_hours</source>
                 <target>Most free hours</target>
             </trans-unit>
+            <trans-unit id="planner.tentative_hours_short">
+                <source>planner.tentative_hours_short</source>
+                <target>%hours%h tentative</target>
+            </trans-unit>
             <trans-unit id="planner.free_hours">
                 <source>planner.free_hours</source>
                 <target>%hours%h free</target>
