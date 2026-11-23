@@ -313,12 +313,15 @@
                                                             {% set joinable = null %}
                                                         {% endif %}
                                                         {% set activityHours = activity.wholeDay ? 'planner.whole_day'|trans : activity.hoursPerDay ~ 'h' %}
+                                                        {# days off the bar crosses take no hours, so they are striped and the tooltip says so #}
+                                                        {% set uncountedDays = row.getUncountedDays(activity, date, segment.span) %}
                                                         <a href="{{ path('planner_activity_edit', {'id': activity.id, 'date': date|date('Y-m-d')}) }}"
                                                            class="planner-activity position-relative z-2 d-flex justify-content-between align-items-center px-2 py-1 rounded text-decoration-none modal-ajax-form shadow-sm{% if not loop.first %} mt-1{% endif %}{% if canMove %} planner-movable{% endif %}{% if activity.timeOff %} planner-activity-off{% endif %}{% if activity.tentative %} planner-tentative{% endif %}"
                                                            {% if not activity.timeOff %}style="background-color: {{ activity.colorSafe }}; color: {{ activity.colorSafe|font_contrast }};"{% endif %}
                                                            {% if canMove %}data-planner-move-url="{{ path('planner_activity_move', {'id': activity.id}) }}" data-planner-begin="{{ activity.begin|date('Y-m-d') }}" data-planner-end="{{ activity.end|date('Y-m-d') }}"{% if activity.daysCount > 1 %} data-planner-split-url="{{ path('planner_activity_split', {'id': activity.id}) }}"{% endif %}{% if joinable is not null %} data-planner-join-url="{{ path('planner_activity_join', {'id': activity.id, 'other': joinable.id}) }}" data-planner-join-day="{{ joinable.begin|date('Y-m-d') }}"{% endif %}{% endif %}
-                                                           title="{% if activity.tentative %}{{ 'planner.tentative'|trans }}: {% endif %}{{ activity.timeOff ? 'planner.time_off'|trans : activity.name }} ({{ activityHours }}){% if activity.hasComment %}: {{ activity.comment|u.truncate(1024, '...') }}{% endif %}">
+                                                           title="{% if activity.tentative %}{{ 'planner.tentative'|trans }}: {% endif %}{{ activity.timeOff ? 'planner.time_off'|trans : activity.name }} ({{ activityHours }}){% if uncountedDays is not empty %}, {{ 'planner.days_off_not_counted'|trans }}{% endif %}{% if activity.hasComment %}: {{ activity.comment|u.truncate(1024, '...') }}{% endif %}">
                                                             {% if canMove and activity.begin|date('Y-m-d') == date|date('Y-m-d') %}<span class="planner-handle planner-handle-start" data-planner-handle="start"></span>{% endif %}
+                                                            {% for offset in uncountedDays %}<span class="planner-day-uncounted" style="left: {{ offset / segment.span * 100 }}%; width: {{ 100 / segment.span }}%;" data-planner-day="{{ date.modify('+' ~ offset ~ ' day')|date('Y-m-d') }}" data-planner-from="{{ date|date('Y-m-d') }}" data-planner-to="{{ segmentEnd|date('Y-m-d') }}"></span>{% endfor %}
                                                             <span class="text-truncate small">{% if activity.hasComment %}{{ icon('comment') }} {% endif %}{{ activityHours }}</span>
                                                             {% if canMove and activity.end|date('Y-m-d') == segmentEnd|date('Y-m-d') %}<span class="planner-handle planner-handle-end" data-planner-handle="end"></span>{% endif %}
                                                         </a>
@@ -456,6 +459,17 @@
         }
         .planner-activity.planner-movable {
             cursor: grab;
+        }
+        /* a day off inside a bar: it takes no hours, so the bar is striped and lighter there */
+        .planner-day-uncounted {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            pointer-events: none;
+            background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.55) 0 4px, rgba(255, 255, 255, 0.25) 4px 8px);
+        }
+        .planner-activity > .text-truncate {
+            position: relative;
         }
         /* not confirmed yet: faded with a dashed border, the tooltip says so in words */
         .planner-activity.planner-tentative {
@@ -1394,6 +1408,72 @@
             // the marker is positioned on the viewport
             window.addEventListener('scroll', removeHint, true);
             document.addEventListener('kimai.reloadPage', removeHint);
+        })();
+
+        // The template places the stripes over days off as equal shares of the bar, but the day columns are sized by
+        // their content, so a narrow weekend would leave the stripes over Friday and Monday. They are moved onto the
+        // real columns here, measured from the header cells, and again whenever a column changes its width.
+        (function () {
+            // the day cell's padding around the bar (p-1)
+            const PADDING = 4;
+            let pending = false;
+
+            function header(date) {
+                return document.querySelector('th[data-planner-day="' + date + '"]');
+            }
+
+            function place() {
+                pending = false;
+                document.querySelectorAll('.planner-day-uncounted[data-planner-day]').forEach(function (stripe) {
+                    const day = header(stripe.dataset.plannerDay);
+                    const from = header(stripe.dataset.plannerFrom);
+                    const to = header(stripe.dataset.plannerTo);
+                    if (!day || !from || !to) {
+                        return;
+                    }
+                    const start = from.getBoundingClientRect().left;
+                    const width = to.getBoundingClientRect().right - start - 2 * PADDING;
+                    if (width <= 0) {
+                        return;
+                    }
+                    // in percent of the bar, so it also holds in a collapsed row, where the bar has no size yet
+                    const rect = day.getBoundingClientRect();
+                    const left = Math.max(0, (rect.left - start - PADDING) / width * 100);
+                    const right = Math.min(100, (rect.right - start - PADDING) / width * 100);
+                    stripe.style.left = left + '%';
+                    stripe.style.width = Math.max(0, right - left) + '%';
+                });
+            }
+
+            function schedule() {
+                if (!pending) {
+                    pending = true;
+                    window.requestAnimationFrame(place);
+                }
+            }
+
+            const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null;
+
+            function observe() {
+                if (observer === null) {
+                    schedule();
+                    return;
+                }
+                observer.disconnect();
+                document.querySelectorAll('th[data-planner-day]').forEach(function (cell) {
+                    observer.observe(cell);
+                });
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', observe);
+            } else {
+                observe();
+            }
+            document.addEventListener('kimai.reloadPage', observe);
+            if (observer === null) {
+                window.addEventListener('resize', schedule);
+            }
         })();
     </script>
 {% endblock %}
